@@ -16,14 +16,30 @@ async function requireWebUser(req:any, reply:FastifyReply, returnTo?:string){
 
 function csrfField(cookieHeader:string|undefined):string{
   const csrf=csrfTokenFromSessionCookie(cookieHeader);
-  return csrf?`<input type="hidden" name="csrf" value="${esc(csrf)}">`:'';
+  return csrf?`<input type="hidden" name="csrf" value="${esc(csrf)}">`:''
 }
 
 export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
   app.get('/pricing',async(req,reply)=>{
-    const q=req.query as any; const resume=q.resume_job_id?String(q.resume_job_id):'';
-    const chosen:PaidPlan=q.plan==='pro'?'pro':'basic';
+    const q=req.query as any;
     const user=await userFromSessionCookie(req.headers.cookie);
+    if(!user){
+      const returnUrl=`/pricing${Object.keys(q).length?`?${new URLSearchParams(q).toString()}`:''}`;
+      return reply.code(302).redirect(`/login?return_to=${encodeURIComponent(returnUrl)}`);
+    }
+    const resume=q.resume_job_id?String(q.resume_job_id):'';
+    const chosen:PaidPlan=q.plan==='pro'?'pro':'basic';
+    
+    // Check if trial user with no usage and no resume_job_id
+    const usage=await getUsageSnapshot(user.id);
+    if(usage.plan==='trial'&&!resume){
+      const usageRows=await pool.query<{count:string}>("SELECT COUNT(*)::text count FROM usage_ledger WHERE user_id=$1",[user.id]);
+      if(Number(usageRows.rows[0].count)===0){
+        const csrf=csrfField(req.headers.cookie);
+        return reply.type('text/html').send(page(`<h1>Try ${esc(env().PUBLIC_BRAND_NAME)} first</h1><div class="card"><p>10 successful videos or 30 total transcript minutes free.</p><p>No card required. Public videos only.</p><p><a href="/connect">Connect to your AI</a></p></div>`));
+      }
+    }
+    
     const csrf=csrfField(req.headers.cookie);
     return reply.type('text/html').send(page(`<h1>Continue with ${esc(env().PUBLIC_BRAND_NAME)}</h1><div class="card"><h2>Basic — $4.99 / month</h2><p>500 minutes / month<br>Instagram, TikTok & YouTube<br>ChatGPT + Claude</p><form id="checkout-basic" method="post" action="/billing/checkout">${csrf}<input type="hidden" name="plan" value="basic"><input type="hidden" name="resume_job_id" value="${esc(resume)}"><button>Continue</button></form></div><p class="muted">Need more? Pro — $9.99 / month, 2,000 minutes and videos up to 120 minutes.</p><form id="checkout-pro" method="post" action="/billing/checkout">${csrf}<input type="hidden" name="plan" value="pro"><input type="hidden" name="resume_job_id" value="${esc(resume)}"><button>Choose Pro</button></form>`));
   });
@@ -34,6 +50,16 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
     const returnTo=`/pricing?plan=${encodeURIComponent(plan)}${resume?`&resume_job_id=${encodeURIComponent(resume)}`:''}`;
     const user=await requireWebUser(req,reply,returnTo); if(!user)return;
     if(!verifyCsrfToken(req.headers.cookie,String(b?.csrf??'')))return reply.code(403).type('text/html').send(page(`<h1>${esc(env().PUBLIC_BRAND_NAME)}</h1><p>This payment action expired. Please try again.</p><p><a href="${esc(returnTo)}">Back</a></p>`));
+    
+    // Check if trial user with no resume_job_id and zero usage_ledger rows
+    const usage=await getUsageSnapshot(user.id);
+    if(usage.plan==='trial'&&!resume){
+      const usageRows=await pool.query<{count:string}>("SELECT COUNT(*)::text count FROM usage_ledger WHERE user_id=$1",[user.id]);
+      if(Number(usageRows.rows[0].count)===0){
+        return reply.code(409).type('text/html').send(page(`<h1>${esc(env().PUBLIC_BRAND_NAME)}</h1><p>Complete one supported public video first.</p><p>Try reading a public Instagram Reel, TikTok, or YouTube video to activate your trial, then return here to upgrade.</p><p><a href="/connect">Back to ${esc(env().PUBLIC_BRAND_NAME)}</a></p>`));
+      }
+    }
+    
     const url=await createCheckoutSession(user.id,plan,resume||undefined);
     return reply.redirect(url);
   });
@@ -76,3 +102,4 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
     return {plan:usage.plan,waiting_jobs:Number(waiting.rows[0].count)};
   });
 }
+
