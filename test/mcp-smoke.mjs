@@ -40,6 +40,14 @@ try{
   assert.match(listed.result.tools[1].description,/LaunchBrand/);
   assert.doesNotMatch(JSON.stringify(listed.result.tools),/\$\{env\(\)/);
 
+  // Assertions for new guidance: do not call merely because URL is present
+  const get_video_transcript_desc=listed.result.tools[0].description;
+  assert.match(get_video_transcript_desc,/do not.*merely.*URL/i,'Description must warn against calling solely because URL is present');
+  assert.match(get_video_transcript_desc,/sufficient access/i,'Description must reference needing sufficient access to content');
+  
+  // Assertion for explicit opt-out wording
+  assert.match(get_video_transcript_desc,/explicitly.*(?:request|requests).*NOT.*(?:use|call)|(?:user|user's).*explicitly.*(?:avoid|not|don't).*(?:fetch|external)/i,'Description must respect explicit user request not to use the tool');
+
   const failed=await call({jsonrpc:'2.0',id:3,method:'tools/call',params:{name:'get_usage',arguments:{}}});
   assert.equal(failed.result.isError,true);
   const payload=JSON.parse(failed.result.content[0].text.split('\n').at(-1));
@@ -51,3 +59,4 @@ try{
   await handler.close();
   await pool.end();
 }
+

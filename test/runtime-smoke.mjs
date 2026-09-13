@@ -28,13 +28,41 @@ try{
   assert.equal(health.status,200);
   assert.equal((await health.json()).ok,true);
 
-  for(const route of ['/','/pricing','/connect','/privacy','/terms']){
+  // Public routes should include /status (may return 503 if db unavailable)
+  for(const route of ['/','/connect','/privacy','/terms']){
     const page=await fetch(`http://127.0.0.1:${port}${route}`,{headers:{host:'link2ai.example'}});
-    assert.equal(page.status,200);
+    assert.equal(page.status,200,`${route} should return 200`);
     const body=await page.text();
     assert.match(body,/LaunchBrand/);
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }
+
+  // /status should respond (200 or 503 depending on db availability)
+  const status=await fetch(`http://127.0.0.1:${port}/status`,{headers:{host:'link2ai.example'}});
+  assert.ok(status.status===200||status.status===503,`/status should return 200 or 503, got ${status.status}`);
+
+  // /pricing redirects to login
+  const pricing=await fetch(`http://127.0.0.1:${port}/pricing`,{headers:{host:'link2ai.example'},redirect:'manual'});
+  assert.equal(pricing.status,302);
+  assert.match(pricing.headers.get('location')??'',/^\/login\?return_to=/);
+
+  // robots.txt
+  const robots=await fetch(`http://127.0.0.1:${port}/robots.txt`,{headers:{host:'link2ai.example'}});
+  assert.equal(robots.status,200);
+  const robotsText=await robots.text();
+  assert.match(robotsText,/Allow: \/\nDisallow: \/account/);
+  assert.match(robotsText,/Sitemap: https:\/\/link2ai\.example\/sitemap\.xml/);
+
+  // sitemap.xml
+  const sitemap=await fetch(`http://127.0.0.1:${port}/sitemap.xml`,{headers:{host:'link2ai.example'}});
+  assert.equal(sitemap.status,200);
+  const sitemapText=await sitemap.text();
+  assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/<\/loc>/);
+  assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/connect<\/loc>/);
+  assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/pricing<\/loc>/);
+  assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/status<\/loc>/);
+  assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/privacy<\/loc>/);
+  assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/terms<\/loc>/);
 
   const oauthMetadata=await fetch(`http://127.0.0.1:${port}/.well-known/oauth-authorization-server`,{headers:{host:'link2ai.example'}});
   assert.equal(oauthMetadata.status,200);
@@ -57,3 +85,4 @@ try{
     new Promise(resolve=>setTimeout(resolve,3000))
   ]);
 }
+
