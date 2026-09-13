@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": ".pure-dist",
+    "rootDir": ".",
+    "strict": true,
+    "types": [],
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/util/errors.ts",
+    "src/util/crypto.ts",
+    "src/media/url.ts",
+    "src/media/captions.ts",
+    "src/media/types.ts",
+    "src/media/text.ts",
+    "src/quota/plans.ts",
+    "check/external.d.ts",
+    "src/config/publicUrl.ts",
+    "src/resolvers/fallback.ts",
+    "src/transcription/format.ts",
+    "src/auth/clientMetadata.ts",
+    "src/billing/order.ts"
+  ]
+}

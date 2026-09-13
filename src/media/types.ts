@@ -1,0 +1,35 @@
+import type { Platform } from './url.js';
+
+export interface TranscriptSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface TranscriptPayload {
+  platform: Platform;
+  canonicalMediaId: string;
+  sourceUrl: string;
+  title?: string;
+  creator?: string;
+  caption?: string;
+  durationSeconds: number;
+  language: string;
+  transcript: string;
+  segments: TranscriptSegment[];
+  source: 'caption' | 'asr';
+}
+
+export interface MediaMetadata {
+  platform: Platform;
+  resolver?: 'ytdlp' | 'external';
+  canonicalMediaId: string;
+  webpageUrl: string;
+  originalLanguage?: string;
+  title?: string;
+  creator?: string;
+  description?: string;
+  durationSeconds: number;
+  subtitles: Record<string, Array<{ url: string; ext?: string; name?: string }>>;
+  automaticCaptions: Record<string, Array<{ url: string; ext?: string; name?: string }>>;
+}
