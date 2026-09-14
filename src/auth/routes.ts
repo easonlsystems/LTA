@@ -10,7 +10,7 @@ import {
 function escapeHtml(v: unknown): string {
   return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]!));
 }
-function html(body:string): string { return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(env().PUBLIC_BRAND_NAME)}</title><link rel="icon" href="/logo.svg"><style>
+function html(body:string): string { return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${escapeHtml(env().PUBLIC_BRAND_NAME)}</title><link rel="icon" href="/logo.svg"><style>
 :root{color-scheme:light;--ink:#17151f;--muted:#706a78;--line:rgba(44,39,55,.12);--purple:#6f54e8}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:26px;background:radial-gradient(circle at 68% -10%,rgba(135,112,255,.20),transparent 35%),radial-gradient(circle at 5% 90%,rgba(239,154,98,.13),transparent 30%),#fbfaf8;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
 .auth{width:min(500px,100%);background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:28px;padding:31px;box-shadow:0 24px 75px rgba(39,31,64,.12);backdrop-filter:blur(16px)}
@@ -19,6 +19,8 @@ h1{font-size:34px;line-height:1.04;letter-spacing:-.045em;margin:15px 0 11px}p{l
 label{display:block;font-size:12px;font-weight:800;margin:14px 0 6px}input,button{box-sizing:border-box;width:100%;padding:13px 14px;margin:0 0 10px;font:inherit;border-radius:13px}
 input{border:1px solid #d5d0da;background:#fff;outline:none}input:focus{border-color:#8d77ff;box-shadow:0 0 0 4px rgba(111,84,232,.08)}
 button{cursor:pointer;border:0;background:linear-gradient(135deg,#6f54e8,#8d77ff);color:#fff;font-weight:820;box-shadow:0 8px 20px rgba(111,84,232,.18)}.muted{color:#706a78;font-size:13px}.tiny{font-size:12px;color:#908997;line-height:1.5}.review{margin-top:24px;padding-top:18px;border-top:1px solid var(--line)}details summary{cursor:pointer;color:#706a78;font-size:13px;font-weight:750}a{color:inherit}.trust{display:flex;gap:8px;flex-wrap:wrap;margin-top:17px}.trust span{font-size:10px;font-weight:800;color:#706a78;background:#f5f3f0;padding:6px 8px;border-radius:999px}
+@media(max-width:620px){body{display:block;padding:16px 13px 28px;min-height:100dvh}.auth{width:100%;max-width:none;padding:22px 18px;border-radius:22px;margin:0 auto}.logo{margin-bottom:23px;font-size:18px}.logo img{width:32px;height:32px}h1{font-size:30px;line-height:1.07;margin-top:13px}p{font-size:14px;margin-bottom:16px}label{margin-top:13px}input,button{min-height:48px;font-size:16px;padding:12px 13px;border-radius:12px}button{font-size:15px}.trust{gap:6px}.trust span{font-size:9px}.review{margin-top:19px;padding-top:15px}.tiny{font-size:12px}}
+@media(max-width:360px){body{padding-left:10px;padding-right:10px}.auth{padding:19px 15px}h1{font-size:28px}}
 </style></head><body><main class="auth"><div class="logo"><img src="/logo.svg" alt=""><span>${escapeHtml(env().PUBLIC_BRAND_NAME)}</span></div>${body}</main></body></html>`; }
 
 function safeReturnTo(raw: string | undefined): string {
