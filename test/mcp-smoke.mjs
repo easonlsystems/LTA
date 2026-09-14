@@ -39,7 +39,7 @@ try{
   assert.match(listed.result.tools[0].description,/LaunchBrand/);
   assert.match(listed.result.tools[1].description,/LaunchBrand/);
   assert.doesNotMatch(JSON.stringify(listed.result.tools),/\$\{env\(\)/);
-  assert.deepEqual(listed.result.tools[0].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true});
+  assert.deepEqual(listed.result.tools[0].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false});
   assert.equal(listed.result.tools[1].annotations.readOnlyHint,true);
   assert.equal(listed.result.tools[2].annotations.readOnlyHint,true);
 
