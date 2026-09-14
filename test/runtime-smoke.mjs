@@ -35,7 +35,7 @@ try{
     const body=await page.text();
     assert.match(body,/LaunchBrand/);
     if(route==='/')assert.match(body,/Claude-first founding beta/);
-    if(route==='/connect'){assert.match(body,/Open Claude setup/);assert.match(body,/mcpName=LaunchBrand/);assert.match(body,/mcpServerUrl=https%3A%2F%2Flink2ai.example%2Fmcp/);}
+    if(route==='/connect'){assert.match(body,/Continue in Claude/);assert.match(body,/connectorName=LaunchBrand/);assert.match(body,/connectorUrl=https%3A%2F%2Flink2ai.example%2Fmcp/);assert.doesNotMatch(body,/target=\"_blank\"/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }
 
