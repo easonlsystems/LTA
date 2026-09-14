@@ -20,4 +20,5 @@ COPY package*.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY sql ./sql
+COPY assets ./assets
 CMD ["node", "dist/src/api/main.js"]

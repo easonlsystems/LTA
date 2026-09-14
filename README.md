@@ -1,5 +1,7 @@
 # Link2AI
 
+> **Claude-first founding beta:** V1 distribution and onboarding are focused on Claude first to validate demand and usability with real users. ChatGPT remains a first-class product target and is the next distribution surface.
+
 Link2AI is a remote MCP service that helps AI assistants read supported public links when the assistant cannot reliably access the content behind them.
 
 Instead of replacing ChatGPT or Claude, Link2AI acts as a thin access layer:
@@ -157,3 +159,9 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the deployment model.
 ## Founding beta sign-in
 
 The public beta can start a trial without email. The first-party `link2ai_trial_device` cookie restores the same beta account on that browser and prevents that browser from claiming a fresh trial under another email. Public email OTP is disabled unless `PUBLIC_EMAIL_LOGIN_ENABLED=true`; this keeps the beta usable without requiring a verified outbound-email domain. OpenAI reviewers use the dedicated reviewer credential path configured only through Railway environment variables.
+
+### Claude-first onboarding
+
+Public beta onboarding is documented at `/connect`. The preferred flow is Claude custom connector → **Sign in now** → **Register automatically (DCR)** → Add → Link2AI `Continue free`. Users should not need a manually issued OAuth client ID or secret.
+
+V1 returns spoken/caption text. Visual-only information may be missing; tool responses carry an explicit limitation notice so hosts should not infer unsupported visual structure.

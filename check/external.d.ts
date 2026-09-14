@@ -3,7 +3,7 @@ declare var Buffer: any;
 type Buffer = any;
 declare module 'node:crypto' { const x:any; export default x; }
 declare module 'node:child_process' { export const spawn:any; }
-declare module 'node:fs/promises' { const x:any; export default x; }
+declare module 'node:fs/promises' { const x:any; export default x; export const readFile:any; }
 declare module 'node:path' { const x:any; export default x; }
 declare module 'node:url' { export const fileURLToPath:any; }
 declare module 'node:os' { const x:any; export default x; }

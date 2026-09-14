@@ -34,6 +34,8 @@ try{
     assert.equal(page.status,200,`${route} should return 200`);
     const body=await page.text();
     assert.match(body,/LaunchBrand/);
+    if(route==='/')assert.match(body,/Claude-first founding beta/);
+    if(route==='/connect'){assert.match(body,/Open Claude setup/);assert.match(body,/mcpName=LaunchBrand/);assert.match(body,/mcpServerUrl=https%3A%2F%2Flink2ai.example%2Fmcp/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }
 
@@ -84,7 +86,10 @@ try{
 
   const oauthMetadata=await fetch(`http://127.0.0.1:${port}/.well-known/oauth-authorization-server`,{headers:{host:'link2ai.example'}});
   assert.equal(oauthMetadata.status,200);
-  assert.deepEqual((await oauthMetadata.json()).scopes_supported,['link2ai:read','offline_access']);
+  const oauthMetadataJson=await oauthMetadata.json();
+  assert.deepEqual(oauthMetadataJson.scopes_supported,['link2ai:read','offline_access']);
+  assert.equal(oauthMetadataJson.registration_endpoint,'https://link2ai.example/oauth/register');
+  assert.equal('client_id_metadata_document_supported' in oauthMetadataJson,false,'Claude-first beta should prefer DCR over CIMD to avoid server-side claude.ai metadata fetch failures');
 
   const ready=await fetch(`http://127.0.0.1:${port}/readyz`,{headers:{host:'link2ai.example'}});
   assert.equal(ready.status,503);

@@ -10,18 +10,16 @@ import {
 function escapeHtml(v: unknown): string {
   return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]!));
 }
-function html(body:string): string { return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(env().PUBLIC_BRAND_NAME)}</title><style>
-:root{color-scheme:light;--ink:#101828;--muted:#667085;--line:#e4e7ec;--soft:#f8fafc}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:28px;background:radial-gradient(circle at 50% -20%,#eef2ff 0,#f8fafc 38%,#fff 72%);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
-.auth{width:min(480px,100%);background:#fff;border:1px solid var(--line);border-radius:22px;padding:30px;box-shadow:0 18px 60px rgba(16,24,40,.08)}
-.logo{font-size:19px;font-weight:850;letter-spacing:-.035em;margin-bottom:34px}.step{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:#f2f4f7;color:#475467;font-size:12px;font-weight:750}
-h1{font-size:32px;line-height:1.05;letter-spacing:-.04em;margin:14px 0 10px}p{line-height:1.55;margin:0 0 18px;color:var(--muted)}
-label{display:block;font-size:13px;font-weight:750;margin:14px 0 6px}input,button{box-sizing:border-box;width:100%;padding:13px 14px;margin:0 0 10px;font:inherit;border-radius:12px}
-input{border:1px solid #d0d5dd;background:#fff;outline:none}input:focus{border-color:#667085;box-shadow:0 0 0 3px rgba(16,24,40,.06)}
-button{cursor:pointer;border:0;background:#101828;color:#fff;font-weight:780}.muted{color:#667085;font-size:13px}.tiny{font-size:12px;color:#98a2b3}
-.review{margin-top:24px;padding-top:18px;border-top:1px solid var(--line)}details summary{cursor:pointer;color:#667085;font-size:13px;font-weight:700}
-a{color:inherit}
-</style></head><body><main class="auth"><div class="logo">${escapeHtml(env().PUBLIC_BRAND_NAME)}</div>${body}</main></body></html>`; }
+function html(body:string): string { return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(env().PUBLIC_BRAND_NAME)}</title><link rel="icon" href="/logo.svg"><style>
+:root{color-scheme:light;--ink:#17151f;--muted:#706a78;--line:rgba(44,39,55,.12);--purple:#6f54e8}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:26px;background:radial-gradient(circle at 68% -10%,rgba(135,112,255,.20),transparent 35%),radial-gradient(circle at 5% 90%,rgba(239,154,98,.13),transparent 30%),#fbfaf8;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
+.auth{width:min(500px,100%);background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:28px;padding:31px;box-shadow:0 24px 75px rgba(39,31,64,.12);backdrop-filter:blur(16px)}
+.logo{display:flex;align-items:center;gap:10px;font-size:19px;font-weight:900;letter-spacing:-.04em;margin-bottom:30px}.logo img{width:34px;height:34px;border-radius:10px}.step{display:inline-flex;align-items:center;gap:8px;padding:7px 10px;border-radius:999px;background:#f0edff;color:#5a45bc;font-size:11px;font-weight:850}
+h1{font-size:34px;line-height:1.04;letter-spacing:-.045em;margin:15px 0 11px}p{line-height:1.58;margin:0 0 18px;color:var(--muted)}
+label{display:block;font-size:12px;font-weight:800;margin:14px 0 6px}input,button{box-sizing:border-box;width:100%;padding:13px 14px;margin:0 0 10px;font:inherit;border-radius:13px}
+input{border:1px solid #d5d0da;background:#fff;outline:none}input:focus{border-color:#8d77ff;box-shadow:0 0 0 4px rgba(111,84,232,.08)}
+button{cursor:pointer;border:0;background:linear-gradient(135deg,#6f54e8,#8d77ff);color:#fff;font-weight:820;box-shadow:0 8px 20px rgba(111,84,232,.18)}.muted{color:#706a78;font-size:13px}.tiny{font-size:12px;color:#908997;line-height:1.5}.review{margin-top:24px;padding-top:18px;border-top:1px solid var(--line)}details summary{cursor:pointer;color:#706a78;font-size:13px;font-weight:750}a{color:inherit}.trust{display:flex;gap:8px;flex-wrap:wrap;margin-top:17px}.trust span{font-size:10px;font-weight:800;color:#706a78;background:#f5f3f0;padding:6px 8px;border-radius:999px}
+</style></head><body><main class="auth"><div class="logo"><img src="/logo.svg" alt=""><span>${escapeHtml(env().PUBLIC_BRAND_NAME)}</span></div>${body}</main></body></html>`; }
 
 function safeReturnTo(raw: string | undefined): string {
   if (!raw || raw.length>4096) return '/account';
@@ -106,7 +104,6 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     scopes_supported: ['link2ai:read','offline_access'],
     resource_parameter_supported: true,
     authorization_response_iss_parameter_supported: true,
-    client_id_metadata_document_supported: true,
     revocation_endpoint_auth_methods_supported: ['none']
   }));
 
@@ -134,7 +131,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const returnTo = safeReturnTo(q.return_to);
     const reviewer=Boolean(env().REVIEWER_EMAIL&&env().REVIEWER_PASSWORD);
     const emailLogin=env().PUBLIC_EMAIL_LOGIN_ENABLED;
-    return reply.type('text/html').send(html(`<span class="step">Founding beta</span><h1>Connect ${escapeHtml(env().PUBLIC_BRAND_NAME)}</h1><p>Start the free trial on this browser. No email, password or card needed.</p><form method="post" action="/auth/guest"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button autofocus>Continue free</button></form><p class="tiny">3 successful links or 10 minutes of content, whichever comes first. After this, we return you to your AI automatically.</p>${emailLogin?`<div class="review"><details><summary>Sign in with email</summary><form method="post" action="/auth/start" style="margin-top:12px"><label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="you@example.com"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Send sign-in code</button></form></details></div>`:''}${reviewer?`<div class="review"><details><summary>OpenAI reviewer access</summary><form method="post" action="/auth/reviewer" style="margin-top:12px"><label>Reviewer email</label><input type="email" name="email" required autocomplete="username"><label>Reviewer password</label><input type="password" name="password" required autocomplete="current-password"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Reviewer sign in</button></form></details></div>`:''}`));
+    return reply.type('text/html').send(html(`<span class="step">Free founding trial</span><h1>One click, then back to Claude.</h1><p>Start ${escapeHtml(env().PUBLIC_BRAND_NAME)} on this browser. No email, password or card needed.</p><form method="post" action="/auth/guest"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button autofocus>Continue free</button></form><p class="tiny">3 successful links or 10 minutes of content, whichever comes first. When authorization finishes, you return to the AI client automatically.</p><div class="trust"><span>Public links only</span><span>Temporary media</span><span>Failed jobs do not count</span></div>${emailLogin?`<div class="review"><details><summary>Sign in with email</summary><form method="post" action="/auth/start" style="margin-top:12px"><label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="you@example.com"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Send sign-in code</button></form></details></div>`:''}${reviewer?`<div class="review"><details><summary>OpenAI reviewer access</summary><form method="post" action="/auth/reviewer" style="margin-top:12px"><label>Reviewer email</label><input type="email" name="email" required autocomplete="username"><label>Reviewer password</label><input type="password" name="password" required autocomplete="current-password"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Reviewer sign in</button></form></details></div>`:''}`));
   });
 
   app.post('/auth/guest', async (req, reply) => {
@@ -206,7 +203,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       if(!csrf)return reply.code(401).send('Sign in to connect this service.');
       const client=await getOAuthClient(request.clientId,request.redirectUri);
       if(!client)return reply.code(400).send('Unknown OAuth client or redirect URI.');
-      return reply.type('text/html').send(html(`<h1>Connect ${escapeHtml(env().PUBLIC_BRAND_NAME)}</h1><p><strong>${escapeHtml(client.client_name)}</strong> wants permission to read supported public links through your ${escapeHtml(env().PUBLIC_BRAND_NAME)} account.</p><p class="muted">This lets the connected AI request content behind supported links and check your ${escapeHtml(env().PUBLIC_BRAND_NAME)} usage. ${escapeHtml(env().PUBLIC_BRAND_NAME)} does not give the client access to your email or payment details.</p><form method="post" action="/oauth/authorize">${authorizeHidden(request,csrf)}<button>Connect</button></form>`));
+      return reply.type('text/html').send(html(`<span class="step">Permission</span><h1>Connect ${escapeHtml(client.client_name)}</h1><p>Allow <strong style="color:#17151f">${escapeHtml(client.client_name)}</strong> to ask ${escapeHtml(env().PUBLIC_BRAND_NAME)} for AI-readable content behind supported public links and to check your ${escapeHtml(env().PUBLIC_BRAND_NAME)} usage.</p><p class="muted">This does not give the AI client access to your email or payment details, and it does not let ${escapeHtml(env().PUBLIC_BRAND_NAME)} post, like, follow, edit or delete anything on the source platform.</p><form method="post" action="/oauth/authorize">${authorizeHidden(request,csrf)}<button>Connect and return</button></form>`));
     }catch(e){return oauthError(reply,e);}
   });
 
