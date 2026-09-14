@@ -67,6 +67,58 @@ async function ytdlp(args: string[], ctx: ResolveContext): Promise<{stdout:strin
   return result;
 }
 
+
+function parseDurationString(value: unknown): number {
+  if (typeof value !== 'string') return 0;
+  const parts=value.trim().split(':').map(Number);
+  if (!parts.length || parts.some(v=>!Number.isFinite(v)||v<0)) return 0;
+  let seconds=0;
+  for (const part of parts) seconds=seconds*60+part;
+  return Number.isFinite(seconds)&&seconds>0?Math.ceil(seconds):0;
+}
+
+function durationFromFragments(value: unknown): number {
+  if (!Array.isArray(value) || !value.length) return 0;
+  let total=0;
+  for (const item of value) {
+    if (!item || typeof item !== 'object') return 0;
+    const d=Number((item as Record<string,unknown>).duration ?? 0);
+    if (!Number.isFinite(d)||d<=0) return 0;
+    total+=d;
+  }
+  return total>0?Math.ceil(total):0;
+}
+
+function extractDurationSeconds(raw: Record<string, unknown>): number {
+  const direct=Number(raw.duration ?? 0);
+  if(Number.isFinite(direct)&&direct>0)return Math.ceil(direct);
+  const fromString=parseDurationString(raw.duration_string);
+  if(fromString)return fromString;
+
+  const candidates:number[]=[];
+  for (const key of ['formats','requested_formats','requested_downloads'] as const) {
+    const entries=raw[key];
+    if(!Array.isArray(entries))continue;
+    for(const entry of entries){
+      if(!entry||typeof entry!=='object')continue;
+      const e=entry as Record<string,unknown>;
+      const d=Number(e.duration ?? 0);
+      if(Number.isFinite(d)&&d>0)candidates.push(Math.ceil(d));
+      const fragmented=durationFromFragments(e.fragments);
+      if(fragmented)candidates.push(fragmented);
+    }
+  }
+
+  if(Array.isArray(raw.chapters)){
+    for(const chapter of raw.chapters){
+      if(!chapter||typeof chapter!=='object')continue;
+      const end=Number((chapter as Record<string,unknown>).end_time ?? 0);
+      if(Number.isFinite(end)&&end>0)candidates.push(Math.ceil(end));
+    }
+  }
+  return candidates.length?Math.max(...candidates):0;
+}
+
 export class YtDlpResolver implements MediaResolver {
   constructor(public readonly platform: Platform) {}
 
@@ -86,8 +138,10 @@ export class YtDlpResolver implements MediaResolver {
     try { raw = JSON.parse(result.stdout) as Record<string, unknown>; }
     catch { throw new Link2AIError('EXTRACTION_FAILED', 'Platform metadata was not valid JSON.', 502, true); }
 
-    const duration = Math.max(0, Math.round(Number(raw.duration ?? 0)));
-    if (!duration) throw new Link2AIError('EXTRACTION_FAILED', 'The video duration could not be determined.', 502, true);
+    // Instagram and some short-form extractors occasionally return usable media metadata
+    // without a top-level duration. Keep the metadata and let the worker derive a
+    // definitive duration from captions or the downloaded audio before reserving quota.
+    const duration = extractDurationSeconds(raw);
     const id = clipExternalText(String(raw.id ?? input.canonicalMediaId),METADATA_LIMITS.canonicalId);
     if(!id)throw new Link2AIError('EXTRACTION_FAILED','The platform returned an invalid media id.',502,true);
     return {

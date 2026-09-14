@@ -19,3 +19,24 @@ export async function normalizeAudioForAsr(inputPath:string,outputDir:string):Pr
   if(stat.size>MAX_ASR_FILE_BYTES)throw new Link2AIError('DOWNLOAD_TOO_LARGE','The prepared audio exceeds the V1 transcription limit.',413);
   return output;
 }
+
+function ffprobeBin(ffmpegBin:string):string{
+  const base=path.basename(ffmpegBin);
+  return base==='ffmpeg'?path.join(path.dirname(ffmpegBin),'ffprobe'):'ffprobe';
+}
+
+export async function probeMediaDurationSeconds(inputPath:string):Promise<number>{
+  const result=await runProcess(ffprobeBin(env().FFMPEG_BIN),[
+    '-v','error','-show_entries','format=duration','-of','default=noprint_wrappers=1:nokey=1',inputPath
+  ],{timeoutMs:30_000,maxOutputBytes:128_000});
+  if(result.code!==0){
+    throw new Link2AIError('EXTRACTION_FAILED','The downloaded media duration could not be determined.',502,true,{ffprobe:result.stderr.slice(-1000)});
+  }
+  const seconds=Number(result.stdout.trim());
+  if(!Number.isFinite(seconds)||seconds<=0){
+    throw new Link2AIError('EXTRACTION_FAILED','The downloaded media duration could not be determined.',502,true);
+  }
+  // Round up so quota and per-item duration limits are never under-counted.
+  return Math.max(1,Math.ceil(seconds));
+}
+

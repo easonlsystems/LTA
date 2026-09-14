@@ -179,7 +179,7 @@ export async function markCompleted(jobId: string, cacheId: string, durationSeco
   );
 }
 
-export async function setJobMetadata(jobId: string, canonicalId: string, durationSeconds: number): Promise<void> {
+export async function setJobMetadata(jobId: string, canonicalId: string, durationSeconds: number | null): Promise<void> {
   await pool.query(
     `UPDATE transcript_jobs SET canonical_media_id=$2, duration_seconds=$3, updated_at=now() WHERE id=$1`,
     [jobId, canonicalId, durationSeconds]
