@@ -152,3 +152,8 @@ npm run db:migrate
 The repository contains a Dockerfile and Railway configuration. The intended production topology is one API/MCP service, one Worker service, and PostgreSQL in the same Railway environment.
 
 See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the deployment model.
+
+
+## Founding beta sign-in
+
+The public beta can start a trial without email. The first-party `link2ai_trial_device` cookie restores the same beta account on that browser and prevents that browser from claiming a fresh trial under another email. Public email OTP is disabled unless `PUBLIC_EMAIL_LOGIN_ENABLED=true`; this keeps the beta usable without requiring a verified outbound-email domain. OpenAI reviewers use the dedicated reviewer credential path configured only through Railway environment variables.

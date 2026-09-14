@@ -40,6 +40,7 @@ export function hashLoginCode(email: string, code: string): string {
 }
 
 export async function beginEmailLogin(emailRaw: string, returnTo: string): Promise<{devCode?:string;flowToken:string}> {
+  if(!env().PUBLIC_EMAIL_LOGIN_ENABLED)throw new Link2AIError('AUTH_REQUIRED','Email sign-in is not available during the founding beta.',404);
   const email = emailRaw.trim().toLowerCase();
   if (email.length>320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Link2AIError('AUTH_REQUIRED', 'Enter a valid email address.', 400);
   if(returnTo.length>4096)throw new Link2AIError('AUTH_REQUIRED','Sign-in return path is too long.',400);
@@ -153,6 +154,45 @@ export async function verifyReviewerLogin(emailRaw:string,password:string,return
     );
     await client.query('COMMIT');
     return {user:u.rows[0],sessionToken:token,returnTo};
+  }catch(err){
+    await client.query('ROLLBACK').catch(()=>{});
+    throw err;
+  }finally{client.release();}
+}
+
+
+export async function beginGuestLogin(existingToken:string|undefined,returnTo:string):Promise<{user:AuthUser;sessionToken:string;deviceToken:string;returnTo:string}>{
+  if(returnTo.length>4096)throw new Link2AIError('AUTH_REQUIRED','Sign-in return path is too long.',400);
+  const deviceToken=existingToken&&existingToken.length>=32&&existingToken.length<=256?existingToken:randomToken(32);
+  const deviceHash=sha256(`trial-device:${deviceToken}:${env().APP_SECRET}`);
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[deviceHash]);
+    const existing=await client.query<AuthUser & {account_status:string}>(
+      `SELECT u.id,u.email,u.plan,u.account_status
+       FROM trial_device_claims d JOIN users u ON u.id=d.user_id
+       WHERE d.device_hash=$1 FOR UPDATE OF d,u`,[deviceHash]
+    );
+    let user:AuthUser & {account_status?:string};
+    if(existing.rowCount){
+      if(existing.rows[0].account_status==='disabled')throw new Link2AIError('AUTH_REQUIRED','This account is disabled.',403);
+      user=existing.rows[0];
+    }else{
+      const created=await client.query<AuthUser & {account_status:string}>(
+        `INSERT INTO users(email,plan,account_status,trial_eligible) VALUES(NULL,'trial','active',true)
+         RETURNING id,email,plan,account_status`,[]
+      );
+      user=created.rows[0];
+      await client.query('INSERT INTO trial_device_claims(device_hash,user_id) VALUES($1,$2)',[deviceHash,user.id]);
+    }
+    const token=randomToken(32);
+    await client.query(
+      `INSERT INTO web_sessions(user_id,token_hash,expires_at) VALUES($1,$2,now() + interval '30 days')`,
+      [user.id,sha256(token)]
+    );
+    await client.query('COMMIT');
+    return {user:{id:user.id,email:user.email,plan:user.plan},sessionToken:token,deviceToken,returnTo};
   }catch(err){
     await client.query('ROLLBACK').catch(()=>{});
     throw err;

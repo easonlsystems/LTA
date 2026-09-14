@@ -18,13 +18,13 @@ export function readinessIssues(role:RuntimeRole):string[]{
     }
   }
   if(role==='api'){
-    if(!e.RESEND_API_KEY)issues.push('RESEND_API_KEY is missing');
+    if(e.PUBLIC_EMAIL_LOGIN_ENABLED&&!e.RESEND_API_KEY)issues.push('RESEND_API_KEY is missing while public email login is enabled');
     if(!e.LEMONSQUEEZY_API_KEY)issues.push('LEMONSQUEEZY_API_KEY is missing');
     if(!e.LEMONSQUEEZY_WEBHOOK_SECRET)issues.push('LEMONSQUEEZY_WEBHOOK_SECRET is missing');
     if(!e.LEMONSQUEEZY_STORE_ID)issues.push('LEMONSQUEEZY_STORE_ID is missing');
     if(!e.LEMONSQUEEZY_BASIC_VARIANT_ID)issues.push('LEMONSQUEEZY_BASIC_VARIANT_ID is missing');
     if(!e.LEMONSQUEEZY_PRO_VARIANT_ID)issues.push('LEMONSQUEEZY_PRO_VARIANT_ID is missing');
-    if(e.NODE_ENV==='production'&&e.AUTH_FROM_EMAIL.includes('example.com'))issues.push('AUTH_FROM_EMAIL is still using the example domain');
+    if(e.PUBLIC_EMAIL_LOGIN_ENABLED&&e.NODE_ENV==='production'&&e.AUTH_FROM_EMAIL.includes('example.com'))issues.push('AUTH_FROM_EMAIL is still using the example domain');
     if(e.NODE_ENV==='production'&&!e.SUPPORT_EMAIL)issues.push('SUPPORT_EMAIL is missing');
     if(Boolean(e.REVIEWER_EMAIL)!==Boolean(e.REVIEWER_PASSWORD))issues.push('REVIEWER_EMAIL and REVIEWER_PASSWORD must be configured together');
   }

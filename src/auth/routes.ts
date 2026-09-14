@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { env } from '../config/env.js';
 import { Link2AIError } from '../util/errors.js';
 import {
-  beginEmailLogin, createAuthorizationCode, csrfTokenFromSessionCookie, exchangeAuthorizationCode, exchangeRefreshToken,
+  beginEmailLogin, beginGuestLogin, createAuthorizationCode, csrfTokenFromSessionCookie, exchangeAuthorizationCode, exchangeRefreshToken,
   getOAuthClient, loginFlowCookieName, mcpResource, parseCookies, registerOAuthClient, revokeOAuthToken, sessionCookieName,
   userFromSessionCookie, verifyCsrfToken, verifyEmailLogin, verifyReviewerLogin, claimTrialDevice, trialDeviceCookieName
 } from './service.js';
@@ -133,7 +133,23 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const q = req.query as any;
     const returnTo = safeReturnTo(q.return_to);
     const reviewer=Boolean(env().REVIEWER_EMAIL&&env().REVIEWER_PASSWORD);
-    return reply.type('text/html').send(html(`<span class="step">1 of 2 · Sign in</span><h1>Connect ${escapeHtml(env().PUBLIC_BRAND_NAME)}</h1><p>Enter your email. We’ll send a 6-digit code, then return you to your AI automatically.</p><form method="post" action="/auth/start"><label>Email</label><input type="email" name="email" required autofocus autocomplete="email" placeholder="you@example.com"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Send sign-in code</button></form><p class="tiny">No password needed. Your account is used for connection, usage limits and billing.</p>${reviewer?`<div class="review"><details><summary>OpenAI reviewer access</summary><form method="post" action="/auth/reviewer" style="margin-top:12px"><label>Reviewer email</label><input type="email" name="email" required autocomplete="username"><label>Reviewer password</label><input type="password" name="password" required autocomplete="current-password"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Reviewer sign in</button></form></details></div>`:''}`));
+    const emailLogin=env().PUBLIC_EMAIL_LOGIN_ENABLED;
+    return reply.type('text/html').send(html(`<span class="step">Founding beta</span><h1>Connect ${escapeHtml(env().PUBLIC_BRAND_NAME)}</h1><p>Start the free trial on this browser. No email, password or card needed.</p><form method="post" action="/auth/guest"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button autofocus>Continue free</button></form><p class="tiny">3 successful links or 10 minutes of content, whichever comes first. After this, we return you to your AI automatically.</p>${emailLogin?`<div class="review"><details><summary>Sign in with email</summary><form method="post" action="/auth/start" style="margin-top:12px"><label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="you@example.com"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Send sign-in code</button></form></details></div>`:''}${reviewer?`<div class="review"><details><summary>OpenAI reviewer access</summary><form method="post" action="/auth/reviewer" style="margin-top:12px"><label>Reviewer email</label><input type="email" name="email" required autocomplete="username"><label>Reviewer password</label><input type="password" name="password" required autocomplete="current-password"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Reviewer sign in</button></form></details></div>`:''}`));
+  });
+
+  app.post('/auth/guest', async (req, reply) => {
+    const b=req.body as any;
+    const returnTo=safeReturnTo(b?.return_to);
+    try{
+      const priorDevice=parseCookies(req.headers.cookie)[trialDeviceCookieName()];
+      const result=await beginGuestLogin(priorDevice,returnTo);
+      const secure=env().NODE_ENV==='production'?'; Secure':'';
+      reply.header('Set-Cookie',[
+        `${sessionCookieName()}=${encodeURIComponent(result.sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`,
+        `${trialDeviceCookieName()}=${encodeURIComponent(result.deviceToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`
+      ]);
+      return reply.redirect(result.returnTo);
+    }catch(e){return friendlyError(reply,e);}
   });
 
   app.post('/auth/start', async (req, reply) => {

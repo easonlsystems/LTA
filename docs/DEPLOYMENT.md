@@ -66,3 +66,11 @@ Before public launch, staging should verify at minimum:
 - email OTP delivery
 - subscription checkout and webhook lifecycle
 - Worker restart / SIGTERM behavior
+
+
+### Founding beta auth
+
+- `PUBLIC_EMAIL_LOGIN_ENABLED=false` — default public beta mode. Users start a browser-bound free trial without email.
+- `PUBLIC_EMAIL_LOGIN_ENABLED=true` — only enable after the production sender/domain can deliver OTP email to arbitrary users.
+- `REVIEWER_EMAIL` + `REVIEWER_PASSWORD` — dedicated OpenAI review account; configure both together and do not commit credentials.
+- `OPENAI_APPS_CHALLENGE` — set to the exact token shown by the OpenAI submission portal when domain verification becomes available.

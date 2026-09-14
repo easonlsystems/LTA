@@ -26,6 +26,7 @@ const schema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_TRANSCRIPTION_MODEL: z.string().default('whisper-1'),
   RESEND_API_KEY: z.string().optional(),
+  PUBLIC_EMAIL_LOGIN_ENABLED: boolish,
   AUTH_FROM_EMAIL: z.string().default('Link2AI <login@example.com>'),
   SUPPORT_EMAIL: z.string().email().optional(),
   AUTH_EMAIL_GLOBAL_LIMIT_15M: z.coerce.number().int().min(10).max(10000).default(200),

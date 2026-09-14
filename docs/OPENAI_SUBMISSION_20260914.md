@@ -18,8 +18,18 @@ Link2AI does not bypass private accounts, authentication, paywalls, DRM, geograp
 - MCP: `https://api-production-0383e.up.railway.app/mcp`
 - Privacy: `https://api-production-0383e.up.railway.app/privacy`
 - Terms: `https://api-production-0383e.up.railway.app/terms`
+- Support: `https://api-production-0383e.up.railway.app/support`
 - Status: `https://api-production-0383e.up.railway.app/status`
 - Domain challenge: `https://api-production-0383e.up.railway.app/.well-known/openai-apps-challenge`
+
+## Listing fields
+- Category: `Productivity` (use the closest Utilities/Productivity option shown by the portal)
+- Availability: `Global / all Plugin Directory-supported regions`
+- MCP deployment: `Universal`
+- Authentication: `OAuth 2.1 / authorization code + PKCE`
+- Custom UI: `None` (MCP-only plugin)
+- Component CSP / UI fetch domains: `None` because Link2AI ships no plugin component UI
+- Listing logo: `assets/Link2AI_Logo_1024.png`
 
 ## Starter prompts
 1. Read this link and tell me what it is about: `<link>`
@@ -157,3 +167,8 @@ The initial release includes:
 - [ ] Starter prompts entered
 - [ ] Release notes entered
 - [ ] Production smoke test passes after this hotfix deploy
+
+
+## Founding beta auth
+
+Public users can start a free browser-bound trial without email. This avoids making a verified outbound-email domain a launch blocker. The OpenAI reviewer uses the dedicated reviewer username/password path, which requires no MFA, SMS, or email confirmation.

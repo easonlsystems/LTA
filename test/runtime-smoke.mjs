@@ -29,7 +29,7 @@ try{
   assert.equal((await health.json()).ok,true);
 
   // Public routes should include /status (may return 503 if db unavailable)
-  for(const route of ['/','/connect','/privacy','/terms']){
+  for(const route of ['/','/connect','/support','/privacy','/terms']){
     const page=await fetch(`http://127.0.0.1:${port}${route}`,{headers:{host:'link2ai.example'}});
     assert.equal(page.status,200,`${route} should return 200`);
     const body=await page.text();
@@ -61,8 +61,14 @@ try{
   assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/connect<\/loc>/);
   assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/pricing<\/loc>/);
   assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/status<\/loc>/);
+  assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/support<\/loc>/);
   assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/privacy<\/loc>/);
   assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/terms<\/loc>/);
+
+  const logo=await fetch(`http://127.0.0.1:${port}/logo.svg`,{headers:{host:'link2ai.example'}});
+  assert.equal(logo.status,200);
+  assert.match(logo.headers.get('content-type')??'',/image\/svg\+xml/);
+  assert.match(await logo.text(),/<svg/);
 
   const challenge=await fetch(`http://127.0.0.1:${port}/.well-known/openai-apps-challenge`,{headers:{host:'link2ai.example'}});
   assert.equal(challenge.status,200);
@@ -71,7 +77,9 @@ try{
   const login=await fetch(`http://127.0.0.1:${port}/login?return_to=%2Faccount`,{headers:{host:'link2ai.example'}});
   assert.equal(login.status,200);
   const loginText=await login.text();
+  assert.match(loginText,/Continue free/);
   assert.match(loginText,/OpenAI reviewer access/);
+  assert.doesNotMatch(loginText,/Send sign-in code/);
   assert.doesNotMatch(loginText,/this-is-a-long-review-password/);
 
   const oauthMetadata=await fetch(`http://127.0.0.1:${port}/.well-known/oauth-authorization-server`,{headers:{host:'link2ai.example'}});
