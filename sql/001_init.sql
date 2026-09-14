@@ -10,6 +10,18 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_eligible boolean NOT NULL DEFAULT true;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_salt text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_set_at timestamptz;
+
+CREATE TABLE IF NOT EXISTS password_auth_attempts (
+  id bigserial PRIMARY KEY,
+  email_hash text NOT NULL,
+  success boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS password_auth_attempts_recent_idx ON password_auth_attempts(email_hash, created_at DESC);
+CREATE INDEX IF NOT EXISTS password_auth_attempts_created_idx ON password_auth_attempts(created_at);
 
 CREATE TABLE IF NOT EXISTS trial_device_claims (
   device_hash text PRIMARY KEY,

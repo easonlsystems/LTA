@@ -23,10 +23,9 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
   app.get('/pricing',async(req,reply)=>{
     const q=req.query as any;
     const user=await userFromSessionCookie(req.headers.cookie);
-    if(!user){
-      const returnUrl=`/pricing${Object.keys(q).length?`?${new URLSearchParams(q).toString()}`:''}`;
-      return reply.code(302).redirect(`/login?return_to=${encodeURIComponent(returnUrl)}`);
-    }
+    const returnUrl=`/pricing${Object.keys(q).length?`?${new URLSearchParams(q).toString()}`:''}`;
+    if(!user)return reply.code(302).redirect(`/login?return_to=${encodeURIComponent(returnUrl)}`);
+    if(!user.email)return reply.code(302).redirect(`/signup?return_to=${encodeURIComponent(returnUrl)}`);
     const resume=q.resume_job_id?String(q.resume_job_id):'';
     const chosen:PaidPlan=q.plan==='pro'?'pro':'basic';
     
@@ -49,6 +48,7 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
     const resume=b?.resume_job_id?String(b.resume_job_id):'';
     const returnTo=`/pricing?plan=${encodeURIComponent(plan)}${resume?`&resume_job_id=${encodeURIComponent(resume)}`:''}`;
     const user=await requireWebUser(req,reply,returnTo); if(!user)return;
+    if(!user.email)return reply.redirect(`/signup?return_to=${encodeURIComponent(returnTo)}`);
     if(!verifyCsrfToken(req.headers.cookie,String(b?.csrf??'')))return reply.code(403).type('text/html').send(page(`<h1>${esc(env().PUBLIC_BRAND_NAME)}</h1><p>This payment action expired. Please try again.</p><p><a href="${esc(returnTo)}">Back</a></p>`));
     
     // Check if trial user with no resume_job_id and zero usage_ledger rows
@@ -74,7 +74,13 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
     const usage=await getUsageSnapshot(user.id);
     const minsUsed=Math.ceil(usage.used_seconds/60), minsLimit=Math.round(usage.limit_seconds/60);
     const csrf=csrfField(req.headers.cookie);
-    return reply.type('text/html').send(page(`<h1>${esc(env().PUBLIC_BRAND_NAME)}</h1><div class="card"><h2>${esc(usage.plan[0].toUpperCase()+usage.plan.slice(1))}</h2><p>${minsUsed} / ${minsLimit} minutes${usage.period_end?`<br>Renews ${esc(new Date(usage.period_end).toLocaleDateString('en-US',{month:'short',day:'numeric'}))}`:''}</p>${usage.plan==='trial'?`<p>${usage.remaining_videos} free links remaining</p><p><a href="/pricing">Continue with Basic</a></p>`:`<form method="post" action="/billing/portal">${csrf}<button>Manage subscription</button></form>`}</div><p class="muted">${esc(env().PUBLIC_BRAND_NAME)} keeps temporary media/audio only while processing. Transcript cache expires automatically.</p>`));
+    const identity=user.email
+      ? `<p class="muted">Signed in as <strong>${esc(user.email)}</strong></p>`
+      : `<div class="card"><h2>Finish your account</h2><p>This is a legacy browser-only trial. Add an email and password so your usage and Claude connection follow you across devices.</p><p><a href="/signup?return_to=%2Faccount">Add email account</a></p></div>`;
+    const billing=user.email
+      ? (usage.plan==='trial'?`<p>${usage.remaining_videos} free links remaining</p><p><a href="/pricing">Continue with Basic</a></p>`:`<form method="post" action="/billing/portal">${csrf}<button>Manage subscription</button></form>`)
+      : `<p><a href="/signup?return_to=%2Faccount">Create your email account before upgrading</a></p>`;
+    return reply.type('text/html').send(page(`<h1>${esc(env().PUBLIC_BRAND_NAME)}</h1>${identity}<div class="card"><h2>${esc(usage.plan[0].toUpperCase()+usage.plan.slice(1))}</h2><p>${minsUsed} / ${minsLimit} minutes${usage.period_end?`<br>Renews ${esc(new Date(usage.period_end).toLocaleDateString('en-US',{month:'short',day:'numeric'}))}`:''}</p>${billing}</div><p class="muted">${esc(env().PUBLIC_BRAND_NAME)} keeps temporary media/audio only while processing. Transcript cache expires automatically.</p><form method="post" action="/auth/logout">${csrf}<button>Sign out</button></form>`));
   });
 
 

@@ -3,8 +3,8 @@ import { env } from '../config/env.js';
 import { Link2AIError } from '../util/errors.js';
 import {
   beginEmailLogin, beginGuestLogin, createAuthorizationCode, csrfTokenFromSessionCookie, exchangeAuthorizationCode, exchangeRefreshToken,
-  getOAuthClient, loginFlowCookieName, mcpResource, parseCookies, registerOAuthClient, revokeOAuthToken, sessionCookieName,
-  userFromSessionCookie, verifyCsrfToken, verifyEmailLogin, verifyReviewerLogin, claimTrialDevice, trialDeviceCookieName
+  getOAuthClient, loginFlowCookieName, mcpResource, parseCookies, registerOAuthClient, registerPasswordAccount, revokeOAuthToken, revokeWebSession, sessionCookieName,
+  userFromSessionCookie, verifyCsrfToken, verifyEmailLogin, verifyPasswordLogin, verifyReviewerLogin, claimTrialDevice, trialDeviceCookieName
 } from './service.js';
 
 function escapeHtml(v: unknown): string {
@@ -127,11 +127,61 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/login', async (req, reply) => {
-    const q = req.query as any;
-    const returnTo = safeReturnTo(q.return_to);
+    const q=req.query as any;
+    const returnTo=safeReturnTo(q.return_to);
     const reviewer=Boolean(env().REVIEWER_EMAIL&&env().REVIEWER_PASSWORD);
-    const emailLogin=env().PUBLIC_EMAIL_LOGIN_ENABLED;
-    return reply.type('text/html').send(html(`<span class="step">Free founding trial</span><h1>One click, then back to Claude.</h1><p>Start ${escapeHtml(env().PUBLIC_BRAND_NAME)} on this browser. No email, password or card needed.</p><form method="post" action="/auth/guest"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button autofocus>Continue free</button></form><p class="tiny">3 successful links or 10 minutes of content, whichever comes first. When authorization finishes, you return to the AI client automatically.</p><div class="trust"><span>Public links only</span><span>Temporary media</span><span>Failed jobs do not count</span></div>${emailLogin?`<div class="review"><details><summary>Sign in with email</summary><form method="post" action="/auth/start" style="margin-top:12px"><label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="you@example.com"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Send sign-in code</button></form></details></div>`:''}${reviewer?`<div class="review"><details><summary>OpenAI reviewer access</summary><form method="post" action="/auth/reviewer" style="margin-top:12px"><label>Reviewer email</label><input type="email" name="email" required autocomplete="username"><label>Reviewer password</label><input type="password" name="password" required autocomplete="current-password"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Reviewer sign in</button></form></details></div>`:''}`));
+    const legacyCodeLogin=env().PUBLIC_EMAIL_LOGIN_ENABLED;
+    return reply.type('text/html').send(html(`<span class="step">Link2AI account</span><h1>Sign in to continue.</h1><p>Your email is your Link2AI account. It keeps your trial, usage and plan attached to you across browsers and devices.</p><form method="post" action="/auth/password/login"><label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="you@example.com"><label>Password</label><input type="password" name="password" required minlength="10" maxlength="128" autocomplete="current-password" placeholder="Your password"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button autofocus>Sign in and continue</button></form><p class="tiny">New to ${escapeHtml(env().PUBLIC_BRAND_NAME)}? <a href="/signup?return_to=${encodeURIComponent(returnTo)}"><strong>Create an account</strong></a>. No card required for the trial.</p><div class="trust"><span>3 links or 10 minutes free</span><span>Public links only</span><span>Failed jobs do not count</span></div>${legacyCodeLogin?`<div class="review"><details><summary>Use an email sign-in code instead</summary><form method="post" action="/auth/start" style="margin-top:12px"><label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="you@example.com"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Send sign-in code</button></form></details></div>`:''}${reviewer?`<div class="review"><details><summary>OpenAI reviewer access</summary><form method="post" action="/auth/reviewer" style="margin-top:12px"><label>Reviewer email</label><input type="email" name="email" required autocomplete="username"><label>Reviewer password</label><input type="password" name="password" required autocomplete="current-password"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Reviewer sign in</button></form></details></div>`:''}`));
+  });
+
+  app.get('/signup',async(req,reply)=>{
+    const q=req.query as any;
+    const returnTo=safeReturnTo(q.return_to);
+    const current=await userFromSessionCookie(req.headers.cookie);
+    const upgrading=Boolean(current&&!current.email);
+    return reply.type('text/html').send(html(`<span class="step">${upgrading?'Finish account setup':'Create account'}</span><h1>${upgrading?'Keep this Link2AI account.':'Start your Link2AI trial.'}</h1><p>${upgrading?'Add an email and password to the account you already used. Your current usage and Claude connection stay attached.':'Use an email and password so your trial, usage and plan follow you across devices.'}</p><form method="post" action="/auth/password/register"><label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="you@example.com"><label>Password</label><input type="password" name="password" required minlength="10" maxlength="128" autocomplete="new-password" placeholder="At least 10 characters"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>${upgrading?'Save account and continue':'Create account and continue'}</button></form><p class="tiny">Already have an account? <a href="/login?return_to=${encodeURIComponent(returnTo)}"><strong>Sign in</strong></a>. Password reset by email will be added after the beta; for now, keep your password safe or contact Support if you lose access.</p><div class="trust"><span>No card for trial</span><span>Same account on every device</span><span>Passwords are salted + hashed</span></div>`));
+  });
+
+  app.post('/auth/password/login',async(req,reply)=>{
+    const b=req.body as any;
+    const returnTo=safeReturnTo(b?.return_to);
+    try{
+      const result=await verifyPasswordLogin(String(b?.email??''),String(b?.password??''),returnTo);
+      const priorDevice=parseCookies(req.headers.cookie)[trialDeviceCookieName()];
+      const trial=await claimTrialDevice(result.user.id,priorDevice);
+      const secure=env().NODE_ENV==='production'?'; Secure':'';
+      reply.header('Set-Cookie',[
+        `${sessionCookieName()}=${encodeURIComponent(result.sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`,
+        `${trialDeviceCookieName()}=${encodeURIComponent(trial.deviceToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`
+      ]);
+      return reply.redirect(result.returnTo);
+    }catch(e){return friendlyError(reply,e);}
+  });
+
+  app.post('/auth/password/register',async(req,reply)=>{
+    const b=req.body as any;
+    const returnTo=safeReturnTo(b?.return_to);
+    try{
+      const current=await userFromSessionCookie(req.headers.cookie);
+      const result=await registerPasswordAccount(String(b?.email??''),String(b?.password??''),returnTo,current?.id);
+      const priorDevice=parseCookies(req.headers.cookie)[trialDeviceCookieName()];
+      const trial=await claimTrialDevice(result.user.id,priorDevice);
+      const secure=env().NODE_ENV==='production'?'; Secure':'';
+      reply.header('Set-Cookie',[
+        `${sessionCookieName()}=${encodeURIComponent(result.sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`,
+        `${trialDeviceCookieName()}=${encodeURIComponent(trial.deviceToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`
+      ]);
+      return reply.redirect(result.returnTo);
+    }catch(e){return friendlyError(reply,e);}
+  });
+
+  app.post('/auth/logout',async(req,reply)=>{
+    const b=req.body as any;
+    if(!verifyCsrfToken(req.headers.cookie,String(b?.csrf??'')))return reply.code(403).type('text/html').send(html(`<h1>Sign-out expired.</h1><p><a href="/account">Back to account</a></p>`));
+    await revokeWebSession(req.headers.cookie).catch(()=>{});
+    const secure=env().NODE_ENV==='production'?'; Secure':'';
+    reply.header('Set-Cookie',`${sessionCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`);
+    return reply.redirect('/');
   });
 
   app.post('/auth/guest', async (req, reply) => {
@@ -199,6 +249,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       // fetch primitive. Validate/fetch the client only after Link2AI sign-in exists.
       const user = await userFromSessionCookie(req.headers.cookie);
       if (!user) return reply.redirect(`/login?return_to=${encodeURIComponent(authorizeQuery(request))}`);
+      if (!user.email) return reply.redirect(`/signup?return_to=${encodeURIComponent(authorizeQuery(request))}`);
       const csrf=csrfTokenFromSessionCookie(req.headers.cookie);
       if(!csrf)return reply.code(401).send('Sign in to connect this service.');
       const client=await getOAuthClient(request.clientId,request.redirectUri);
@@ -213,6 +264,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       const request=parseAuthorizeRequest(b);
       const user=await userFromSessionCookie(req.headers.cookie);
       if(!user)return reply.redirect(`/login?return_to=${encodeURIComponent(authorizeQuery(request))}`);
+      if(!user.email)return reply.redirect(`/signup?return_to=${encodeURIComponent(authorizeQuery(request))}`);
       if(!verifyCsrfToken(req.headers.cookie,String(b?.csrf??'')))return reply.code(403).send('Authorization confirmation expired. Please try connecting again.');
       const client=await getOAuthClient(request.clientId,request.redirectUri);
       if(!client)return reply.code(400).send('Unknown OAuth client or redirect URI.');

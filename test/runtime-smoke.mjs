@@ -35,7 +35,7 @@ try{
     const body=await page.text();
     assert.match(body,/LaunchBrand/);
     if(route==='/')assert.match(body,/Claude-first founding beta/);
-    if(route==='/connect'){assert.match(body,/Continue in Claude/);assert.match(body,/connectorName=LaunchBrand/);assert.match(body,/connectorUrl=https%3A%2F%2Flink2ai.example%2Fmcp/);assert.doesNotMatch(body,/target=\"_blank\"/);}
+    if(route==='/connect'){assert.match(body,/Open Claude setup/);assert.match(body,/connectorName=LaunchBrand/);assert.match(body,/connectorUrl=https%3A%2F%2Flink2ai.example%2Fmcp/);assert.match(body,/target=\"_blank\"/);assert.match(body,/Email account/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }
 
@@ -79,10 +79,20 @@ try{
   const login=await fetch(`http://127.0.0.1:${port}/login?return_to=%2Faccount`,{headers:{host:'link2ai.example'}});
   assert.equal(login.status,200);
   const loginText=await login.text();
-  assert.match(loginText,/Continue free/);
+  assert.match(loginText,/Sign in to continue/);
+  assert.match(loginText,/auth\/password\/login/);
+  assert.match(loginText,/Create an account/);
   assert.match(loginText,/OpenAI reviewer access/);
+  assert.doesNotMatch(loginText,/Continue free/);
   assert.doesNotMatch(loginText,/Send sign-in code/);
   assert.doesNotMatch(loginText,/this-is-a-long-review-password/);
+
+  const signup=await fetch(`http://127.0.0.1:${port}/signup?return_to=%2Faccount`,{headers:{host:'link2ai.example'}});
+  assert.equal(signup.status,200);
+  const signupText=await signup.text();
+  assert.match(signupText,/Start your Link2AI trial/);
+  assert.match(signupText,/auth\/password\/register/);
+  assert.match(signupText,/At least 10 characters/);
 
   const oauthMetadata=await fetch(`http://127.0.0.1:${port}/.well-known/oauth-authorization-server`,{headers:{host:'link2ai.example'}});
   assert.equal(oauthMetadata.status,200);

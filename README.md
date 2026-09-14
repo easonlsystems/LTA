@@ -158,10 +158,12 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the deployment model.
 
 ## Founding beta sign-in
 
-The public beta can start a trial without email. The first-party `link2ai_trial_device` cookie restores the same beta account on that browser and prevents that browser from claiming a fresh trial under another email. Public email OTP is disabled unless `PUBLIC_EMAIL_LOGIN_ENABLED=true`; this keeps the beta usable without requiring a verified outbound-email domain. OpenAI reviewers use the dedicated reviewer credential path configured only through Railway environment variables.
+Public users now use a Link2AI **email + password account**. The email is the stable account identity for trial usage, paid plan state, web sessions and Claude OAuth authorization. Passwords are never stored in plaintext: Link2AI uses a per-account random salt and Node's scrypt password derivation before storage. The first-party `link2ai_trial_device` cookie remains only as an anti-abuse/returning-device signal; it is no longer the user's identity. Existing anonymous beta accounts can be upgraded in place so their usage and OAuth records stay attached.
+
+`PUBLIC_EMAIL_LOGIN_ENABLED` now controls only the optional legacy email-OTP path. The normal public password login does not require Resend or a verified outbound-email domain. OpenAI reviewers continue to use the dedicated reviewer credential path configured only through Railway environment variables.
 
 ### Claude-first onboarding
 
-Public beta onboarding is documented at `/connect`. The preferred flow is Claude custom connector → **Sign in now** → **Register automatically (DCR)** → Add → Link2AI `Continue free`. Users should not need a manually issued OAuth client ID or secret.
+Public beta onboarding is documented at `/connect`. The preferred flow is Claude custom connector → **Sign in now** → **Register automatically (DCR)** → Add → create/sign in to the Link2AI email account → approve the Link2AI OAuth connection. Users should not need a manually issued OAuth client ID or secret. The `/connect` tab stays open while Claude setup runs in a new tab and changes into `/account` after a fresh OAuth connection is detected.
 
 V1 returns spoken/caption text. Visual-only information may be missing; tool responses carry an explicit limitation notice so hosts should not infer unsupported visual structure.

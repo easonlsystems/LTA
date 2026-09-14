@@ -1,4 +1,8 @@
 import crypto from 'node:crypto';
+import { promisify } from 'node:util';
+
+const scryptAsync = promisify(crypto.scrypt) as any;
+const PASSWORD_SCRYPT_OPTIONS={N:16_384,r:8,p:1,maxmem:64*1024*1024};
 
 export function randomToken(bytes = 32): string {
   return crypto.randomBytes(bytes).toString('base64url');
@@ -31,4 +35,24 @@ export function timingSafeEqualHex(a: string, b: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function validateAccountPassword(password:string):void{
+  if(password.length<10)throw new Error('Password must be at least 10 characters.');
+  if(password.length>128)throw new Error('Password must be 128 characters or fewer.');
+}
+
+export async function hashAccountPassword(password:string):Promise<{salt:string;hash:string}>{
+  validateAccountPassword(password);
+  const salt=crypto.randomBytes(16).toString('base64url');
+  const derived=await scryptAsync(password,salt,64,PASSWORD_SCRYPT_OPTIONS);
+  return {salt,hash:derived.toString('hex')};
+}
+
+export async function verifyAccountPassword(password:string,salt:string,expectedHash:string):Promise<boolean>{
+  if(!salt||!expectedHash)return false;
+  try{
+    const derived=await scryptAsync(password,salt,64,PASSWORD_SCRYPT_OPTIONS);
+    return timingSafeEqualHex(derived.toString('hex'),expectedHash);
+  }catch{return false;}
 }
