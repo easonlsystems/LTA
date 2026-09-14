@@ -43,10 +43,10 @@ try{
   const status=await fetch(`http://127.0.0.1:${port}/status`,{headers:{host:'link2ai.example'}});
   assert.ok(status.status===200||status.status===503,`/status should return 200 or 503, got ${status.status}`);
 
-  // /pricing redirects to login
+  // /pricing sends new unauthenticated users to account creation
   const pricing=await fetch(`http://127.0.0.1:${port}/pricing`,{headers:{host:'link2ai.example'},redirect:'manual'});
   assert.equal(pricing.status,302);
-  assert.match(pricing.headers.get('location')??'',/^\/login\?return_to=/);
+  assert.match(pricing.headers.get('location')??'',/^\/signup\?return_to=/);
 
   // robots.txt
   const robots=await fetch(`http://127.0.0.1:${port}/robots.txt`,{headers:{host:'link2ai.example'}});
@@ -90,7 +90,7 @@ try{
   const signup=await fetch(`http://127.0.0.1:${port}/signup?return_to=%2Faccount`,{headers:{host:'link2ai.example'}});
   assert.equal(signup.status,200);
   const signupText=await signup.text();
-  assert.match(signupText,/Start your Link2AI trial/);
+  assert.match(signupText,/Create your Link2AI account/);
   assert.match(signupText,/auth\/password\/register/);
   assert.match(signupText,/At least 10 characters/);
 

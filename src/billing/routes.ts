@@ -10,7 +10,7 @@ function page(body:string){return `<!doctype html><html><head><meta charset="utf
 
 async function requireWebUser(req:any, reply:FastifyReply, returnTo?:string){
   const user=await userFromSessionCookie(req.headers.cookie);
-  if(!user){reply.redirect(`/login?return_to=${encodeURIComponent(returnTo??req.raw.url??'/account')}`);return null;}
+  if(!user){reply.redirect(`/signup?return_to=${encodeURIComponent(returnTo??req.raw.url??'/account')}`);return null;}
   return user;
 }
 
@@ -24,7 +24,7 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
     const q=req.query as any;
     const user=await userFromSessionCookie(req.headers.cookie);
     const returnUrl=`/pricing${Object.keys(q).length?`?${new URLSearchParams(q).toString()}`:''}`;
-    if(!user)return reply.code(302).redirect(`/login?return_to=${encodeURIComponent(returnUrl)}`);
+    if(!user)return reply.code(302).redirect(`/signup?return_to=${encodeURIComponent(returnUrl)}`);
     if(!user.email)return reply.code(302).redirect(`/signup?return_to=${encodeURIComponent(returnUrl)}`);
     const resume=q.resume_job_id?String(q.resume_job_id):'';
     const chosen:PaidPlan=q.plan==='pro'?'pro':'basic';

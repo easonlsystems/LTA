@@ -139,7 +139,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const returnTo=safeReturnTo(q.return_to);
     const current=await userFromSessionCookie(req.headers.cookie);
     const upgrading=Boolean(current&&!current.email);
-    return reply.type('text/html').send(html(`<span class="step">${upgrading?'Finish account setup':'Create account'}</span><h1>${upgrading?'Keep this Link2AI account.':'Start your Link2AI trial.'}</h1><p>${upgrading?'Add an email and password to the account you already used. Your current usage and Claude connection stay attached.':'Use an email and password so your trial, usage and plan follow you across devices.'}</p><form method="post" action="/auth/password/register"><label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="you@example.com"><label>Password</label><input type="password" name="password" required minlength="10" maxlength="128" autocomplete="new-password" placeholder="At least 10 characters"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>${upgrading?'Save account and continue':'Create account and continue'}</button></form><p class="tiny">Already have an account? <a href="/login?return_to=${encodeURIComponent(returnTo)}"><strong>Sign in</strong></a>. Password reset by email will be added after the beta; for now, keep your password safe or contact Support if you lose access.</p><div class="trust"><span>No card for trial</span><span>Same account on every device</span><span>Passwords are salted + hashed</span></div>`));
+    return reply.type('text/html').send(html(`<span class="step">${upgrading?'Finish account setup':'Create account'}</span><h1>${upgrading?'Keep this Link2AI account.':'Create your Link2AI account.'}</h1><p>${upgrading?'Add an email and password to the account you already used. Your current usage and Claude connection stay attached.':'Use an email and password so your trial, usage and plan follow you across devices.'}</p><form method="post" action="/auth/password/register"><label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="you@example.com"><label>Password</label><input type="password" name="password" required minlength="10" maxlength="128" autocomplete="new-password" placeholder="At least 10 characters"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>${upgrading?'Save account and continue':'Create account and continue'}</button></form><p class="tiny">Already have an account? <a href="/login?return_to=${encodeURIComponent(returnTo)}"><strong>Sign in</strong></a>. Password reset by email will be added after the beta; for now, keep your password safe or contact Support if you lose access.</p><div class="trust"><span>No card for trial</span><span>Same account on every device</span><span>Passwords are salted + hashed</span></div>`));
   });
 
   app.post('/auth/password/login',async(req,reply)=>{
@@ -248,7 +248,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       // Never let an unauthenticated authorize request turn CIMD into an outbound
       // fetch primitive. Validate/fetch the client only after Link2AI sign-in exists.
       const user = await userFromSessionCookie(req.headers.cookie);
-      if (!user) return reply.redirect(`/login?return_to=${encodeURIComponent(authorizeQuery(request))}`);
+      if (!user) return reply.redirect(`/signup?return_to=${encodeURIComponent(authorizeQuery(request))}`);
       if (!user.email) return reply.redirect(`/signup?return_to=${encodeURIComponent(authorizeQuery(request))}`);
       const csrf=csrfTokenFromSessionCookie(req.headers.cookie);
       if(!csrf)return reply.code(401).send('Sign in to connect this service.');
@@ -263,7 +263,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       const b=req.body as any;
       const request=parseAuthorizeRequest(b);
       const user=await userFromSessionCookie(req.headers.cookie);
-      if(!user)return reply.redirect(`/login?return_to=${encodeURIComponent(authorizeQuery(request))}`);
+      if(!user)return reply.redirect(`/signup?return_to=${encodeURIComponent(authorizeQuery(request))}`);
       if(!user.email)return reply.redirect(`/signup?return_to=${encodeURIComponent(authorizeQuery(request))}`);
       if(!verifyCsrfToken(req.headers.cookie,String(b?.csrf??'')))return reply.code(403).send('Authorization confirmation expired. Please try connecting again.');
       const client=await getOAuthClient(request.clientId,request.redirectUri);
