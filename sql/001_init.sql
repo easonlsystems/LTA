@@ -9,6 +9,15 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_eligible boolean NOT NULL DEFAULT true;
+
+CREATE TABLE IF NOT EXISTS trial_device_claims (
+  device_hash text PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS trial_device_claims_user_idx ON trial_device_claims(user_id);
+
 CREATE TABLE IF NOT EXISTS login_codes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email text NOT NULL,

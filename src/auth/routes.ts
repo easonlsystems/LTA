@@ -4,13 +4,24 @@ import { Link2AIError } from '../util/errors.js';
 import {
   beginEmailLogin, createAuthorizationCode, csrfTokenFromSessionCookie, exchangeAuthorizationCode, exchangeRefreshToken,
   getOAuthClient, loginFlowCookieName, mcpResource, parseCookies, registerOAuthClient, revokeOAuthToken, sessionCookieName,
-  userFromSessionCookie, verifyCsrfToken, verifyEmailLogin
+  userFromSessionCookie, verifyCsrfToken, verifyEmailLogin, verifyReviewerLogin, claimTrialDevice, trialDeviceCookieName
 } from './service.js';
 
 function escapeHtml(v: unknown): string {
   return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]!));
 }
-function html(body:string): string { return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(env().PUBLIC_BRAND_NAME)}</title><style>body{font-family:system-ui,sans-serif;max-width:480px;margin:60px auto;padding:0 20px;color:#171717}input,button{box-sizing:border-box;width:100%;padding:12px;margin:8px 0;font:inherit}button{cursor:pointer}.muted{color:#666;font-size:14px}</style></head><body>${body}</body></html>`; }
+function html(body:string): string { return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(env().PUBLIC_BRAND_NAME)}</title><style>
+:root{color-scheme:light;--ink:#101828;--muted:#667085;--line:#e4e7ec;--soft:#f8fafc}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:28px;background:radial-gradient(circle at 50% -20%,#eef2ff 0,#f8fafc 38%,#fff 72%);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
+.auth{width:min(480px,100%);background:#fff;border:1px solid var(--line);border-radius:22px;padding:30px;box-shadow:0 18px 60px rgba(16,24,40,.08)}
+.logo{font-size:19px;font-weight:850;letter-spacing:-.035em;margin-bottom:34px}.step{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:#f2f4f7;color:#475467;font-size:12px;font-weight:750}
+h1{font-size:32px;line-height:1.05;letter-spacing:-.04em;margin:14px 0 10px}p{line-height:1.55;margin:0 0 18px;color:var(--muted)}
+label{display:block;font-size:13px;font-weight:750;margin:14px 0 6px}input,button{box-sizing:border-box;width:100%;padding:13px 14px;margin:0 0 10px;font:inherit;border-radius:12px}
+input{border:1px solid #d0d5dd;background:#fff;outline:none}input:focus{border-color:#667085;box-shadow:0 0 0 3px rgba(16,24,40,.06)}
+button{cursor:pointer;border:0;background:#101828;color:#fff;font-weight:780}.muted{color:#667085;font-size:13px}.tiny{font-size:12px;color:#98a2b3}
+.review{margin-top:24px;padding-top:18px;border-top:1px solid var(--line)}details summary{cursor:pointer;color:#667085;font-size:13px;font-weight:700}
+a{color:inherit}
+</style></head><body><main class="auth"><div class="logo">${escapeHtml(env().PUBLIC_BRAND_NAME)}</div>${body}</main></body></html>`; }
 
 function safeReturnTo(raw: string | undefined): string {
   if (!raw || raw.length>4096) return '/account';
@@ -121,7 +132,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.get('/login', async (req, reply) => {
     const q = req.query as any;
     const returnTo = safeReturnTo(q.return_to);
-    return reply.type('text/html').send(html(`<h1>Connect ${escapeHtml(env().PUBLIC_BRAND_NAME)}</h1><p>Enter your email to receive a one-time sign-in code.</p><form method="post" action="/auth/start"><input type="email" name="email" required autofocus placeholder="you@example.com"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Continue</button></form><p class="muted">${escapeHtml(env().PUBLIC_BRAND_NAME)} only uses your account for connection, quota and billing.</p>`));
+    const reviewer=Boolean(env().REVIEWER_EMAIL&&env().REVIEWER_PASSWORD);
+    return reply.type('text/html').send(html(`<span class="step">1 of 2 · Sign in</span><h1>Connect ${escapeHtml(env().PUBLIC_BRAND_NAME)}</h1><p>Enter your email. We’ll send a 6-digit code, then return you to your AI automatically.</p><form method="post" action="/auth/start"><label>Email</label><input type="email" name="email" required autofocus autocomplete="email" placeholder="you@example.com"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Send sign-in code</button></form><p class="tiny">No password needed. Your account is used for connection, usage limits and billing.</p>${reviewer?`<div class="review"><details><summary>OpenAI reviewer access</summary><form method="post" action="/auth/reviewer" style="margin-top:12px"><label>Reviewer email</label><input type="email" name="email" required autocomplete="username"><label>Reviewer password</label><input type="password" name="password" required autocomplete="current-password"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Reviewer sign in</button></form></details></div>`:''}`));
   });
 
   app.post('/auth/start', async (req, reply) => {
@@ -130,7 +142,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     try {
       const result = await beginEmailLogin(String(b?.email ?? ''), returnTo);
       reply.header('Set-Cookie',loginFlowCookie(result.flowToken,600));
-      return reply.type('text/html').send(html(`<h1>Check your email</h1><p>Enter the 6-digit code sent to <strong>${escapeHtml(b?.email)}</strong>.</p>${result.devCode ? `<p class="muted">Development code: <strong>${result.devCode}</strong></p>` : ''}<form method="post" action="/auth/verify"><input type="hidden" name="email" value="${escapeHtml(b?.email)}"><input type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" name="code" required autofocus><button>Connect</button></form>`));
+      return reply.type('text/html').send(html(`<span class="step">2 of 2 · Verify</span><h1>Check your email</h1><p>We sent a 6-digit code to <strong style="color:#101828">${escapeHtml(b?.email)}</strong>.</p>${result.devCode ? `<p class="muted">Development code: <strong>${result.devCode}</strong></p>` : ''}<form method="post" action="/auth/verify"><label>6-digit code</label><input type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" name="code" required autofocus placeholder="000000"><input type="hidden" name="email" value="${escapeHtml(b?.email)}"><button>Verify and continue</button></form><p class="tiny">After verification, ${escapeHtml(env().PUBLIC_BRAND_NAME)} continues the connection automatically.</p>`));
     } catch (e) { return friendlyError(reply,e); }
   });
 
@@ -140,12 +152,31 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     try {
       const result = await verifyEmailLogin(String(b?.email ?? ''), String(b?.code ?? ''), flowToken);
       const secure = env().NODE_ENV === 'production' ? '; Secure' : '';
+      const priorDevice=parseCookies(req.headers.cookie)[trialDeviceCookieName()];
+      const trial=await claimTrialDevice(result.user.id,priorDevice);
       reply.header('Set-Cookie', [
         `${sessionCookieName()}=${encodeURIComponent(result.sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`,
+        `${trialDeviceCookieName()}=${encodeURIComponent(trial.deviceToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`,
         loginFlowCookie('',0)
       ]);
       return reply.redirect(result.returnTo);
     } catch (e) { return friendlyError(reply,e); }
+  });
+
+  app.post('/auth/reviewer', async (req, reply) => {
+    const b=req.body as any;
+    const returnTo=safeReturnTo(b?.return_to);
+    try{
+      const result=await verifyReviewerLogin(String(b?.email??''),String(b?.password??''),returnTo);
+      const secure=env().NODE_ENV==='production'?'; Secure':'';
+      const priorDevice=parseCookies(req.headers.cookie)[trialDeviceCookieName()];
+      const trial=await claimTrialDevice(result.user.id,priorDevice);
+      reply.header('Set-Cookie',[
+        `${sessionCookieName()}=${encodeURIComponent(result.sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${secure}`,
+        `${trialDeviceCookieName()}=${encodeURIComponent(trial.deviceToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`
+      ]);
+      return reply.redirect(result.returnTo);
+    }catch(e){return friendlyError(reply,e);}
   });
 
   app.get('/oauth/authorize', async (req, reply) => {
@@ -159,7 +190,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       if(!csrf)return reply.code(401).send('Sign in to connect this service.');
       const client=await getOAuthClient(request.clientId,request.redirectUri);
       if(!client)return reply.code(400).send('Unknown OAuth client or redirect URI.');
-      return reply.type('text/html').send(html(`<h1>Connect ${escapeHtml(env().PUBLIC_BRAND_NAME)}</h1><p><strong>${escapeHtml(client.client_name)}</strong> wants permission to read public social-video links through your ${escapeHtml(env().PUBLIC_BRAND_NAME)} account.</p><p class="muted">This lets the connected AI request transcripts and check your ${escapeHtml(env().PUBLIC_BRAND_NAME)} usage. ${escapeHtml(env().PUBLIC_BRAND_NAME)} does not give the client access to your email or payment details.</p><form method="post" action="/oauth/authorize">${authorizeHidden(request,csrf)}<button>Connect</button></form>`));
+      return reply.type('text/html').send(html(`<h1>Connect ${escapeHtml(env().PUBLIC_BRAND_NAME)}</h1><p><strong>${escapeHtml(client.client_name)}</strong> wants permission to read supported public links through your ${escapeHtml(env().PUBLIC_BRAND_NAME)} account.</p><p class="muted">This lets the connected AI request content behind supported links and check your ${escapeHtml(env().PUBLIC_BRAND_NAME)} usage. ${escapeHtml(env().PUBLIC_BRAND_NAME)} does not give the client access to your email or payment details.</p><form method="post" action="/oauth/authorize">${authorizeHidden(request,csrf)}<button>Connect</button></form>`));
     }catch(e){return oauthError(reply,e);}
   });
 

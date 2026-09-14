@@ -126,7 +126,7 @@ export async function recoverStaleJobs(): Promise<void> {
   // immediately. A fresh tool call can create a new job if the user still wants it.
   await pool.query(
     `UPDATE transcript_jobs SET status='failed',error_code='PAYMENT_SESSION_EXPIRED',
-      error_message='The payment session expired. Ask the connected AI to read the video again to continue.',
+      error_message='The payment session expired. Ask the connected AI to read the link again to continue.',
       checkout_url=NULL,source_url='',normalized_url='',canonical_media_id='',updated_at=now()
      WHERE status='awaiting_payment' AND updated_at < now() - interval '24 hours'`
   );

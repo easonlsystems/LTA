@@ -34,5 +34,5 @@ export function asLink2AIError(err: unknown): Link2AIError {
   // Unknown runtime errors may contain filesystem paths, SQL details or provider internals.
   // Log the original error at the call site, but never persist/return that raw message.
   void err;
-  return new Link2AIError('INTERNAL_ERROR', 'The service hit an internal error while processing this video.', 500, false);
+  return new Link2AIError('INTERNAL_ERROR', 'The service hit an internal error while processing this link.', 500, false);
 }

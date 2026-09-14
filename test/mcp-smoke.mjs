@@ -39,6 +39,9 @@ try{
   assert.match(listed.result.tools[0].description,/LaunchBrand/);
   assert.match(listed.result.tools[1].description,/LaunchBrand/);
   assert.doesNotMatch(JSON.stringify(listed.result.tools),/\$\{env\(\)/);
+  assert.deepEqual(listed.result.tools[0].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true});
+  assert.equal(listed.result.tools[1].annotations.readOnlyHint,true);
+  assert.equal(listed.result.tools[2].annotations.readOnlyHint,true);
 
   // Assertions for new guidance: do not call merely because URL is present
   const get_video_transcript_desc=listed.result.tools[0].description;
@@ -52,7 +55,7 @@ try{
   assert.equal(failed.result.isError,true);
   const payload=JSON.parse(failed.result.content[0].text.split('\n').at(-1));
   assert.equal(payload.error_code,'INTERNAL_ERROR');
-  assert.equal(payload.message,'The service hit an internal error while processing this video.');
+  assert.equal(payload.message,'The service hit an internal error while processing this link.');
   assert.doesNotMatch(failed.result.content[0].text,/ECONNREFUSED|127\.0\.0\.1|postgres/i);
   console.log('MCP smoke tests PASS');
 }finally{

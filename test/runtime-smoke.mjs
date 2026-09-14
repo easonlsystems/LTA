@@ -10,7 +10,7 @@ const port=address.port;
 await new Promise(resolve=>probe.close(resolve));
 
 const child=spawn(process.execPath,['dist/src/api/main.js'],{
-  env:{...process.env,NODE_ENV:'production',PORT:String(port),DATABASE_URL:'postgres://127.0.0.1:1/link2ai',PUBLIC_BASE_URL:'https://link2ai.example',PUBLIC_BRAND_NAME:'LaunchBrand',APP_SECRET:'01234567890123456789012345678901',LEMONSQUEEZY_API_KEY:'lemon-secret-must-not-render',RESEND_API_KEY:'resend-secret-must-not-render'},
+  env:{...process.env,NODE_ENV:'production',PORT:String(port),DATABASE_URL:'postgres://127.0.0.1:1/link2ai',PUBLIC_BASE_URL:'https://link2ai.example',PUBLIC_BRAND_NAME:'LaunchBrand',APP_SECRET:'01234567890123456789012345678901',LEMONSQUEEZY_API_KEY:'lemon-secret-must-not-render',RESEND_API_KEY:'resend-secret-must-not-render',OPENAI_APPS_CHALLENGE:'review-challenge-token',REVIEWER_EMAIL:'reviewer@example.com',REVIEWER_PASSWORD:'this-is-a-long-review-password'},
   stdio:['ignore','pipe','pipe']
 });
 let output='';
@@ -63,6 +63,16 @@ try{
   assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/status<\/loc>/);
   assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/privacy<\/loc>/);
   assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/terms<\/loc>/);
+
+  const challenge=await fetch(`http://127.0.0.1:${port}/.well-known/openai-apps-challenge`,{headers:{host:'link2ai.example'}});
+  assert.equal(challenge.status,200);
+  assert.equal(await challenge.text(),'review-challenge-token');
+
+  const login=await fetch(`http://127.0.0.1:${port}/login?return_to=%2Faccount`,{headers:{host:'link2ai.example'}});
+  assert.equal(login.status,200);
+  const loginText=await login.text();
+  assert.match(loginText,/OpenAI reviewer access/);
+  assert.doesNotMatch(loginText,/this-is-a-long-review-password/);
 
   const oauthMetadata=await fetch(`http://127.0.0.1:${port}/.well-known/oauth-authorization-server`,{headers:{host:'link2ai.example'}});
   assert.equal(oauthMetadata.status,200);

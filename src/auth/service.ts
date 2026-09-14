@@ -7,6 +7,7 @@ import { fetchCimdOAuthClient, validateOAuthRedirectUris, type ResolvedOAuthClie
 
 const SESSION_COOKIE = 'link2ai_session';
 const LOGIN_FLOW_COOKIE = 'link2ai_login_flow';
+const TRIAL_DEVICE_COOKIE = 'link2ai_trial_device';
 
 export interface AuthUser { id: string; email: string | null; plan: 'trial'|'basic'|'pro'; }
 
@@ -32,6 +33,7 @@ function normalizeScope(raw?: string): string {
 
 export function sessionCookieName(): string { return SESSION_COOKIE; }
 export function loginFlowCookieName(): string { return LOGIN_FLOW_COOKIE; }
+export function trialDeviceCookieName(): string { return TRIAL_DEVICE_COOKIE; }
 
 export function hashLoginCode(email: string, code: string): string {
   return sha256(`${email.trim().toLowerCase()}:${code}:${env().APP_SECRET}`);
@@ -121,6 +123,72 @@ export async function verifyEmailLogin(emailRaw: string, code: string, flowToken
     if (!committed) await client.query('ROLLBACK');
     throw err;
   } finally { client.release(); }
+}
+
+
+export async function verifyReviewerLogin(emailRaw:string,password:string,returnTo:string):Promise<{user:AuthUser;sessionToken:string;returnTo:string}>{
+  const reviewerEmail=env().REVIEWER_EMAIL?.trim().toLowerCase();
+  const reviewerPassword=env().REVIEWER_PASSWORD;
+  const email=emailRaw.trim().toLowerCase();
+  if(!reviewerEmail||!reviewerPassword)throw new Link2AIError('AUTH_REQUIRED','Reviewer access is not configured.',404);
+  if(returnTo.length>4096)throw new Link2AIError('AUTH_REQUIRED','Sign-in return path is too long.',400);
+  const supplied=sha256(password);
+  const expected=sha256(reviewerPassword);
+  if(email!==reviewerEmail||!timingSafeEqualHex(supplied,expected)){
+    throw new Link2AIError('AUTH_REQUIRED','Reviewer email or password is incorrect.',401);
+  }
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const u=await client.query<AuthUser & {account_status:string}>(
+      `INSERT INTO users(email,plan,account_status) VALUES($1,'pro','active')
+       ON CONFLICT(email) DO UPDATE SET plan='pro',account_status=CASE WHEN users.account_status='disabled' THEN 'disabled' ELSE 'active' END,updated_at=now()
+       RETURNING id,email,plan,account_status`,[email]
+    );
+    if(u.rows[0].account_status==='disabled')throw new Link2AIError('AUTH_REQUIRED','This account is disabled.',403);
+    const token=randomToken(32);
+    await client.query(
+      `INSERT INTO web_sessions(user_id,token_hash,expires_at) VALUES($1,$2,now() + interval '7 days')`,
+      [u.rows[0].id,sha256(token)]
+    );
+    await client.query('COMMIT');
+    return {user:u.rows[0],sessionToken:token,returnTo};
+  }catch(err){
+    await client.query('ROLLBACK').catch(()=>{});
+    throw err;
+  }finally{client.release();}
+}
+
+
+export async function claimTrialDevice(userId:string,existingToken?:string):Promise<{deviceToken:string;eligible:boolean}>{
+  const deviceToken=existingToken&&existingToken.length>=32&&existingToken.length<=256?existingToken:randomToken(32);
+  const deviceHash=sha256(`trial-device:${deviceToken}:${env().APP_SECRET}`);
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    // Serialize claims for the same device token. Two concurrent sign-ins on one
+    // device must not both observe an unclaimed token and receive a fresh trial.
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[deviceHash]);
+    await client.query(
+      'INSERT INTO trial_device_claims(device_hash,user_id) VALUES($1,$2) ON CONFLICT(device_hash) DO NOTHING',
+      [deviceHash,userId]
+    );
+    const existing=await client.query<{user_id:string}>(
+      'SELECT user_id FROM trial_device_claims WHERE device_hash=$1 FOR UPDATE',[deviceHash]
+    );
+    let eligible=true;
+    if(existing.rowCount&&existing.rows[0].user_id!==userId){
+      eligible=false;
+      await client.query(`UPDATE users SET trial_eligible=false,updated_at=now() WHERE id=$1 AND plan='trial'`,[userId]);
+    }
+    const state=await client.query<{trial_eligible:boolean}>('SELECT trial_eligible FROM users WHERE id=$1',[userId]);
+    eligible=eligible&&Boolean(state.rows[0]?.trial_eligible);
+    await client.query('COMMIT');
+    return {deviceToken,eligible};
+  }catch(err){
+    await client.query('ROLLBACK').catch(()=>{});
+    throw err;
+  }finally{client.release();}
 }
 
 export function parseCookies(header?: string): Record<string,string> {

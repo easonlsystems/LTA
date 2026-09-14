@@ -26,6 +26,7 @@ export function readinessIssues(role:RuntimeRole):string[]{
     if(!e.LEMONSQUEEZY_PRO_VARIANT_ID)issues.push('LEMONSQUEEZY_PRO_VARIANT_ID is missing');
     if(e.NODE_ENV==='production'&&e.AUTH_FROM_EMAIL.includes('example.com'))issues.push('AUTH_FROM_EMAIL is still using the example domain');
     if(e.NODE_ENV==='production'&&!e.SUPPORT_EMAIL)issues.push('SUPPORT_EMAIL is missing');
+    if(Boolean(e.REVIEWER_EMAIL)!==Boolean(e.REVIEWER_PASSWORD))issues.push('REVIEWER_EMAIL and REVIEWER_PASSWORD must be configured together');
   }
   if(role==='worker'){
     if(!e.GROQ_API_KEY&&!e.OPENAI_API_KEY)issues.push('At least one speech-to-text provider key is required');

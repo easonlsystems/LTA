@@ -39,6 +39,18 @@ health check: /healthz
 
 Environment variable names are documented in `.env.example`. Secrets should be provided through the hosting platform and never committed to the repository.
 
+
+## OpenAI plugin submission configuration
+
+The API also supports the public Plugin review flow:
+
+- `OPENAI_APPS_CHALLENGE` — exact token returned at `/.well-known/openai-apps-challenge` during domain verification.
+- `REVIEWER_EMAIL` + `REVIEWER_PASSWORD` — optional dedicated review credentials. Configure both or neither. The reviewer path bypasses email OTP only for this exact account and grants a test-only Pro entitlement so the reviewer can complete the required test cases without a paid subscription.
+
+Use a unique reviewer password of at least 16 characters. Never commit the credential to source control. Normal users continue to use passwordless email login.
+
+The launch trial is 3 successful links or 10 minutes of processed content, whichever is reached first. A first-party device token provides a basic repeated-trial abuse check; it is a launch guardrail, not a claim of perfect person-level identity.
+
 ## Runtime acceptance
 
 Before public launch, staging should verify at minimum:

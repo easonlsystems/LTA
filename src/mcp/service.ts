@@ -104,7 +104,7 @@ export async function waitForJob(userId:string,jobId:string,maxWaitMs:number):Pr
     if(r.status!=='processing')return r;
     await new Promise(resolve=>setTimeout(resolve,750));
   }
-  return {status:'processing',job_id:jobId,message:'The video is still being prepared. Call get_transcript_result with this job_id.',retry_after_seconds:3};
+  return {status:'processing',job_id:jobId,message:'The link is still being prepared. Call get_transcript_result with this job_id.',retry_after_seconds:3};
 }
 
 export async function getJobResult(userId:string,jobId:string):Promise<ToolJobResult>{
@@ -116,7 +116,7 @@ export async function getJobResult(userId:string,jobId:string):Promise<ToolJobRe
   if(!r.rowCount)throw new Link2AIError('JOB_NOT_FOUND','Transcript job not found.',404);
   const row=r.rows[0];
   if(row.status==='completed'&&!row.transcript){
-    return {status:'failed',job_id:row.id,error_code:'TRANSCRIPT_EXPIRED',message:'This temporary transcript has expired. Call get_video_transcript with the original video URL to read it again.'};
+    return {status:'failed',job_id:row.id,error_code:'TRANSCRIPT_EXPIRED',message:'This temporary result has expired. Call get_video_transcript with the original link to read it again.'};
   }
   if(row.status==='completed'){
     return {
@@ -127,7 +127,21 @@ export async function getJobResult(userId:string,jobId:string):Promise<ToolJobRe
   }
   if(row.status==='awaiting_payment')return {status:'payment_required',job_id:row.id,duration_seconds:row.duration_seconds??undefined,checkout_url:row.checkout_url,error_code:row.error_code,message:row.error_message};
   if(row.status==='failed')return {status:'failed',job_id:row.id,error_code:row.error_code,message:row.error_message};
-  return {status:'processing',job_id:row.id,message:`${env().PUBLIC_BRAND_NAME} is reading this video.`,retry_after_seconds:3};
+  return {status:'processing',job_id:row.id,message:`${env().PUBLIC_BRAND_NAME} is reading this link.`,retry_after_seconds:3};
 }
 
-export async function usageForTool(userId:string){return await getUsageSnapshot(userId);}
+export async function usageForTool(userId:string){
+  const usage=await getUsageSnapshot(userId);
+  return {
+    plan:usage.plan,
+    used_seconds:usage.used_seconds,
+    limit_seconds:usage.limit_seconds,
+    remaining_seconds:usage.remaining_seconds,
+    used_links:usage.used_videos,
+    limit_links:usage.limit_videos,
+    remaining_links:usage.remaining_videos,
+    concurrent_jobs:usage.concurrent_jobs,
+    concurrency_limit:usage.concurrency_limit,
+    period_end:usage.period_end
+  };
+}

@@ -36,12 +36,12 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
       const usageRows=await pool.query<{count:string}>("SELECT COUNT(*)::text count FROM usage_ledger WHERE user_id=$1",[user.id]);
       if(Number(usageRows.rows[0].count)===0){
         const csrf=csrfField(req.headers.cookie);
-        return reply.type('text/html').send(page(`<h1>Try ${esc(env().PUBLIC_BRAND_NAME)} first</h1><div class="card"><p>10 successful videos or 30 total transcript minutes free.</p><p>No card required. Public videos only.</p><p><a href="/connect">Connect to your AI</a></p></div>`));
+        return reply.type('text/html').send(page(`<h1>Try ${esc(env().PUBLIC_BRAND_NAME)} first</h1><div class="card"><p>3 successful links or 10 total minutes of content free.</p><p>No card required. Supported public links only.</p><p><a href="/connect">Connect to your AI</a></p></div>`));
       }
     }
     
     const csrf=csrfField(req.headers.cookie);
-    return reply.type('text/html').send(page(`<h1>Continue with ${esc(env().PUBLIC_BRAND_NAME)}</h1><div class="card"><h2>Basic — $4.99 / month</h2><p>500 minutes / month<br>Instagram, TikTok & YouTube<br>ChatGPT + Claude</p><form id="checkout-basic" method="post" action="/billing/checkout">${csrf}<input type="hidden" name="plan" value="basic"><input type="hidden" name="resume_job_id" value="${esc(resume)}"><button>Continue</button></form></div><p class="muted">Need more? Pro — $9.99 / month, 2,000 minutes and videos up to 120 minutes.</p><form id="checkout-pro" method="post" action="/billing/checkout">${csrf}<input type="hidden" name="plan" value="pro"><input type="hidden" name="resume_job_id" value="${esc(resume)}"><button>Choose Pro</button></form>`));
+    return reply.type('text/html').send(page(`<h1>Continue with ${esc(env().PUBLIC_BRAND_NAME)}</h1><div class="card"><h2>Basic — $4.99 / month</h2><p>500 minutes of content / month<br>Instagram, TikTok & YouTube<br>ChatGPT + Claude</p><form id="checkout-basic" method="post" action="/billing/checkout">${csrf}<input type="hidden" name="plan" value="basic"><input type="hidden" name="resume_job_id" value="${esc(resume)}"><button>Continue</button></form></div><p class="muted">Need more? Pro — $9.99 / month, 2,000 minutes of content and up to 120 minutes per link.</p><form id="checkout-pro" method="post" action="/billing/checkout">${csrf}<input type="hidden" name="plan" value="pro"><input type="hidden" name="resume_job_id" value="${esc(resume)}"><button>Choose Pro</button></form>`));
   });
 
   app.post('/billing/checkout',async(req,reply)=>{
@@ -56,7 +56,7 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
     if(usage.plan==='trial'&&!resume){
       const usageRows=await pool.query<{count:string}>("SELECT COUNT(*)::text count FROM usage_ledger WHERE user_id=$1",[user.id]);
       if(Number(usageRows.rows[0].count)===0){
-        return reply.code(409).type('text/html').send(page(`<h1>${esc(env().PUBLIC_BRAND_NAME)}</h1><p>Complete one supported public video first.</p><p>Try reading a public Instagram Reel, TikTok, or YouTube video to activate your trial, then return here to upgrade.</p><p><a href="/connect">Back to ${esc(env().PUBLIC_BRAND_NAME)}</a></p>`));
+        return reply.code(409).type('text/html').send(page(`<h1>${esc(env().PUBLIC_BRAND_NAME)}</h1><p>Complete one supported public link first.</p><p>Try reading a supported Instagram, TikTok, or YouTube link to activate your trial, then return here to upgrade.</p><p><a href="/connect">Back to ${esc(env().PUBLIC_BRAND_NAME)}</a></p>`));
       }
     }
     
@@ -66,7 +66,7 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
 
   app.get('/billing/success',async(req,reply)=>{
     const q=req.query as any; const resume=q.resume_job_id?String(q.resume_job_id):null;
-    return reply.type('text/html').send(page(`<h1>You're connected.</h1><p>Your subscription is being activated${resume?' and the video you were reading will resume automatically':''}.</p><p>You can return to ChatGPT or Claude.</p><script>setTimeout(()=>location.href='/account',2500)</script>`));
+    return reply.type('text/html').send(page(`<h1>You're connected.</h1><p>Your subscription is being activated${resume?' and the link you were reading will resume automatically':''}.</p><p>You can return to ChatGPT or Claude.</p><script>setTimeout(()=>location.href='/account',2500)</script>`));
   });
 
   app.get('/account',async(req,reply)=>{
@@ -74,7 +74,7 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
     const usage=await getUsageSnapshot(user.id);
     const minsUsed=Math.ceil(usage.used_seconds/60), minsLimit=Math.round(usage.limit_seconds/60);
     const csrf=csrfField(req.headers.cookie);
-    return reply.type('text/html').send(page(`<h1>${esc(env().PUBLIC_BRAND_NAME)}</h1><div class="card"><h2>${esc(usage.plan[0].toUpperCase()+usage.plan.slice(1))}</h2><p>${minsUsed} / ${minsLimit} minutes${usage.period_end?`<br>Renews ${esc(new Date(usage.period_end).toLocaleDateString('en-US',{month:'short',day:'numeric'}))}`:''}</p>${usage.plan==='trial'?`<p>${usage.remaining_videos} free videos remaining</p><p><a href="/pricing">Continue with Basic</a></p>`:`<form method="post" action="/billing/portal">${csrf}<button>Manage subscription</button></form>`}</div><p class="muted">${esc(env().PUBLIC_BRAND_NAME)} keeps raw video/audio only while processing. Transcript cache expires automatically.</p>`));
+    return reply.type('text/html').send(page(`<h1>${esc(env().PUBLIC_BRAND_NAME)}</h1><div class="card"><h2>${esc(usage.plan[0].toUpperCase()+usage.plan.slice(1))}</h2><p>${minsUsed} / ${minsLimit} minutes${usage.period_end?`<br>Renews ${esc(new Date(usage.period_end).toLocaleDateString('en-US',{month:'short',day:'numeric'}))}`:''}</p>${usage.plan==='trial'?`<p>${usage.remaining_videos} free links remaining</p><p><a href="/pricing">Continue with Basic</a></p>`:`<form method="post" action="/billing/portal">${csrf}<button>Manage subscription</button></form>`}</div><p class="muted">${esc(env().PUBLIC_BRAND_NAME)} keeps temporary media/audio only while processing. Transcript cache expires automatically.</p>`));
   });
 
 

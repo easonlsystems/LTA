@@ -10,8 +10,8 @@ export interface PlanLimits {
 
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   trial: {
-    secondsPerPeriod: 30 * 60,
-    videosPerPeriod: 10,
+    secondsPerPeriod: 10 * 60,
+    videosPerPeriod: 3,
     maxVideoSeconds: 30 * 60,
     concurrency: 1,
     priority: 0

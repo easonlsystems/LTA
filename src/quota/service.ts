@@ -5,18 +5,19 @@ import { PLAN_LIMITS, type Plan } from './plans.js';
 
 interface Period { start: Date | null; end: Date | null; }
 
-async function getUserAndPeriod(client: PoolClient, userId: string): Promise<{plan:Plan; period:Period}> {
-  const user = await client.query<{plan:Plan}>('SELECT plan FROM users WHERE id=$1 FOR UPDATE', [userId]);
+async function getUserAndPeriod(client: PoolClient, userId: string): Promise<{plan:Plan; period:Period; trialEligible:boolean}> {
+  const user = await client.query<{plan:Plan;trial_eligible:boolean}>('SELECT plan,trial_eligible FROM users WHERE id=$1 FOR UPDATE', [userId]);
   if (!user.rowCount) throw new Link2AIError('AUTH_REQUIRED', 'User account not found.', 401);
   const plan = user.rows[0].plan;
-  if (plan === 'trial') return { plan, period: { start: null, end: null } };
+  const trialEligible=Boolean(user.rows[0].trial_eligible);
+  if (plan === 'trial') return { plan, period: { start: null, end: null }, trialEligible };
   const sub = await client.query<{current_period_start:Date|null; current_period_end:Date|null}>(
     `SELECT current_period_start, current_period_end FROM subscriptions
      WHERE user_id=$1 AND plan=$2 AND status IN ('active','trialing','past_due')
      ORDER BY CASE WHEN status IN ('active','trialing') THEN 0 ELSE 1 END, updated_at DESC LIMIT 1`, [userId,plan]
   );
   if (sub.rowCount && sub.rows[0].current_period_start && sub.rows[0].current_period_end) {
-    return { plan, period: { start: sub.rows[0].current_period_start, end: sub.rows[0].current_period_end } };
+    return { plan, period: { start: sub.rows[0].current_period_start, end: sub.rows[0].current_period_end }, trialEligible };
   }
   const now = new Date();
   return {
@@ -24,7 +25,8 @@ async function getUserAndPeriod(client: PoolClient, userId: string): Promise<{pl
     period: {
       start: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
       end: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
-    }
+    },
+    trialEligible
   };
 }
 
@@ -37,14 +39,19 @@ export async function reserveQuota(userId: string, jobId: string, seconds: numbe
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { plan, period } = await getUserAndPeriod(client, userId);
+    const { plan, period, trialEligible } = await getUserAndPeriod(client, userId);
     // If a previous attempt finalized quota but crashed before marking the job completed,
     // retrying this same job must not reserve or charge it a second time.
     const finalized=await client.query('SELECT 1 FROM usage_ledger WHERE user_id=$1 AND job_id=$2',[userId,jobId]);
     if(finalized.rowCount){await client.query('COMMIT');return;}
     const limits = PLAN_LIMITS[plan];
+    if(plan==='trial'&&!trialEligible){
+      throw new Link2AIError('QUOTA_EXCEEDED','This account is not eligible for another free trial.',402,false,{
+        plan,remaining_seconds:0,remaining_videos:0
+      });
+    }
     if (seconds > limits.maxVideoSeconds) {
-      throw new Link2AIError('DURATION_LIMIT_EXCEEDED', `This video exceeds the ${Math.round(limits.maxVideoSeconds/60)} minute limit for ${plan}.`, 402, false, { plan, max_video_seconds: limits.maxVideoSeconds });
+      throw new Link2AIError('DURATION_LIMIT_EXCEEDED', `The content behind this link exceeds the ${Math.round(limits.maxVideoSeconds/60)} minute limit for ${plan}.`, 402, false, { plan, max_video_seconds: limits.maxVideoSeconds });
     }
 
     await client.query('DELETE FROM quota_reservations WHERE expires_at <= now()');
@@ -61,7 +68,7 @@ export async function reserveQuota(userId: string, jobId: string, seconds: numbe
     const usedSeconds = Number(usage.rows[0].seconds) + Number(reservations.rows[0].seconds);
     const usedVideos = Number(usage.rows[0].videos) + Number(reservations.rows[0].videos);
     if (usedSeconds + seconds > limits.secondsPerPeriod || (limits.videosPerPeriod !== null && usedVideos + 1 > limits.videosPerPeriod)) {
-      throw new Link2AIError('QUOTA_EXCEEDED', 'Your plan does not have enough remaining quota for this video.', 402, false, {
+      throw new Link2AIError('QUOTA_EXCEEDED', 'Your plan does not have enough remaining quota for this link.', 402, false, {
         plan,
         remaining_seconds: Math.max(0, limits.secondsPerPeriod - usedSeconds),
         remaining_videos: limits.videosPerPeriod === null ? null : Math.max(0, limits.videosPerPeriod - usedVideos)
@@ -128,7 +135,7 @@ export async function getUsageSnapshot(userId: string): Promise<UsageSnapshot> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { plan, period } = await getUserAndPeriod(client, userId);
+    const { plan, period, trialEligible } = await getUserAndPeriod(client, userId);
     const limits = PLAN_LIMITS[plan];
     const pf = periodSql(period, 'u');
     const usage = await client.query<{seconds:string; videos:string}>(
@@ -144,11 +151,11 @@ export async function getUsageSnapshot(userId: string): Promise<UsageSnapshot> {
     return {
       plan,
       used_seconds: usedSeconds,
-      limit_seconds: limits.secondsPerPeriod,
-      remaining_seconds: Math.max(0, limits.secondsPerPeriod - usedSeconds),
+      limit_seconds: plan==='trial'&&!trialEligible?0:limits.secondsPerPeriod,
+      remaining_seconds: plan==='trial'&&!trialEligible?0:Math.max(0, limits.secondsPerPeriod - usedSeconds),
       used_videos: usedVideos,
-      limit_videos: limits.videosPerPeriod,
-      remaining_videos: limits.videosPerPeriod === null ? null : Math.max(0, limits.videosPerPeriod - usedVideos),
+      limit_videos: plan==='trial'&&!trialEligible?0:limits.videosPerPeriod,
+      remaining_videos: plan==='trial'&&!trialEligible?0:(limits.videosPerPeriod === null ? null : Math.max(0, limits.videosPerPeriod - usedVideos)),
       concurrent_jobs: Number(active.rows[0].count),
       concurrency_limit: limits.concurrency,
       period_end: period.end?.toISOString() ?? null

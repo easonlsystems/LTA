@@ -1,6 +1,6 @@
 # Link2AI
 
-Link2AI is a remote MCP service that helps AI assistants read public social-video links when the assistant cannot reliably access the underlying spoken content itself.
+Link2AI is a remote MCP service that helps AI assistants read supported public links when the assistant cannot reliably access the content behind them.
 
 Instead of replacing ChatGPT or Claude, Link2AI acts as a thin access layer:
 
@@ -20,9 +20,9 @@ Public Instagram Reel / TikTok / YouTube URL
 
 ## Why this project exists
 
-A common failure mode in AI chat is simple: the user pastes a public social-video link and asks a question about the video, but the assistant cannot actually read the spoken content.
+A common failure mode in AI chat is simple: the user pastes a supported public link and asks a question about it, but the assistant cannot actually access the content behind that link.
 
-Link2AI focuses on that missing layer. It does not summarize, fact-check, translate, or run its own chatbot. Its job is to convert supported public video URLs into reliable AI-readable context and return that context to the assistant the user is already using.
+Link2AI focuses on that missing layer. It does not summarize, fact-check, translate, or run its own chatbot. Its job is to turn supported public links into reliable AI-readable context and return that context to the assistant the user is already using.
 
 ## V1 scope
 
@@ -106,21 +106,9 @@ The assistant decides when it actually needs Link2AI. A supported URL appearing 
 
 ## Validation status
 
-The current V1 source has passed clean dependency installation, production TypeScript build, the complete automated test suite, MCP initialization/tool-discovery checks, runtime API/website smoke tests, and a production dependency vulnerability audit.
+The baseline in this repository has already been deployed to the production Railway topology. The 2026-09-14 launch hotfix changes onboarding, review access, OpenAI submission support, and trial policy, so it must be redeployed and smoke-tested again before public directory submission.
 
-Current phase: **runtime / staging acceptance**.
-
-Still requiring real-environment acceptance before production launch:
-
-- PostgreSQL migrations and concurrency behavior on a real database
-- Docker/Railway runtime
-- live transcription providers
-- real public Instagram/TikTok/YouTube media
-- email delivery
-- billing webhooks and subscription lifecycle
-- live ChatGPT / Claude connection flows
-
-This distinction is intentional: source correctness is not treated as proof of production readiness.
+For this hotfix, the dependency-light TypeScript structural check and pure regression suite pass locally. A clean `npm ci` / full package build could not be rerun in the packaging sandbox because that environment could not resolve `registry.npmjs.org`; production CI/Railway remains the final networked build gate.
 
 ## Local development
 

@@ -2,7 +2,7 @@
 
 ## Design goal
 
-Link2AI is an access layer between an AI assistant and public social-video content that the assistant cannot reliably read on its own.
+Link2AI is an access layer between an AI assistant and supported public links whose underlying content the assistant cannot reliably read on its own.
 
 The service is intentionally not responsible for summarization or reasoning. Its job ends when it has returned normalized, AI-readable context.
 
