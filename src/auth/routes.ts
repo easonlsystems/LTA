@@ -6,6 +6,7 @@ import {
   getOAuthClient, loginFlowCookieName, mcpResource, parseCookies, registerOAuthClient, registerPasswordAccount, revokeOAuthToken, revokeWebSession, sessionCookieName,
   userFromSessionCookie, verifyCsrfToken, verifyEmailLogin, verifyPasswordLogin, verifyReviewerLogin, claimTrialDevice, trialDeviceCookieName
 } from './service.js';
+import { linkWebsiteVisitorToUser, trackWebsiteVisit } from '../analytics/visitors.js';
 
 function escapeHtml(v: unknown): string {
   return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]!));
@@ -129,6 +130,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/login', async (req, reply) => {
+    await trackWebsiteVisit(req,reply,'/login');
     const q=req.query as any;
     const returnTo=safeReturnTo(q.return_to);
     const reviewer=Boolean(env().REVIEWER_EMAIL&&env().REVIEWER_PASSWORD);
@@ -137,6 +139,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/signup',async(req,reply)=>{
+    await trackWebsiteVisit(req,reply,'/signup');
     const q=req.query as any;
     const returnTo=safeReturnTo(q.return_to);
     const current=await userFromSessionCookie(req.headers.cookie);
@@ -149,6 +152,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const returnTo=safeReturnTo(b?.return_to);
     try{
       const result=await verifyPasswordLogin(String(b?.email??''),String(b?.password??''),returnTo);
+      await linkWebsiteVisitorToUser(req.headers.cookie,result.user.id,false);
       const priorDevice=parseCookies(req.headers.cookie)[trialDeviceCookieName()];
       const trial=await claimTrialDevice(result.user.id,priorDevice);
       const secure=env().NODE_ENV==='production'?'; Secure':'';
@@ -166,6 +170,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     try{
       const current=await userFromSessionCookie(req.headers.cookie);
       const result=await registerPasswordAccount(String(b?.email??''),String(b?.password??''),returnTo,current?.id);
+      await linkWebsiteVisitorToUser(req.headers.cookie,result.user.id,true);
       const priorDevice=parseCookies(req.headers.cookie)[trialDeviceCookieName()];
       const trial=await claimTrialDevice(result.user.id,priorDevice);
       const secure=env().NODE_ENV==='production'?'; Secure':'';
@@ -216,6 +221,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const flowToken=parseCookies(req.headers.cookie)[loginFlowCookieName()]??'';
     try {
       const result = await verifyEmailLogin(String(b?.email ?? ''), String(b?.code ?? ''), flowToken);
+      await linkWebsiteVisitorToUser(req.headers.cookie,result.user.id,false);
       const secure = env().NODE_ENV === 'production' ? '; Secure' : '';
       const priorDevice=parseCookies(req.headers.cookie)[trialDeviceCookieName()];
       const trial=await claimTrialDevice(result.user.id,priorDevice);

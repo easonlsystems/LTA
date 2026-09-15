@@ -67,6 +67,31 @@ CREATE TABLE IF NOT EXISTS founder_admin_events (
 );
 CREATE INDEX IF NOT EXISTS founder_admin_events_target_idx ON founder_admin_events(target_user_id, created_at DESC);
 
+
+CREATE TABLE IF NOT EXISTS website_visitors (
+  visitor_id uuid PRIMARY KEY,
+  user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  first_path text NOT NULL,
+  last_path text NOT NULL,
+  page_views integer NOT NULL DEFAULT 0 CHECK (page_views >= 0),
+  first_seen_at timestamptz NOT NULL DEFAULT now(),
+  last_seen_at timestamptz NOT NULL DEFAULT now(),
+  signed_up_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS website_visitors_user_idx ON website_visitors(user_id);
+CREATE INDEX IF NOT EXISTS website_visitors_last_seen_idx ON website_visitors(last_seen_at DESC);
+CREATE INDEX IF NOT EXISTS website_visitors_signed_up_idx ON website_visitors(signed_up_at) WHERE signed_up_at IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS website_pageviews (
+  id bigserial PRIMARY KEY,
+  visitor_id uuid NOT NULL REFERENCES website_visitors(visitor_id) ON DELETE CASCADE,
+  path text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS website_pageviews_created_idx ON website_pageviews(created_at DESC);
+CREATE INDEX IF NOT EXISTS website_pageviews_visitor_idx ON website_pageviews(visitor_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS website_pageviews_path_idx ON website_pageviews(path, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS oauth_clients (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   client_id text NOT NULL UNIQUE,

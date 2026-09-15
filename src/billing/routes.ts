@@ -4,6 +4,7 @@ import { csrfTokenFromSessionCookie, userFromSessionCookie, verifyCsrfToken } fr
 import { getUsageSnapshot } from '../quota/service.js';
 import { env } from '../config/env.js';
 import { pool } from '../db/pool.js';
+import { trackWebsiteVisit } from '../analytics/visitors.js';
 
 function esc(v:unknown){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]!));}
 function page(body:string){return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${esc(env().PUBLIC_BRAND_NAME)}</title><link rel="icon" href="/logo.svg"><style>
@@ -29,6 +30,7 @@ function csrfField(cookieHeader:string|undefined):string{
 
 export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
   app.get('/pricing',async(req,reply)=>{
+    await trackWebsiteVisit(req,reply,'/pricing');
     const q=req.query as any;
     const user=await userFromSessionCookie(req.headers.cookie);
     const returnUrl=`/pricing${Object.keys(q).length?`?${new URLSearchParams(q).toString()}`:''}`;
