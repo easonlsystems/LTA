@@ -4,9 +4,9 @@ import { Link2AIError } from '../util/errors.js';
 import {
   beginEmailLogin, beginGuestLogin, createAuthorizationCode, csrfTokenFromSessionCookie, exchangeAuthorizationCode, exchangeRefreshToken,
   getOAuthClient, loginFlowCookieName, mcpResource, parseCookies, registerOAuthClient, registerPasswordAccount, revokeOAuthToken, revokeWebSession, sessionCookieName,
-  userFromSessionCookie, verifyCsrfToken, verifyEmailLogin, verifyPasswordLogin, verifyReviewerLogin, claimTrialDevice, trialDeviceCookieName
+  userFromSessionCookie, verifyCsrfToken, verifyEmailLogin, verifyPasswordLogin, verifyReviewerLogin, claimTrialDevice, trialDeviceCookieName, clearFounderStepUpCookie
 } from './service.js';
-import { linkWebsiteVisitorToUser, trackWebsiteVisit } from '../analytics/visitors.js';
+import { linkWebsiteVisitorToUser, trackWebsiteEvent, trackWebsiteVisit } from '../analytics/visitors.js';
 
 function escapeHtml(v: unknown): string {
   return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]!));
@@ -22,7 +22,7 @@ input{border:1px solid #d5d0da;background:#fff;outline:none}input:focus{border-c
 button{cursor:pointer;border:0;background:linear-gradient(135deg,#6f54e8,#8d77ff);color:#fff;font-weight:820;box-shadow:0 8px 20px rgba(111,84,232,.18)}.muted{color:#706a78;font-size:13px}.tiny{font-size:12px;color:#908997;line-height:1.5}.review{margin-top:24px;padding-top:18px;border-top:1px solid var(--line)}details summary{cursor:pointer;color:#706a78;font-size:13px;font-weight:750}a{color:inherit}.trust{display:flex;gap:8px;flex-wrap:wrap;margin-top:17px}.trust span{font-size:10px;font-weight:800;color:#706a78;background:#f5f3f0;padding:6px 8px;border-radius:999px}
 @media(max-width:620px){body{display:block;padding:16px 13px 28px;min-height:100dvh}.auth{width:100%;max-width:none;padding:22px 18px;border-radius:22px;margin:0 auto}.logo{margin-bottom:23px;font-size:18px}.logo img{width:32px;height:32px}h1{font-size:30px;line-height:1.07;margin-top:13px}p{font-size:14px;margin-bottom:16px}label{margin-top:13px}input,button{min-height:48px;font-size:16px;padding:12px 13px;border-radius:12px}button{font-size:15px}.trust{gap:6px}.trust span{font-size:9px}.review{margin-top:19px;padding-top:15px}.tiny{font-size:12px}}
 @media(max-width:360px){body{padding-left:10px;padding-right:10px}.auth{padding:19px 15px}h1{font-size:28px}}
-</style></head><body><main class="auth"><div class="logo"><img src="/logo.svg" alt=""><span>${escapeHtml(env().PUBLIC_BRAND_NAME)}</span></div>${body}${env().SUPPORT_EMAIL?`<p class="tiny" style="margin-top:18px;padding-top:15px;border-top:1px solid var(--line)">Need help? <a href="mailto:${escapeHtml(env().SUPPORT_EMAIL)}"><strong>${escapeHtml(env().SUPPORT_EMAIL)}</strong></a></p>`:''}</main></body></html>`; }
+</style></head><body><main class="auth"><div class="logo"><img src="/logo.svg" alt=""><span>${escapeHtml(env().PUBLIC_BRAND_NAME)}</span></div>${body}${env().SUPPORT_EMAIL?`<p class="tiny" style="margin-top:18px;padding-top:15px;border-top:1px solid var(--line)">Need help? <a href="mailto:${escapeHtml(env().SUPPORT_EMAIL)}"><strong>${escapeHtml(env().SUPPORT_EMAIL)}</strong></a></p>`:''}<p class="tiny" style="margin-top:12px;text-align:center"><a href="/pricing">Pricing</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a><br>${escapeHtml(env().PUBLIC_BRAND_NAME)} is a product by Eason Systems.</p></main></body></html>`; }
 
 function safeReturnTo(raw: string | undefined): string {
   if (!raw || raw.length>4096) return '/account';
@@ -93,6 +93,22 @@ function loginFlowCookie(value:string,maxAge:number):string{
   return `${loginFlowCookieName()}=${encodeURIComponent(value)}; Path=/auth/verify; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`;
 }
 
+function browserPostOriginOk(headers:Record<string,string|string[]|undefined>):boolean{
+  let expected:string;
+  try{expected=new URL(env().PUBLIC_BASE_URL).origin;}catch{return false;}
+  const origin=Array.isArray(headers.origin)?headers.origin[0]:headers.origin;
+  if(origin)return origin===expected;
+  const referer=Array.isArray(headers.referer)?headers.referer[0]:headers.referer;
+  if(!referer)return false;
+  try{return new URL(referer).origin===expected;}catch{return false;}
+}
+
+function rejectCrossSiteBrowserPost(req:{headers:Record<string,string|string[]|undefined>},reply:FastifyReply):boolean{
+  if(browserPostOriginOk(req.headers))return false;
+  reply.code(403).type('text/plain').send('Invalid request');
+  return true;
+}
+
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.get('/.well-known/oauth-authorization-server', async () => ({
     issuer: env().PUBLIC_BASE_URL,
@@ -144,10 +160,11 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const returnTo=safeReturnTo(q.return_to);
     const current=await userFromSessionCookie(req.headers.cookie);
     const upgrading=Boolean(current&&!current.email);
-    return reply.type('text/html').send(html(`<span class="step">${upgrading?'Finish account setup':'Create account'}</span><h1>${upgrading?'Keep this Link2AI account.':'Create your Link2AI account.'}</h1><p>${upgrading?'Add an email and password to the account you already used. Your current usage and Claude connection stay attached.':'Use an email and password so your trial, usage and plan follow you across devices.'}</p><form method="post" action="/auth/password/register"><label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="you@example.com"><label>Password</label><input type="password" name="password" required minlength="10" maxlength="128" autocomplete="new-password" placeholder="At least 10 characters"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>${upgrading?'Save account and continue':'Create account and continue'}</button></form><p class="tiny">Already have an account? <a href="/login?return_to=${encodeURIComponent(returnTo)}"><strong>Sign in</strong></a>. Password reset by email will be added after the beta; for now, keep your password safe or contact Support if you lose access.</p><div class="trust"><span>No card for trial</span><span>Same account on every device</span><span>Passwords are salted + hashed</span></div>`));
+    return reply.type('text/html').send(html(`<span class="step">${upgrading?'Finish account setup':'Start free · 10 processing units'}</span><h1>${upgrading?'Keep this Link2AI account.':'Create your Link2AI account.'}</h1><p>${upgrading?'Add an email and password to the account you already used. Your current usage and Claude connection stay attached.':'One account keeps your trial, usage and plan attached to you. After this, you go straight back to the Claude setup.'}</p><form method="post" action="/auth/password/register"><label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="you@example.com"><label>Password</label><input type="password" name="password" required minlength="10" maxlength="128" autocomplete="new-password" placeholder="At least 10 characters"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>${upgrading?'Save account and continue':'Create account → Continue to Claude setup'}</button></form><p class="tiny">Already have an account? <a href="/login?return_to=${encodeURIComponent(returnTo)}"><strong>Sign in</strong></a>. Need account help? Use <a href="/support"><strong>Support</strong></a>.</p><div class="trust"><span>10 processing units free</span><span>No card</span><span>Failed / unsupported reads use 0 units</span></div>`));
   });
 
   app.post('/auth/password/login',async(req,reply)=>{
+    if(rejectCrossSiteBrowserPost(req as unknown as {headers:Record<string,string|string[]|undefined>},reply))return;
     const b=req.body as any;
     const returnTo=safeReturnTo(b?.return_to);
     try{
@@ -158,28 +175,33 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       const secure=env().NODE_ENV==='production'?'; Secure':'';
       reply.header('Set-Cookie',[
         `${sessionCookieName()}=${encodeURIComponent(result.sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`,
-        `${trialDeviceCookieName()}=${encodeURIComponent(trial.deviceToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`
+        `${trialDeviceCookieName()}=${encodeURIComponent(trial.deviceToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`,
+        clearFounderStepUpCookie()
       ]);
       return reply.redirect(result.returnTo);
     }catch(e){return friendlyError(reply,e);}
   });
 
   app.post('/auth/password/register',async(req,reply)=>{
+    if(rejectCrossSiteBrowserPost(req as unknown as {headers:Record<string,string|string[]|undefined>},reply))return;
     const b=req.body as any;
     const returnTo=safeReturnTo(b?.return_to);
+    await trackWebsiteEvent(req,'signup_submit','/signup');
     try{
       const current=await userFromSessionCookie(req.headers.cookie);
       const result=await registerPasswordAccount(String(b?.email??''),String(b?.password??''),returnTo,current?.id);
       await linkWebsiteVisitorToUser(req.headers.cookie,result.user.id,true);
+      await trackWebsiteEvent(req,'signup_complete','/signup');
       const priorDevice=parseCookies(req.headers.cookie)[trialDeviceCookieName()];
       const trial=await claimTrialDevice(result.user.id,priorDevice);
       const secure=env().NODE_ENV==='production'?'; Secure':'';
       reply.header('Set-Cookie',[
         `${sessionCookieName()}=${encodeURIComponent(result.sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`,
-        `${trialDeviceCookieName()}=${encodeURIComponent(trial.deviceToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`
+        `${trialDeviceCookieName()}=${encodeURIComponent(trial.deviceToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`,
+        clearFounderStepUpCookie()
       ]);
       return reply.redirect(result.returnTo);
-    }catch(e){return friendlyError(reply,e);}
+    }catch(e){await trackWebsiteEvent(req,'signup_failed','/signup');return friendlyError(reply,e);}
   });
 
   app.post('/auth/logout',async(req,reply)=>{
@@ -187,11 +209,12 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     if(!verifyCsrfToken(req.headers.cookie,String(b?.csrf??'')))return reply.code(403).type('text/html').send(html(`<h1>Sign-out expired.</h1><p><a href="/account">Back to account</a></p>`));
     await revokeWebSession(req.headers.cookie).catch(()=>{});
     const secure=env().NODE_ENV==='production'?'; Secure':'';
-    reply.header('Set-Cookie',`${sessionCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`);
+    reply.header('Set-Cookie',[`${sessionCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`,clearFounderStepUpCookie()]);
     return reply.redirect('/');
   });
 
   app.post('/auth/guest', async (req, reply) => {
+    if(rejectCrossSiteBrowserPost(req as unknown as {headers:Record<string,string|string[]|undefined>},reply))return;
     const b=req.body as any;
     const returnTo=safeReturnTo(b?.return_to);
     try{
@@ -200,13 +223,15 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       const secure=env().NODE_ENV==='production'?'; Secure':'';
       reply.header('Set-Cookie',[
         `${sessionCookieName()}=${encodeURIComponent(result.sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`,
-        `${trialDeviceCookieName()}=${encodeURIComponent(result.deviceToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`
+        `${trialDeviceCookieName()}=${encodeURIComponent(result.deviceToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`,
+        clearFounderStepUpCookie()
       ]);
       return reply.redirect(result.returnTo);
     }catch(e){return friendlyError(reply,e);}
   });
 
   app.post('/auth/start', async (req, reply) => {
+    if(rejectCrossSiteBrowserPost(req as unknown as {headers:Record<string,string|string[]|undefined>},reply))return;
     const b = req.body as any;
     const returnTo = safeReturnTo(b?.return_to);
     try {
@@ -217,6 +242,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post('/auth/verify', async (req, reply) => {
+    if(rejectCrossSiteBrowserPost(req as unknown as {headers:Record<string,string|string[]|undefined>},reply))return;
     const b = req.body as any;
     const flowToken=parseCookies(req.headers.cookie)[loginFlowCookieName()]??'';
     try {
@@ -228,13 +254,15 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       reply.header('Set-Cookie', [
         `${sessionCookieName()}=${encodeURIComponent(result.sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`,
         `${trialDeviceCookieName()}=${encodeURIComponent(trial.deviceToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`,
-        loginFlowCookie('',0)
+        loginFlowCookie('',0),
+        clearFounderStepUpCookie()
       ]);
       return reply.redirect(result.returnTo);
     } catch (e) { return friendlyError(reply,e); }
   });
 
   app.post('/auth/reviewer', async (req, reply) => {
+    if(rejectCrossSiteBrowserPost(req as unknown as {headers:Record<string,string|string[]|undefined>},reply))return;
     const b=req.body as any;
     const returnTo=safeReturnTo(b?.return_to);
     try{
@@ -244,7 +272,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       const trial=await claimTrialDevice(result.user.id,priorDevice);
       reply.header('Set-Cookie',[
         `${sessionCookieName()}=${encodeURIComponent(result.sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${secure}`,
-        `${trialDeviceCookieName()}=${encodeURIComponent(trial.deviceToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`
+        `${trialDeviceCookieName()}=${encodeURIComponent(trial.deviceToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`,
+        clearFounderStepUpCookie()
       ]);
       return reply.redirect(result.returnTo);
     }catch(e){return friendlyError(reply,e);}

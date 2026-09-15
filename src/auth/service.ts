@@ -8,6 +8,7 @@ import { fetchCimdOAuthClient, validateOAuthRedirectUris, type ResolvedOAuthClie
 const SESSION_COOKIE = 'link2ai_session';
 const LOGIN_FLOW_COOKIE = 'link2ai_login_flow';
 const TRIAL_DEVICE_COOKIE = 'link2ai_trial_device';
+const FOUNDER_STEPUP_COOKIE = 'link2ai_founder_stepup';
 
 export interface AuthUser { id: string; email: string | null; plan: 'trial'|'basic'|'pro'; }
 
@@ -34,6 +35,7 @@ function normalizeScope(raw?: string): string {
 export function sessionCookieName(): string { return SESSION_COOKIE; }
 export function loginFlowCookieName(): string { return LOGIN_FLOW_COOKIE; }
 export function trialDeviceCookieName(): string { return TRIAL_DEVICE_COOKIE; }
+export function founderStepUpCookieName(): string { return FOUNDER_STEPUP_COOKIE; }
 
 export function hashLoginCode(email: string, code: string): string {
   return sha256(`${email.trim().toLowerCase()}:${code}:${env().APP_SECRET}`);
@@ -145,6 +147,55 @@ export async function verifyPasswordLogin(emailRaw:string,password:string,return
   const token=randomToken(32);
   await pool.query(`INSERT INTO web_sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '30 days')`,[row.id,sha256(token)]);
   return {user:{id:row.id,email:row.email,plan:row.plan},sessionToken:token,returnTo};
+}
+
+
+export async function verifyPasswordForUser(userId:string,password:string):Promise<boolean>{
+  if(password.length>128)return false;
+  const r=await pool.query<{email:string|null;account_status:string;password_hash:string|null;password_salt:string|null}>(
+    `SELECT email,account_status,password_hash,password_salt FROM users WHERE id=$1`,[userId]
+  );
+  const row=r.rows[0];
+  if(!row?.email||row.account_status==='disabled')return false;
+  const email=normalizeAccountEmail(row.email);
+  await enforcePasswordAttemptLimit(email);
+  const ok=row.password_hash&&row.password_salt
+    ? await verifyAccountPassword(password,row.password_salt,row.password_hash)
+    : await verifyAccountPassword(password,'link2ai-dummy-password-salt','00'.repeat(64));
+  await recordPasswordAttempt(email,Boolean(ok));
+  return Boolean(ok);
+}
+
+function founderStepUpSignature(sessionToken:string,expires:number):string{
+  return hmacSha256(env().APP_SECRET,`founder-stepup:${sha256(sessionToken)}:${expires}`);
+}
+
+export function createFounderStepUpCookie(cookieHeader?:string,ttlSeconds=900):string|null{
+  const sessionToken=parseCookies(cookieHeader)[SESSION_COOKIE];
+  if(!sessionToken)return null;
+  const expires=Math.floor(Date.now()/1000)+Math.max(60,Math.min(ttlSeconds,1800));
+  const value=`${expires}.${founderStepUpSignature(sessionToken,expires)}`;
+  const secure=env().NODE_ENV==='production'?'; Secure':'';
+  return `${FOUNDER_STEPUP_COOKIE}=${encodeURIComponent(value)}; Path=/founder; HttpOnly; SameSite=Strict; Max-Age=${Math.max(60,Math.min(ttlSeconds,1800))}${secure}`;
+}
+
+export function clearFounderStepUpCookie():string{
+  const secure=env().NODE_ENV==='production'?'; Secure':'';
+  return `${FOUNDER_STEPUP_COOKIE}=; Path=/founder; HttpOnly; SameSite=Strict; Max-Age=0${secure}`;
+}
+
+export function hasFounderStepUp(cookieHeader?:string):boolean{
+  const parsed=parseCookies(cookieHeader);
+  const sessionToken=parsed[SESSION_COOKIE];
+  const raw=parsed[FOUNDER_STEPUP_COOKIE];
+  if(!sessionToken||!raw)return false;
+  const dot=raw.indexOf('.');
+  if(dot<1)return false;
+  const expires=Number(raw.slice(0,dot));
+  const sig=raw.slice(dot+1);
+  const now=Math.floor(Date.now()/1000);
+  if(!Number.isInteger(expires)||expires<=now||expires>now+1800||!/^[0-9a-f]{64}$/i.test(sig))return false;
+  return timingSafeEqualHex(sig,founderStepUpSignature(sessionToken,expires));
 }
 
 export async function revokeWebSession(cookieHeader?:string):Promise<void>{

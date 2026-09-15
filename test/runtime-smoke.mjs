@@ -10,7 +10,7 @@ const port=address.port;
 await new Promise(resolve=>probe.close(resolve));
 
 const child=spawn(process.execPath,['dist/src/api/main.js'],{
-  env:{...process.env,NODE_ENV:'production',PORT:String(port),DATABASE_URL:'postgres://127.0.0.1:1/link2ai',PUBLIC_BASE_URL:'https://link2ai.example',PUBLIC_BRAND_NAME:'LaunchBrand',APP_SECRET:'01234567890123456789012345678901',LEMONSQUEEZY_API_KEY:'lemon-secret-must-not-render',RESEND_API_KEY:'resend-secret-must-not-render',OPENAI_APPS_CHALLENGE:'review-challenge-token',REVIEWER_EMAIL:'reviewer@example.com',REVIEWER_PASSWORD:'this-is-a-long-review-password'},
+  env:{...process.env,NODE_ENV:'production',PORT:String(port),DATABASE_URL:'postgres://127.0.0.1:1/link2ai',PUBLIC_BASE_URL:'https://link2ai.example',PUBLIC_BRAND_NAME:'LaunchBrand',APP_SECRET:'01234567890123456789012345678901',LEMONSQUEEZY_API_KEY:'lemon-secret-must-not-render',RESEND_API_KEY:'resend-secret-must-not-render',OPENAI_APPS_CHALLENGE:'review-challenge-token',REVIEWER_EMAIL:'reviewer@example.com',REVIEWER_PASSWORD:'this-is-a-long-review-password',FOUNDER_EMAIL:'founder@example.com'},
   stdio:['ignore','pipe','pipe']
 });
 let output='';
@@ -36,9 +36,48 @@ try{
     assert.equal(page.status,200,`${route} should return 200`);
     const body=await page.text();
     assert.match(body,/LaunchBrand/);
-    if(route==='/'){assert.match(body,/Paste the link\./);assert.match(body,/Your AI can read it\./);assert.match(body,/V2 · public links → readable source context/);}
-    if(route==='/connect'){assert.match(body,/Open Claude setup/);assert.match(body,/connectorName=LaunchBrand/);assert.match(body,/connectorUrl=https%3A%2F%2Flink2ai.example%2Fmcp/);assert.match(body,/target=\"_blank\"/);assert.match(body,/Email account/);}
+    if(route==='/'){assert.match(body,/Paste the link\./);assert.match(body,/Your AI can read it\./);assert.match(body,/Start free — 10 units/);assert.match(body,/See the 20-second example/);assert.match(body,/Before/);assert.match(body,/After/);assert.match(body,/V2 · public links → readable source context/);}
+    if(route==='/connect'){assert.match(body,/Open Claude setup/);assert.match(body,/href=\"\/connect\/start\"/);assert.match(body,/target=\"_blank\"/);assert.match(body,/Email account/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
+  }
+
+  const start=await fetch(`http://127.0.0.1:${port}/start?from=hero`,{headers:{host:'link2ai.example'},redirect:'manual'});
+  assert.equal(start.status,302);
+  assert.equal(start.headers.get('location'),'/signup?return_to=%2Fconnect');
+
+  const connectStart=await fetch(`http://127.0.0.1:${port}/connect/start`,{headers:{host:'link2ai.example'},redirect:'manual'});
+  assert.equal(connectStart.status,302);
+  const connectLocation=connectStart.headers.get('location')??'';
+  assert.match(connectLocation,/^https:\/\/claude\.ai\/customize\/connectors\?/);
+  assert.match(connectLocation,/connectorName=LaunchBrand/);
+  assert.match(connectLocation,/connectorUrl=https%3A%2F%2Flink2ai\.example%2Fmcp/);
+
+  const analyticsWrite=await fetch(`http://127.0.0.1:${port}/api/analytics/event`,{
+    method:'POST',headers:{host:'link2ai.example','content-type':'application/json'},body:'{"event":"connect_install_click"}'
+  });
+  assert.equal(analyticsWrite.status,404,'there should be no public analytics write endpoint');
+
+  const crossSiteLogin=await fetch(`http://127.0.0.1:${port}/auth/password/login`,{
+    method:'POST',
+    headers:{host:'link2ai.example',origin:'https://evil.example','content-type':'application/x-www-form-urlencoded'},
+    body:'email=x%40example.com&password=not-a-real-password&return_to=%2Faccount',
+    redirect:'manual'
+  });
+  assert.equal(crossSiteLogin.status,403,'browser auth POSTs must reject cross-site origins before touching account state');
+
+  const founder=await fetch(`http://127.0.0.1:${port}/founder`,{headers:{host:'link2ai.example'},redirect:'manual'});
+  assert.equal(founder.status,404,'signed-out /founder must not disclose the private admin surface');
+  assert.equal(founder.headers.get('location'),null);
+  assert.match(founder.headers.get('cache-control')??'',/no-store/);
+  assert.equal(founder.headers.get('x-frame-options'),'DENY');
+  assert.match(founder.headers.get('content-security-policy')??'',/frame-ancestors 'none'/);
+  assert.match(founder.headers.get('x-robots-tag')??'',/noindex/);
+  assert.equal(founder.headers.get('cross-origin-resource-policy'),'same-origin');
+
+  for(const privatePath of ['/founder/unlock','/founder/user/00000000-0000-4000-8000-000000000000']){
+    const privateResponse=await fetch(`http://127.0.0.1:${port}${privatePath}`,{headers:{host:'link2ai.example'},redirect:'manual'});
+    assert.equal(privateResponse.status,404,`${privatePath} must not disclose the private admin surface when signed out`);
+    assert.match(privateResponse.headers.get('cache-control')??'',/no-store/);
   }
 
   // /status should respond (200 or 503 depending on db availability)
@@ -61,6 +100,7 @@ try{
   assert.equal(robots.status,200);
   const robotsText=await robots.text();
   assert.match(robotsText,/Allow: \/\nDisallow: \/account/);
+  assert.doesNotMatch(robotsText,/Disallow: \/founder/,'robots.txt must not advertise the private admin path');
   assert.match(robotsText,/Sitemap: https:\/\/link2ai\.example\/sitemap\.xml/);
 
   // sitemap.xml
@@ -74,6 +114,7 @@ try{
   assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/support<\/loc>/);
   assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/privacy<\/loc>/);
   assert.match(sitemapText,/<url><loc>https:\/\/link2ai\.example\/terms<\/loc>/);
+  assert.doesNotMatch(sitemapText,/\/founder/,'private admin routes must never appear in sitemap');
 
   const logo=await fetch(`http://127.0.0.1:${port}/logo.svg`,{headers:{host:'link2ai.example'}});
   assert.equal(logo.status,200);
@@ -104,6 +145,10 @@ try{
   assert.match(signupText,/Create your Link2AI account/);
   assert.match(signupText,/auth\/password\/register/);
   assert.match(signupText,/At least 10 characters/);
+  assert.match(signupText,/10 processing units free/);
+  assert.match(signupText,/Continue to Claude setup/);
+  assert.match(signupText,/Failed \/ unsupported reads use 0 units/);
+  assert.match(signupText,/product by Eason Systems/);
 
   const oauthMetadata=await fetch(`http://127.0.0.1:${port}/.well-known/oauth-authorization-server`,{headers:{host:'link2ai.example'}});
   assert.equal(oauthMetadata.status,200);

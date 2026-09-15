@@ -15,6 +15,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_salt text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_set_at timestamptz;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_bonus_seconds integer NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_bonus_videos integer NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS analytics_excluded boolean NOT NULL DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS password_auth_attempts (
   id bigserial PRIMARY KEY,
@@ -91,6 +92,43 @@ CREATE TABLE IF NOT EXISTS website_pageviews (
 CREATE INDEX IF NOT EXISTS website_pageviews_created_idx ON website_pageviews(created_at DESC);
 CREATE INDEX IF NOT EXISTS website_pageviews_visitor_idx ON website_pageviews(visitor_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS website_pageviews_path_idx ON website_pageviews(path, created_at DESC);
+
+
+ALTER TABLE website_visitors ADD COLUMN IF NOT EXISTS first_referrer text;
+ALTER TABLE website_visitors ADD COLUMN IF NOT EXISTS utm_source text;
+ALTER TABLE website_visitors ADD COLUMN IF NOT EXISTS utm_medium text;
+ALTER TABLE website_visitors ADD COLUMN IF NOT EXISTS utm_campaign text;
+
+CREATE TABLE IF NOT EXISTS website_events (
+  id bigserial PRIMARY KEY,
+  visitor_id uuid NOT NULL REFERENCES website_visitors(visitor_id) ON DELETE CASCADE,
+  user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  event_name text NOT NULL,
+  path text NOT NULL,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS website_events_event_idx ON website_events(event_name, created_at DESC);
+CREATE INDEX IF NOT EXISTS website_events_visitor_idx ON website_events(visitor_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS website_events_user_idx ON website_events(user_id, created_at DESC) WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS website_events_visitor_milestone_once_idx
+  ON website_events(visitor_id,event_name)
+  WHERE event_name IN ('cta_start','signup_submit','signup_complete','connect_install_click','connect_complete');
+
+CREATE TABLE IF NOT EXISTS analytics_epochs (
+  key text PRIMARY KEY,
+  started_at timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO analytics_epochs(key) VALUES('website_v2_activation') ON CONFLICT(key) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS founder_security_events (
+  id bigserial PRIMARY KEY,
+  founder_user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  action text NOT NULL,
+  success boolean NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS founder_security_events_founder_idx ON founder_security_events(founder_user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS oauth_clients (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
