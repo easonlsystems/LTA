@@ -13,6 +13,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_eligible boolean NOT NULL DEFAU
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_salt text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_set_at timestamptz;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_bonus_seconds integer NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_bonus_videos integer NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS password_auth_attempts (
   id bigserial PRIMARY KEY,
@@ -52,6 +54,18 @@ CREATE TABLE IF NOT EXISTS web_sessions (
   expires_at timestamptz NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+
+CREATE TABLE IF NOT EXISTS founder_admin_events (
+  id bigserial PRIMARY KEY,
+  founder_user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  target_user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  action text NOT NULL,
+  before_state jsonb,
+  after_state jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS founder_admin_events_target_idx ON founder_admin_events(target_user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS oauth_clients (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

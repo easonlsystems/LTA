@@ -29,6 +29,7 @@ const schema = z.object({
   PUBLIC_EMAIL_LOGIN_ENABLED: boolish,
   AUTH_FROM_EMAIL: z.string().default('Link2AI <login@example.com>'),
   SUPPORT_EMAIL: z.string().email().optional(),
+  FOUNDER_EMAIL: z.string().email().optional(),
   AUTH_EMAIL_GLOBAL_LIMIT_15M: z.coerce.number().int().min(10).max(10000).default(200),
   OAUTH_DCR_GLOBAL_LIMIT_HOUR: z.coerce.number().int().min(10).max(100000).default(2000),
   DEV_SHOW_LOGIN_CODE: boolish,
