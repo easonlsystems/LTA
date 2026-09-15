@@ -124,13 +124,33 @@ function founderTime(value:unknown):string{
   if(!value)return '—';
   const d=new Date(String(value));
   if(Number.isNaN(d.getTime()))return '—';
-  return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(d);
+  return new Intl.DateTimeFormat('zh-TW',{timeZone:'Asia/Taipei',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(d);
 }
 function founderNum(value:unknown):number{return Number(value??0)||0;}
 function founderPct(part:number,total:number):string{return total>0?`${Math.round((part/total)*100)}%`:'0%';}
 function founderMinutes(seconds:unknown):string{
   const n=founderNum(seconds)/60;
   return n>=100?`${Math.round(n)}`:n.toFixed(n>=10?1:2).replace(/\\.00$/,'').replace(/(\\.\\d)0$/,'$1');
+}
+function founderPlanLabel(value:unknown):string{
+  const v=String(value??'');
+  return ({trial:'試用',basic:'Basic',pro:'Pro'} as Record<string,string>)[v]??v;
+}
+function founderAccountStatusLabel(value:unknown):string{
+  const v=String(value??'');
+  return ({active:'正常',past_due:'付款逾期',canceled:'已取消',disabled:'已停用'} as Record<string,string>)[v]??v;
+}
+function founderJobStatusLabel(value:unknown):string{
+  const v=String(value??'');
+  return ({queued:'排隊中',processing:'處理中',completed:'已完成',failed:'失敗',awaiting_payment:'等待付款',pending:'等待中'} as Record<string,string>)[v]??v;
+}
+function founderActionLabel(value:unknown):string{
+  const v=String(value??'');
+  return ({account_update:'帳號調整'} as Record<string,string>)[v]??v;
+}
+function founderShell(body:string,title=`${env().PUBLIC_BRAND_NAME} 後台`){
+  const supportEmail=env().SUPPORT_EMAIL?.trim();
+  return `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${title}</title><link rel="icon" href="/logo.svg"><style>${siteCss}</style></head><body><div class="wrap"><nav><a class="brand" href="/"><img src="/logo.svg" alt=""><span>${env().PUBLIC_BRAND_NAME}</span></a><div class="navlinks"><a class="hide-sm" href="/">首頁</a><a class="hide-sm" href="/pricing">方案</a><a class="hide-sm" href="/support">客服</a><a class="btn sm purple" href="/connect">加到 Claude</a></div></nav>${body}<footer><span>© 2026 ${env().PUBLIC_BRAND_NAME}</span><span class="legal-links"><a href="/privacy">隱私權</a> · <a href="/terms">服務條款</a> · <a href="/status">系統狀態</a> · <a href="/account">帳號</a>${supportEmail?` · <a href="mailto:${supportEmail}">客服：${supportEmail}</a>`:''}</span></footer></div></body></html>`;
 }
 function founderOriginOk(req:{headers:Record<string,string|string[]|undefined>}):boolean{
   let expected:string;
@@ -239,40 +259,40 @@ app.get('/founder',async(req,reply)=>{
   const links=founderNum(m?.links_total),seconds=founderNum(m?.seconds_total);
   const a=analyticsResult.rows[0];
   const visitors=founderNum(a?.visitors_total),visitorSignups=founderNum(a?.signed_up_total),visitorActivated=founderNum(a?.activated_visitors_total),connectVisitors=founderNum(a?.connect_visitors_total);
-  const topPages=topPagesResult.rows.map(row=>`<tr><td class="fd-email">${founderEscape(row.path)}</td><td>${founderNum(row.visitors)}</td><td>${founderNum(row.views)}</td></tr>`).join('')||'<tr><td colspan="3">No tracked page views yet.</td></tr>';
-  const recentJobs=recentJobsResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td class="fd-email"><a href="/founder/user/${founderEscape(row.user_id)}">${founderEscape(row.email??'anonymous')}</a></td><td>${founderEscape(row.platform)}</td><td><span class="fd-status ${row.status==='completed'?'ok':row.status==='failed'?'bad':'wait'}">${founderEscape(row.status)}</span></td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)}m`:'—'}</td><td>${founderEscape(row.error_code??'—')}</td></tr>`).join('')||'<tr><td colspan="6">No jobs yet.</td></tr>';
-  const platforms=platformResult.rows.map(row=>`<span class="fd-chip">${founderEscape(row.platform)} · ${founderNum(row.count)}</span>`).join('')||'<span class="fd-chip">No completed links yet</span>';
+  const topPages=topPagesResult.rows.map(row=>`<tr><td class="fd-email">${founderEscape(row.path)}</td><td>${founderNum(row.visitors)}</td><td>${founderNum(row.views)}</td></tr>`).join('')||'<tr><td colspan="3">目前還沒有網站瀏覽紀錄。</td></tr>';
+  const recentJobs=recentJobsResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td class="fd-email"><a href="/founder/user/${founderEscape(row.user_id)}">${founderEscape(row.email??'匿名')}</a></td><td>${founderEscape(row.platform)}</td><td><span class="fd-status ${row.status==='completed'?'ok':row.status==='failed'?'bad':'wait'}">${founderEscape(founderJobStatusLabel(row.status))}</span></td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)} 分鐘`:'—'}</td><td>${founderEscape(row.error_code??'—')}</td></tr>`).join('')||'<tr><td colspan="6">目前還沒有工作紀錄。</td></tr>';
+  const platforms=platformResult.rows.map(row=>`<span class="fd-chip">${founderEscape(row.platform)} · ${founderNum(row.count)}</span>`).join('')||'<span class="fd-chip">目前還沒有成功連結</span>';
   const totalMatched=founderNum(accountsCountResult.rows[0]?.count);
   const totalPages=Math.max(1,Math.ceil(totalMatched/pageSize));
-  const accountRows=accountsResult.rows.map(row=>`<tr><td class="fd-email"><a href="/founder/user/${founderEscape(row.id)}">${founderEscape(row.email)}</a></td><td>${founderEscape(row.plan)}</td><td>${founderEscape(row.account_status)}</td><td>${row.trial_eligible?'yes':'no'}</td><td>${row.connected?'✓':'—'}</td><td>${founderNum(row.links)}</td><td>${founderMinutes(row.seconds)}m</td><td>${founderNum(row.failed)}</td><td>${founderTime(row.last_activity)}</td><td><a class="btn alt sm" href="/founder/user/${founderEscape(row.id)}">Manage</a></td></tr>`).join('')||'<tr><td colspan="10">No matching accounts.</td></tr>';
+  const accountRows=accountsResult.rows.map(row=>`<tr><td class="fd-email"><a href="/founder/user/${founderEscape(row.id)}">${founderEscape(row.email)}</a></td><td>${founderEscape(founderPlanLabel(row.plan))}</td><td>${founderEscape(founderAccountStatusLabel(row.account_status))}</td><td>${row.trial_eligible?'是':'否'}</td><td>${row.connected?'✓':'—'}</td><td>${founderNum(row.links)}</td><td>${founderMinutes(row.seconds)}</td><td>${founderNum(row.failed)}</td><td>${founderTime(row.last_activity)}</td><td><a class="btn alt sm" href="/founder/user/${founderEscape(row.id)}">管理</a></td></tr>`).join('')||'<tr><td colspan="10">找不到符合的帳號。</td></tr>';
   const searchValue=founderEscape(q);
   const querySuffix=q?`&q=${encodeURIComponent(q)}`:'';
-  const prev=page>1?`<a class="btn alt sm" href="/founder?page=${page-1}${querySuffix}">← Prev</a>`:'';
-  const next=page<totalPages?`<a class="btn alt sm" href="/founder?page=${page+1}${querySuffix}">Next →</a>`:'';
+  const prev=page>1?`<a class="btn alt sm" href="/founder?page=${page-1}${querySuffix}">← 上一頁</a>`:'';
+  const next=page<totalPages?`<a class="btn alt sm" href="/founder?page=${page+1}${querySuffix}">下一頁 →</a>`:'';
 
-  const html=`<main class="fd">${founderCss()}<div class="fd-head"><div><span class="badge"><span class="badge-dot"></span>Private founder view</span><h1>Link2AI pulse.</h1><p class="fd-sub">Product usage + account administration. Full emails are visible only here.</p></div><a class="btn alt sm" href="/founder">Refresh</a></div>
+  const html=`<main class="fd">${founderCss()}<div class="fd-head"><div><span class="badge"><span class="badge-dot"></span>Founder 私人後台</span><h1>Link2AI 後台</h1><p class="fd-sub">網站流量、產品使用情況與帳號管理。完整 Email 只會顯示在這裡。</p></div><a class="btn alt sm" href="/founder">重新整理</a></div>
     <section class="fd-grid">
-      <div class="fd-card"><div class="fd-label">Unique visitors</div><div class="fd-value">${visitors}</div><div class="fd-note">+${founderNum(a?.visitors_24h)} today · ${founderNum(a?.visitors_7d)} in 7d</div></div>
-      <div class="fd-card"><div class="fd-label">Page views</div><div class="fd-value">${founderNum(a?.pageviews_total)}</div><div class="fd-note">+${founderNum(a?.pageviews_24h)} today · ${founderNum(a?.pageviews_7d)} in 7d</div></div>
-      <div class="fd-card"><div class="fd-label">Visitor signups</div><div class="fd-value">${visitorSignups}</div><div class="fd-note">${founderPct(visitorSignups,Math.max(visitors,1))} of tracked visitors</div></div>
-      <div class="fd-card"><div class="fd-label">Non-founder visitors</div><div class="fd-value">${founderNum(a?.non_founder_7d)}</div><div class="fd-note">Seen in the last 7 days</div></div>
-      <div class="fd-card"><div class="fd-label">Accounts</div><div class="fd-value">${accounts}</div><div class="fd-note">+${founderNum(m?.accounts_24h)} today · +${founderNum(m?.accounts_7d)} in 7d</div></div>
-      <div class="fd-card"><div class="fd-label">Claude connected</div><div class="fd-value">${connected}</div><div class="fd-note">${founderPct(connected,accounts)} of accounts</div></div>
-      <div class="fd-card"><div class="fd-label">Successful links</div><div class="fd-value">${links}</div><div class="fd-note">+${founderNum(m?.links_24h)} today · +${founderNum(m?.links_7d)} in 7d</div></div>
-      <div class="fd-card"><div class="fd-label">Paid users</div><div class="fd-value">${paid}</div><div class="fd-note">Basic ${founderNum(m?.basic_total)} · Pro ${founderNum(m?.pro_total)}</div></div>
-      <div class="fd-card"><div class="fd-label">Activated users</div><div class="fd-value">${activated}</div><div class="fd-note">At least 1 successful link · ${founderPct(activated,accounts)} of accounts</div></div>
-      <div class="fd-card"><div class="fd-label">Processed content</div><div class="fd-value">${founderMinutes(seconds)}m</div><div class="fd-note">${founderMinutes(m?.seconds_7d)}m in 7d</div></div>
-      <div class="fd-card"><div class="fd-label">Failed jobs</div><div class="fd-value">${founderNum(m?.failed_24h)}</div><div class="fd-note">today · ${founderNum(m?.failed_7d)} in 7d</div></div>
-      <div class="fd-card"><div class="fd-label">Platforms</div><div class="fd-chips" style="margin-top:10px">${platforms}</div></div>
+      <div class="fd-card"><div class="fd-label">不重複訪客</div><div class="fd-value">${visitors}</div><div class="fd-note">今天 +${founderNum(a?.visitors_24h)} · 7 天內 ${founderNum(a?.visitors_7d)}</div></div>
+      <div class="fd-card"><div class="fd-label">頁面瀏覽次數</div><div class="fd-value">${founderNum(a?.pageviews_total)}</div><div class="fd-note">今天 +${founderNum(a?.pageviews_24h)} · 7 天內 ${founderNum(a?.pageviews_7d)}</div></div>
+      <div class="fd-card"><div class="fd-label">訪客註冊數</div><div class="fd-value">${visitorSignups}</div><div class="fd-note">佔追蹤訪客 ${founderPct(visitorSignups,Math.max(visitors,1))}</div></div>
+      <div class="fd-card"><div class="fd-label">非 Founder 訪客</div><div class="fd-value">${founderNum(a?.non_founder_7d)}</div><div class="fd-note">最近 7 天曾造訪</div></div>
+      <div class="fd-card"><div class="fd-label">帳號數</div><div class="fd-value">${accounts}</div><div class="fd-note">今天 +${founderNum(m?.accounts_24h)} · 7 天內 +${founderNum(m?.accounts_7d)}</div></div>
+      <div class="fd-card"><div class="fd-label">已連接 Claude</div><div class="fd-value">${connected}</div><div class="fd-note">佔帳號 ${founderPct(connected,accounts)}</div></div>
+      <div class="fd-card"><div class="fd-label">成功連結</div><div class="fd-value">${links}</div><div class="fd-note">今天 +${founderNum(m?.links_24h)} · 7 天內 +${founderNum(m?.links_7d)}</div></div>
+      <div class="fd-card"><div class="fd-label">付費使用者</div><div class="fd-value">${paid}</div><div class="fd-note">Basic ${founderNum(m?.basic_total)} · Pro ${founderNum(m?.pro_total)}</div></div>
+      <div class="fd-card"><div class="fd-label">已啟用使用者</div><div class="fd-value">${activated}</div><div class="fd-note">至少成功 1 個連結 · 佔帳號 ${founderPct(activated,accounts)}</div></div>
+      <div class="fd-card"><div class="fd-label">已處理內容</div><div class="fd-value">${founderMinutes(seconds)} 分鐘</div><div class="fd-note">7 天內 ${founderMinutes(m?.seconds_7d)} 分鐘</div></div>
+      <div class="fd-card"><div class="fd-label">失敗工作</div><div class="fd-value">${founderNum(m?.failed_24h)}</div><div class="fd-note">今天 · 7 天內 ${founderNum(m?.failed_7d)}</div></div>
+      <div class="fd-card"><div class="fd-label">平台</div><div class="fd-chips" style="margin-top:10px">${platforms}</div></div>
     </section>
-    <section><div class="fd-label" style="margin-bottom:8px">Website funnel · tracked from this release</div><div class="fd-funnel"><div class="fd-step"><b>${visitors}</b><span>Unique visitors</span></div><div class="fd-step"><b>${connectVisitors}</b><span>Opened setup · ${founderPct(connectVisitors,Math.max(visitors,1))}</span></div><div class="fd-step"><b>${visitorSignups}</b><span>Signed up · ${founderPct(visitorSignups,Math.max(visitors,1))}</span></div><div class="fd-step"><b>${visitorActivated}</b><span>Activated · ${founderPct(visitorActivated,Math.max(visitorSignups,1))} of signups</span></div></div></section>
-    <section class="fd-panel"><div class="fd-panel-head"><div><h2>Top website pages</h2><div class="fd-note">Last 7 days · anonymous first-party analytics</div></div><span class="fd-label">No IP stored</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:520px"><thead><tr><th>Page</th><th>Unique visitors</th><th>Views</th></tr></thead><tbody>${topPages}</tbody></table></div></section>
-    <section><div class="fd-label" style="margin-bottom:8px">Product funnel</div><div class="fd-funnel"><div class="fd-step"><b>${accounts}</b><span>Accounts</span></div><div class="fd-step"><b>${connected}</b><span>Claude connected · ${founderPct(connected,accounts)}</span></div><div class="fd-step"><b>${activated}</b><span>First successful link · ${founderPct(activated,accounts)}</span></div><div class="fd-step"><b>${paid}</b><span>Paid · ${founderPct(paid,Math.max(activated,1))} of activated</span></div></div></section>
-    <section class="fd-panel"><div class="fd-panel-head"><div><h2>All accounts</h2><div class="fd-note">${totalMatched} matching · page ${page}/${totalPages}</div></div><form method="get" action="/founder" class="fd-tools"><input class="fd-input" type="search" name="q" value="${searchValue}" placeholder="Search email"><button class="btn alt sm" type="submit">Search</button>${q?'<a class="btn alt sm" href="/founder">Clear</a>':''}</form></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>Email</th><th>Plan</th><th>Status</th><th>Trial</th><th>Claude</th><th>Links</th><th>Minutes</th><th>Failed</th><th>Last activity</th><th></th></tr></thead><tbody>${accountRows}</tbody></table></div><div class="fd-panel-head"><span class="fd-label">100 per page</span><div class="fd-nav">${prev}${next}</div></div></section>
-    <section class="fd-panel"><div class="fd-panel-head"><h2>Recent jobs</h2><span class="fd-label">Latest 20</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>Time</th><th>Email</th><th>Platform</th><th>Status</th><th>Length</th><th>Error</th></tr></thead><tbody>${recentJobs}</tbody></table></div></section>
-    <div class="fd-warning">Website analytics start when this release is deployed; earlier website visits cannot be backfilled. Tracking uses a random first-party browser token and page path only, with no IP stored.</div><div class="fd-warning">Adjustments never delete usage history. Extra quota is added on top of the plan limit. Manual plan changes can later be overwritten by a Lemon Squeezy subscription webhook.</div>
-    <p class="fd-private">Private route. Only the signed-in account matching FOUNDER_EMAIL can open this page.</p></main>`;
-  return reply.type('text/html').send(siteShell(html,`${env().PUBLIC_BRAND_NAME} Founder`));
+    <section><div class="fd-label" style="margin-bottom:8px">網站轉換漏斗 · 從這次版本開始統計</div><div class="fd-funnel"><div class="fd-step"><b>${visitors}</b><span>不重複訪客</span></div><div class="fd-step"><b>${connectVisitors}</b><span>開啟設定頁 · ${founderPct(connectVisitors,Math.max(visitors,1))}</span></div><div class="fd-step"><b>${visitorSignups}</b><span>完成註冊 · ${founderPct(visitorSignups,Math.max(visitors,1))}</span></div><div class="fd-step"><b>${visitorActivated}</b><span>成功啟用 · 佔註冊者 ${founderPct(visitorActivated,Math.max(visitorSignups,1))}</span></div></div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><div><h2>熱門網站頁面</h2><div class="fd-note">最近 7 天 · 匿名第一方統計</div></div><span class="fd-label">不儲存 IP</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:520px"><thead><tr><th>頁面</th><th>不重複訪客</th><th>瀏覽次數</th></tr></thead><tbody>${topPages}</tbody></table></div></section>
+    <section><div class="fd-label" style="margin-bottom:8px">產品轉換漏斗</div><div class="fd-funnel"><div class="fd-step"><b>${accounts}</b><span>帳號</span></div><div class="fd-step"><b>${connected}</b><span>已連接 Claude · ${founderPct(connected,accounts)}</span></div><div class="fd-step"><b>${activated}</b><span>首次成功連結 · ${founderPct(activated,accounts)}</span></div><div class="fd-step"><b>${paid}</b><span>付費 · 佔已啟用使用者 ${founderPct(paid,Math.max(activated,1))}</span></div></div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><div><h2>所有帳號</h2><div class="fd-note">${totalMatched} 筆符合 · 第 ${page}／${totalPages} 頁</div></div><form method="get" action="/founder" class="fd-tools"><input class="fd-input" type="search" name="q" value="${searchValue}" placeholder="搜尋 Email"><button class="btn alt sm" type="submit">搜尋</button>${q?'<a class="btn alt sm" href="/founder">清除</a>':''}</form></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>Email</th><th>方案</th><th>狀態</th><th>試用資格</th><th>Claude</th><th>連結數</th><th>分鐘</th><th>失敗</th><th>最後活動</th><th></th></tr></thead><tbody>${accountRows}</tbody></table></div><div class="fd-panel-head"><span class="fd-label">每頁 100 筆</span><div class="fd-nav">${prev}${next}</div></div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><h2>最近工作</h2><span class="fd-label">最近 20 筆</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>Email</th><th>平台</th><th>狀態</th><th>長度</th><th>錯誤</th></tr></thead><tbody>${recentJobs}</tbody></table></div></section>
+    <div class="fd-warning">網站流量統計會從這個版本部署後開始，之前的訪客無法回補。統計只使用隨機第一方瀏覽器識別碼與頁面路徑，不儲存 IP。</div><div class="fd-warning">後台調整不會刪除使用紀錄。額外額度會加在原方案上；手動修改方案後，之後仍可能被 Lemon Squeezy 的正式訂閱 webhook 更新。</div>
+    <p class="fd-private">私人頁面。只有登入 Email 與 FOUNDER_EMAIL 相同的帳號可以開啟。</p></main>`;
+  return reply.type('text/html').send(founderShell(html,`${env().PUBLIC_BRAND_NAME} 後台`));
 });
 
 app.get('/founder/user/:id',async(req,reply)=>{
@@ -301,34 +321,34 @@ app.get('/founder/user/:id',async(req,reply)=>{
     pool.query<{action:string;before_state:unknown;after_state:unknown;created_at:string}>(`SELECT action,before_state,after_state,created_at FROM founder_admin_events WHERE target_user_id=$1 ORDER BY created_at DESC LIMIT 10`,[targetId])
   ]);
   const a=allTimeResult.rows[0];
-  const flash=String((req.query as {saved?:string;error?:string})?.saved??'')==='1'?'<div class="fd-okflash">Saved.</div>':String((req.query as {error?:string})?.error??'')?`<div class="fd-badflash">${founderEscape((req.query as {error?:string}).error)}</div>`:'';
-  const jobRows=jobsResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(row.platform)}</td><td>${founderEscape(row.status)}</td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)}m`:'—'}</td><td>${founderEscape(row.error_code??'—')}</td><td class="fd-email">${founderEscape(row.id)}</td></tr>`).join('')||'<tr><td colspan="6">No jobs yet.</td></tr>';
-  const auditRows=auditResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(row.action)}</td><td class="fd-muted">${founderEscape(JSON.stringify(row.after_state??{}))}</td></tr>`).join('')||'<tr><td colspan="3">No founder adjustments yet.</td></tr>';
+  const flash=String((req.query as {saved?:string;error?:string})?.saved??'')==='1'?'<div class="fd-okflash">已儲存。</div>':String((req.query as {error?:string})?.error??'')?`<div class="fd-badflash">${founderEscape((req.query as {error?:string}).error)}</div>`:'';
+  const jobRows=jobsResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(row.platform)}</td><td>${founderEscape(founderJobStatusLabel(row.status))}</td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)} 分鐘`:'—'}</td><td>${founderEscape(row.error_code??'—')}</td><td class="fd-email">${founderEscape(row.id)}</td></tr>`).join('')||'<tr><td colspan="6">目前還沒有工作紀錄。</td></tr>';
+  const auditRows=auditResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(founderActionLabel(row.action))}</td><td class="fd-muted">${founderEscape(JSON.stringify(row.after_state??{}))}</td></tr>`).join('')||'<tr><td colspan="3">目前還沒有 Founder 調整紀錄。</td></tr>';
   const limitVideos=usage.limit_videos===null?'∞':String(usage.limit_videos);
   const remainingVideos=usage.remaining_videos===null?'∞':String(usage.remaining_videos);
   const self=targetId===founder.id;
-  const html=`<main class="fd">${founderCss()}<div class="fd-head"><div><a href="/founder" class="fd-note">← All accounts</a><h1 style="font-size:clamp(30px,5vw,52px)">${founderEscape(account.email??'anonymous')}</h1><p class="fd-sub fd-email">${founderEscape(account.id)}</p></div><a class="btn alt sm" href="/founder/user/${founderEscape(targetId)}">Refresh</a></div>${flash}
+  const html=`<main class="fd">${founderCss()}<div class="fd-head"><div><a href="/founder" class="fd-note">← 所有帳號</a><h1 style="font-size:clamp(30px,5vw,52px)">${founderEscape(account.email??'匿名')}</h1><p class="fd-sub fd-email">${founderEscape(account.id)}</p></div><a class="btn alt sm" href="/founder/user/${founderEscape(targetId)}">重新整理</a></div>${flash}
     <section class="fd-grid">
-      <div class="fd-card"><div class="fd-label">Plan</div><div class="fd-value" style="font-size:26px">${founderEscape(account.plan)}</div><div class="fd-note">${founderEscape(account.account_status)}</div></div>
-      <div class="fd-card"><div class="fd-label">Current usage</div><div class="fd-value" style="font-size:26px">${founderMinutes(usage.used_seconds)}m</div><div class="fd-note">of ${founderMinutes(usage.limit_seconds)}m · ${usage.used_videos}/${limitVideos} links</div></div>
-      <div class="fd-card"><div class="fd-label">Remaining</div><div class="fd-value" style="font-size:26px">${founderMinutes(usage.remaining_seconds)}m</div><div class="fd-note">${remainingVideos} links · period end ${founderTime(usage.period_end)}</div></div>
-      <div class="fd-card"><div class="fd-label">Claude</div><div class="fd-value" style="font-size:26px">${account.connected?'Connected':'—'}</div><div class="fd-note">Trial eligible: ${account.trial_eligible?'yes':'no'}</div></div>
-      <div class="fd-card"><div class="fd-label">All-time links</div><div class="fd-value">${founderNum(a?.links)}</div><div class="fd-note">${founderMinutes(a?.seconds)}m processed</div></div>
-      <div class="fd-card"><div class="fd-label">Failed jobs</div><div class="fd-value">${founderNum(a?.failed)}</div><div class="fd-note">Last job ${founderTime(a?.last_job)}</div></div>
-      <div class="fd-card"><div class="fd-label">Bonus quota</div><div class="fd-value" style="font-size:26px">${founderMinutes(account.admin_bonus_seconds)}m</div><div class="fd-note">+${founderNum(account.admin_bonus_videos)} links</div></div>
-      <div class="fd-card"><div class="fd-label">Created</div><div class="fd-value" style="font-size:20px">${founderTime(account.created_at)}</div><div class="fd-note">Updated ${founderTime(account.updated_at)}</div></div>
+      <div class="fd-card"><div class="fd-label">方案</div><div class="fd-value" style="font-size:26px">${founderEscape(founderPlanLabel(account.plan))}</div><div class="fd-note">${founderEscape(founderAccountStatusLabel(account.account_status))}</div></div>
+      <div class="fd-card"><div class="fd-label">目前用量</div><div class="fd-value" style="font-size:26px">${founderMinutes(usage.used_seconds)} 分鐘</div><div class="fd-note">共 ${founderMinutes(usage.limit_seconds)} 分鐘 · ${usage.used_videos}/${limitVideos} 個連結</div></div>
+      <div class="fd-card"><div class="fd-label">剩餘額度</div><div class="fd-value" style="font-size:26px">${founderMinutes(usage.remaining_seconds)} 分鐘</div><div class="fd-note">${remainingVideos} 個連結 · 本期到 ${founderTime(usage.period_end)}</div></div>
+      <div class="fd-card"><div class="fd-label">Claude</div><div class="fd-value" style="font-size:26px">${account.connected?'已連接':'—'}</div><div class="fd-note">試用資格：${account.trial_eligible?'有':'無'}</div></div>
+      <div class="fd-card"><div class="fd-label">累計成功連結</div><div class="fd-value">${founderNum(a?.links)}</div><div class="fd-note">已處理 ${founderMinutes(a?.seconds)} 分鐘</div></div>
+      <div class="fd-card"><div class="fd-label">失敗工作</div><div class="fd-value">${founderNum(a?.failed)}</div><div class="fd-note">最後工作 ${founderTime(a?.last_job)}</div></div>
+      <div class="fd-card"><div class="fd-label">額外額度</div><div class="fd-value" style="font-size:26px">${founderMinutes(account.admin_bonus_seconds)} 分鐘</div><div class="fd-note">+${founderNum(account.admin_bonus_videos)} 個連結</div></div>
+      <div class="fd-card"><div class="fd-label">建立時間</div><div class="fd-value" style="font-size:20px">${founderTime(account.created_at)}</div><div class="fd-note">更新於 ${founderTime(account.updated_at)}</div></div>
     </section>
-    <section class="fd-panel"><div class="fd-panel-head"><div><h2>Adjust account</h2><div class="fd-note">Usage history is never deleted.</div></div></div><div style="padding:18px"><form method="post" action="/founder/user/${founderEscape(targetId)}/update"><div class="fd-form-grid">
-      <div class="fd-field"><label>Plan</label><select class="fd-select" name="plan"><option value="trial" ${account.plan==='trial'?'selected':''}>Trial</option><option value="basic" ${account.plan==='basic'?'selected':''}>Basic</option><option value="pro" ${account.plan==='pro'?'selected':''}>Pro</option></select><small>Manual plan override. A later Lemon Squeezy webhook can replace it.</small></div>
-      <div class="fd-field"><label>Account status</label><select class="fd-select" name="account_status"><option value="active" ${account.account_status==='active'?'selected':''}>Active</option><option value="past_due" ${account.account_status==='past_due'?'selected':''}>Past due</option><option value="canceled" ${account.account_status==='canceled'?'selected':''}>Canceled</option><option value="disabled" ${account.account_status==='disabled'?'selected':''}>Disabled</option></select><small>Disabled blocks web sessions, OAuth and new processing.${self?' Your own founder account cannot be disabled here.':''}</small></div>
-      <div class="fd-field"><label>Trial eligibility</label><select class="fd-select" name="trial_eligible"><option value="true" ${account.trial_eligible?'selected':''}>Eligible</option><option value="false" ${!account.trial_eligible?'selected':''}>Not eligible</option></select><small>Only matters while the account is on Trial.</small></div>
-      <div class="fd-field"><label>Extra minutes</label><input class="fd-input" type="number" name="bonus_minutes" min="0" max="100000" step="1" value="${Math.floor(founderNum(account.admin_bonus_seconds)/60)}"><small>Added on top of the normal plan limit without changing historical usage.</small></div>
-      <div class="fd-field"><label>Extra links</label><input class="fd-input" type="number" name="bonus_links" min="0" max="100000" step="1" value="${founderNum(account.admin_bonus_videos)}"><small>Useful for Trial; Basic and Pro already have no link-count cap.</small></div>
-    </div><div class="fd-actions"><button class="btn purple" type="submit">Save changes</button><a class="btn alt" href="/founder">Back</a></div></form></div></section>
-    <section class="fd-panel"><div class="fd-panel-head"><h2>Recent jobs</h2><span class="fd-label">Latest 30</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>Time</th><th>Platform</th><th>Status</th><th>Length</th><th>Error</th><th>Job ID</th></tr></thead><tbody>${jobRows}</tbody></table></div></section>
-    <section class="fd-panel"><div class="fd-panel-head"><h2>Founder adjustments</h2><span class="fd-label">Latest 10</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>Time</th><th>Action</th><th>New state</th></tr></thead><tbody>${auditRows}</tbody></table></div></section>
-    <p class="fd-private">Full email and account controls are visible only to FOUNDER_EMAIL.</p></main>`;
-  return reply.type('text/html').send(siteShell(html,`${env().PUBLIC_BRAND_NAME} Founder Account`));
+    <section class="fd-panel"><div class="fd-panel-head"><div><h2>調整帳號</h2><div class="fd-note">使用紀錄不會被刪除。</div></div></div><div style="padding:18px"><form method="post" action="/founder/user/${founderEscape(targetId)}/update"><div class="fd-form-grid">
+      <div class="fd-field"><label>方案</label><select class="fd-select" name="plan"><option value="trial" ${account.plan==='trial'?'selected':''}>試用</option><option value="basic" ${account.plan==='basic'?'selected':''}>Basic</option><option value="pro" ${account.plan==='pro'?'selected':''}>Pro</option></select><small>手動調整方案；之後 Lemon Squeezy webhook 仍可能依正式訂閱狀態更新。</small></div>
+      <div class="fd-field"><label>帳號狀態</label><select class="fd-select" name="account_status"><option value="active" ${account.account_status==='active'?'selected':''}>正常</option><option value="past_due" ${account.account_status==='past_due'?'selected':''}>付款逾期</option><option value="canceled" ${account.account_status==='canceled'?'selected':''}>已取消</option><option value="disabled" ${account.account_status==='disabled'?'selected':''}>已停用</option></select><small>停用後會阻擋網站登入、OAuth 與新的處理工作。${self?' 你不能在這裡停用自己的 Founder 帳號。':''}</small></div>
+      <div class="fd-field"><label>試用資格</label><select class="fd-select" name="trial_eligible"><option value="true" ${account.trial_eligible?'selected':''}>可試用</option><option value="false" ${!account.trial_eligible?'selected':''}>不可試用</option></select><small>只有帳號目前是試用方案時才會生效。</small></div>
+      <div class="fd-field"><label>額外分鐘</label><input class="fd-input" type="number" name="bonus_minutes" min="0" max="100000" step="1" value="${Math.floor(founderNum(account.admin_bonus_seconds)/60)}"><small>直接加在原方案額度上，不會更動既有使用紀錄。</small></div>
+      <div class="fd-field"><label>額外連結數</label><input class="fd-input" type="number" name="bonus_links" min="0" max="100000" step="1" value="${founderNum(account.admin_bonus_videos)}"><small>主要給試用方案補額度；Basic 與 Pro 本來就沒有連結數上限。</small></div>
+    </div><div class="fd-actions"><button class="btn purple" type="submit">儲存變更</button><a class="btn alt" href="/founder">返回</a></div></form></div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><h2>最近工作</h2><span class="fd-label">最近 30 筆</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>平台</th><th>狀態</th><th>長度</th><th>錯誤</th><th>工作 ID</th></tr></thead><tbody>${jobRows}</tbody></table></div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><h2>Founder 調整紀錄</h2><span class="fd-label">最近 10 筆</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>動作</th><th>新狀態</th></tr></thead><tbody>${auditRows}</tbody></table></div></section>
+    <p class="fd-private">完整 Email 與帳號控制只會顯示給 FOUNDER_EMAIL。</p></main>`;
+  return reply.type('text/html').send(founderShell(html,`${env().PUBLIC_BRAND_NAME} 帳號管理`));
 });
 
 app.post('/founder/user/:id/update',async(req,reply)=>{
@@ -345,9 +365,9 @@ app.post('/founder/user/:id/update',async(req,reply)=>{
   const bonusMinutes=Number(body.bonus_minutes??0);
   const bonusLinks=Number(body.bonus_links??0);
   if(!['trial','basic','pro'].includes(plan)||!['active','past_due','canceled','disabled'].includes(accountStatus)||!Number.isInteger(bonusMinutes)||bonusMinutes<0||bonusMinutes>100000||!Number.isInteger(bonusLinks)||bonusLinks<0||bonusLinks>100000){
-    return reply.redirect(`/founder/user/${encodeURIComponent(targetId)}?error=${encodeURIComponent('Invalid account settings.')}`);
+    return reply.redirect(`/founder/user/${encodeURIComponent(targetId)}?error=${encodeURIComponent('帳號設定格式不正確。')}`);
   }
-  if(targetId===founder.id&&accountStatus==='disabled')return reply.redirect(`/founder/user/${encodeURIComponent(targetId)}?error=${encodeURIComponent('You cannot disable the founder account from the founder dashboard.')}`);
+  if(targetId===founder.id&&accountStatus==='disabled')return reply.redirect(`/founder/user/${encodeURIComponent(targetId)}?error=${encodeURIComponent('不能從 Founder 後台停用自己的帳號。')}`);
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
@@ -360,7 +380,7 @@ app.post('/founder/user/:id/update',async(req,reply)=>{
   }catch(err){
     await client.query('ROLLBACK');
     app.log.error(err);
-    return reply.redirect(`/founder/user/${encodeURIComponent(targetId)}?error=${encodeURIComponent('Save failed.')}`);
+    return reply.redirect(`/founder/user/${encodeURIComponent(targetId)}?error=${encodeURIComponent('儲存失敗。')}`);
   }finally{client.release();}
 });
 
