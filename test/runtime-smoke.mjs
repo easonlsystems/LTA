@@ -36,7 +36,7 @@ try{
     assert.equal(page.status,200,`${route} should return 200`);
     const body=await page.text();
     assert.match(body,/LaunchBrand/);
-    if(route==='/')assert.match(body,/Claude-first founding beta/);
+    if(route==='/'){assert.match(body,/Paste the link\./);assert.match(body,/Your AI can read it\./);assert.match(body,/V2 · public links → readable source context/);}
     if(route==='/connect'){assert.match(body,/Open Claude setup/);assert.match(body,/connectorName=LaunchBrand/);assert.match(body,/connectorUrl=https%3A%2F%2Flink2ai.example%2Fmcp/);assert.match(body,/target=\"_blank\"/);assert.match(body,/Email account/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }
@@ -45,10 +45,16 @@ try{
   const status=await fetch(`http://127.0.0.1:${port}/status`,{headers:{host:'link2ai.example'}});
   assert.ok(status.status===200||status.status===503,`/status should return 200 or 503, got ${status.status}`);
 
-  // /pricing sends new unauthenticated users to account creation
+  // /pricing is public in Website V2.
   const pricing=await fetch(`http://127.0.0.1:${port}/pricing`,{headers:{host:'link2ai.example'},redirect:'manual'});
-  assert.equal(pricing.status,302);
-  assert.match(pricing.headers.get('location')??'',/^\/signup\?return_to=/);
+  assert.equal(pricing.status,200);
+  const pricingText=await pricing.text();
+  assert.match(pricingText,/Start free\. Upgrade only when you know what you need\./);
+  assert.match(pricingText,/10 processing units/);
+  assert.match(pricingText,/500 processing units \/ month/);
+  assert.match(pricingText,/2,000 processing units \/ month/);
+  assert.match(pricingText,/No fixed link-count limit/);
+  assert.doesNotMatch(pricingText,/3 successful links|10 total minutes|content minutes \/ month/);
 
   // robots.txt
   const robots=await fetch(`http://127.0.0.1:${port}/robots.txt`,{headers:{host:'link2ai.example'}});
@@ -85,6 +91,9 @@ try{
   assert.match(loginText,/auth\/password\/login/);
   assert.match(loginText,/Create an account/);
   assert.match(loginText,/OpenAI reviewer access/);
+  assert.match(loginText,/10 processing units free/);
+  assert.match(loginText,/Failed or unsupported reads use 0 units/);
+  assert.doesNotMatch(loginText,/3 links or 10 minutes free/);
   assert.doesNotMatch(loginText,/Continue free/);
   assert.doesNotMatch(loginText,/Send sign-in code/);
   assert.doesNotMatch(loginText,/this-is-a-long-review-password/);
