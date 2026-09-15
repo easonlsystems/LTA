@@ -30,11 +30,11 @@ export async function runProcess(
     };
     child.stdout.on('data', collect(stdout));
     child.stderr.on('data', collect(stderr));
-    child.on('error', err => {
+    child.on('error', (err:Error) => {
       clearTimeout(timer);
       reject(err);
     });
-    child.on('close', code => {
+    child.on('close', (code:number|null) => {
       clearTimeout(timer);
       const out = Buffer.concat(stdout).toString('utf8');
       const err = Buffer.concat(stderr).toString('utf8');

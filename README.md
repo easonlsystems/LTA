@@ -1,127 +1,125 @@
 # Link2AI
 
-> **Claude-first founding beta:** V1 distribution and onboarding are focused on Claude first to validate demand and usability with real users. ChatGPT remains a first-class product target and is the next distribution surface.
+> **Paste a link. Your AI can read it.**
 
-Link2AI is a remote MCP service that helps AI assistants read supported public links when the assistant cannot reliably access the content behind them.
+Link2AI is a thin remote MCP access layer that turns supported public links into AI-readable source context when the assistant cannot reliably access the content on its own. The founding beta is Claude-first, with ChatGPT as the next distribution surface; the protocol remains usable by compatible remote-MCP clients.
 
-Instead of replacing ChatGPT or Claude, Link2AI acts as a thin access layer:
+Link2AI does not summarize, translate, fact-check or run its own chatbot. The host AI still does the reasoning and produces the answer.
 
 ```text
-Public Instagram Reel / TikTok / YouTube URL
-                    ↓
-              URL validation
-                    ↓
-          Platform-specific resolver
-                    ↓
-       Captions first → ASR fallback
-                    ↓
-       Transcript + timestamps + metadata
-                    ↓
-          ChatGPT / Claude continues
+Public link
+    ↓
+URL validation + content classification
+    ↓
+video ───────→ captions first → ASR fallback
+post/page ───→ public text extraction
+    ↓
+metadata + AI-readable source text
+    ↓
+Claude / ChatGPT continues
 ```
 
-## Why this project exists
+## Supported beta sources
 
-A common failure mode in AI chat is simple: the user pastes a supported public link and asks a question about it, but the assistant cannot actually access the content behind that link.
-
-Link2AI focuses on that missing layer. It does not summarize, fact-check, translate, or run its own chatbot. Its job is to turn supported public links into reliable AI-readable context and return that context to the assistant the user is already using.
-
-## V1 scope
-
-Supported:
-
+- YouTube and YouTube Shorts videos
+- TikTok videos
 - Instagram Reels
-- TikTok
-- YouTube
-- YouTube Shorts
-- Remote MCP clients such as ChatGPT and Claude
+- Public Instagram posts
+- Individual public X posts
+- Individual public Reddit posts + a bounded set of top public comments
+- Readable public HTTPS webpages and articles
 
-Intentionally out of scope for V1:
+TikTok photo posts are accepted by the URL layer and use the post extractor when the public page exposes usable text.
 
-- Private or login-only media
-- DRM or paid-content bypass
-- Visual understanding / OCR
-- A separate AI chat interface
-- A transcript library
-- Facebook / X ingestion
+Not supported:
+
+- Private or login-only content
+- Profiles, feeds, timelines or bulk crawling
+- Paywall, DRM or access-control bypass
+- Full visual understanding / OCR
+- A separate Link2AI chat UI
+- A permanent content library
 
 ## Core engineering decisions
 
-### Captions before ASR
+### One link-reading interface
 
-When usable captions exist, Link2AI parses those instead of paying for speech-to-text. ASR is only used as a fallback.
+The MCP tool id remains `get_video_transcript` for backward compatibility with already-connected clients, but its product-facing title is **Read link content** and it can return video transcripts, post text or webpage text. New responses include `content_type` and `content_text` while preserving the legacy `transcript` field.
 
-### Resolver isolation
+### Media pipeline
 
-Instagram, TikTok, and YouTube are separated into platform resolvers so platform breakage can be contained instead of taking down the entire product.
+For supported videos, Link2AI prefers usable publisher/platform captions. Only when captions are unavailable does it download temporary media, normalize audio and use speech-to-text.
 
-### Canonical media cache
+### Text-link pipeline
 
-Cache identity is based on platform + canonical media ID + language rather than raw share URLs. This prevents duplicate work across different tracking/share links that point to the same media.
+For supported posts and webpages, Link2AI extracts public text directly rather than forcing the media pipeline:
 
-### Global in-flight deduplication
+- X posts use public embed metadata.
+- Reddit posts use Reddit's public post JSON when available and return the post plus a bounded top-comment tree; a public-page fallback is used only when the JSON endpoint is temporarily unavailable.
+- Instagram/TikTok posts first use the dedicated social extractor and fall back to the public page when possible.
+- Generic webpages use the SSRF-safe HTTP client, accept only HTML/text responses, remove common non-content regions and return bounded readable text.
 
-Concurrent requests for the same uncached media are coordinated so a viral video does not trigger duplicate transcription jobs.
+### Canonical cache + in-flight deduplication
+
+Cache identity is based on platform + canonical source ID + language instead of raw tracking/share URLs. Concurrent requests for the same uncached content share the existing media-claim mechanism so the worker does not perform duplicate extraction.
+
+### Quota behavior
+
+Successful Trial reads consume one successful-link unit. Video processing also consumes measured content seconds. Text-only post/page jobs keep media duration at zero but consume **one equivalent content minute** from plan quota. This keeps the existing minute-based plans useful for both media and text links without pretending a webpage has a video duration. Failed jobs do not consume completed-job quota.
 
 ### Security boundary
 
-Public URLs are treated as untrusted input. The service validates supported hosts, re-checks redirects, blocks private/link-local address ranges, limits remote metadata responses, isolates OAuth resources, and treats transcript text as untrusted data rather than instructions.
+Public URLs are untrusted input. Generic webpage fetching uses HTTPS only, validates DNS/IPs before requests and after redirects, rejects private/link-local destinations, limits response size and content type, and treats extracted text as untrusted external content rather than instructions.
 
 ### Privacy and retention
 
-Temporary media/audio are deleted after processing. Transcript cache entries expire and are deleted after the configured retention period. Historical jobs scrub media identifiers after the retention window.
+Temporary media/audio are deleted after processing. Cached source text/transcripts expire after the configured retention period. Historical jobs scrub source identifiers after retention. Link2AI does not intentionally build a permanent corpus of scraped pages or media.
 
 ## Architecture
 
 ```text
-ChatGPT / Claude
-       ↓
-Remote MCP + OAuth
-       ↓
-API service
-├── account/auth
-├── quota/entitlements
-├── billing hooks
-├── transcript jobs
-└── public website/account routes
-       ↓
-PostgreSQL
-       ↕
-Worker
-├── platform resolvers
-├── caption extraction
-├── FFmpeg normalization
-└── speech-to-text fallback
+Claude / ChatGPT / compatible MCP client
+                 ↓
+          Remote MCP + OAuth
+                 ↓
+             API service
+       ├── account/auth
+       ├── quota/entitlements
+       ├── billing hooks
+       ├── link-reading jobs
+       └── public website/account routes
+                 ↓
+             PostgreSQL
+                 ↕
+              Worker
+       ├── URL classifier
+       ├── social/page text extractor
+       ├── platform media resolvers
+       ├── caption extraction
+       ├── FFmpeg normalization
+       └── speech-to-text fallback
 ```
-
-More detail is available in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/SECURITY.md`](docs/SECURITY.md).
 
 ## MCP tools
 
-The V1 interface intentionally stays small:
+The public interface intentionally stays small:
 
-- `get_video_transcript(url)`
-- `get_transcript_result(job_id)`
-- `get_usage()`
+- `get_video_transcript(url)` — backward-compatible tool id; starts/reuses a **Read link content** job.
+- `get_transcript_result(job_id)` — retrieve/poll a long-running result and page long source text.
+- `get_usage()` — return the connected account's plan and quota.
 
-The assistant decides when it actually needs Link2AI. A supported URL appearing in conversation does not automatically mean the tool should be called.
+A supported URL appearing in conversation does not automatically mean the tool should be called. The host AI should invoke it only when the user's request actually depends on the content behind the link and the AI does not already have sufficient access.
 
-## Validation status
+## Requirements
 
-The baseline in this repository has already been deployed to the production Railway topology. The 2026-09-14 launch hotfix changes onboarding, review access, OpenAI submission support, and trial policy, so it must be redeployed and smoke-tested again before public directory submission.
-
-For this hotfix, the dependency-light TypeScript structural check and pure regression suite pass locally. A clean `npm ci` / full package build could not be rerun in the packaging sandbox because that environment could not resolve `registry.npmjs.org`; production CI/Railway remains the final networked build gate.
-
-## Local development
-
-Requirements:
-
-- Node.js 22
+- Node.js 22+
 - PostgreSQL
 - FFmpeg
 - yt-dlp
+- gallery-dl
+- At least one configured speech-to-text provider for media fallback
 
-Install and test:
+## Local development
 
 ```bash
 npm ci
@@ -129,7 +127,7 @@ npm run build
 npm test
 ```
 
-Copy `.env.example` to `.env` and provide the required local configuration before starting services.
+Copy `.env.example` to `.env` and provide the required local configuration.
 
 API:
 
@@ -151,19 +149,12 @@ npm run db:migrate
 
 ## Deployment
 
-The repository contains a Dockerfile and Railway configuration. The intended production topology is one API/MCP service, one Worker service, and PostgreSQL in the same Railway environment.
+The production topology is one API/MCP service, one Worker service, and PostgreSQL in the same Railway environment. Both API and Worker use the same image/codebase with different start commands.
 
-See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the deployment model.
+The current expansion keeps the existing job/cache tables and extends cache source types to `post` and `page`, so the migration must run before the new worker becomes active.
 
+## Claude-first onboarding
 
-## Founding beta sign-in
+Public beta onboarding lives at `/connect`. The preferred flow is Claude custom connector → **Sign in now** → **Register automatically (DCR)** → Add → Link2AI account authorization. Users should not need a manually issued OAuth client ID or secret.
 
-Public users now use a Link2AI **email + password account**. The email is the stable account identity for trial usage, paid plan state, web sessions and Claude OAuth authorization. Passwords are never stored in plaintext: Link2AI uses a per-account random salt and Node's scrypt password derivation before storage. The first-party `link2ai_trial_device` cookie remains only as an anti-abuse/returning-device signal; it is no longer the user's identity. Existing anonymous beta accounts can be upgraded in place so their usage and OAuth records stay attached.
-
-`PUBLIC_EMAIL_LOGIN_ENABLED` now controls only the optional legacy email-OTP path. The normal public password login does not require Resend or a verified outbound-email domain. OpenAI reviewers continue to use the dedicated reviewer credential path configured only through Railway environment variables.
-
-### Claude-first onboarding
-
-Public beta onboarding is documented at `/connect`. The preferred flow is Claude custom connector → **Sign in now** → **Register automatically (DCR)** → Add → create/sign in to the Link2AI email account → approve the Link2AI OAuth connection. Users should not need a manually issued OAuth client ID or secret. The `/connect` tab stays open while Claude setup runs in a new tab and changes into `/account` after a fresh OAuth connection is detected.
-
-V1 returns spoken/caption text. Visual-only information may be missing; tool responses carry an explicit limitation notice so hosts should not infer unsupported visual structure.
+The beta can read spoken/caption text from supported videos, public post text (including bounded Reddit discussion context), and readable public webpages. Visual-only information may still be missing unless it is present in readable page metadata/text.

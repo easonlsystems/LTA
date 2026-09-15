@@ -1,5 +1,9 @@
 export type Plan = 'trial' | 'basic' | 'pro';
 
+// Text-only posts/pages use one equivalent content minute. This keeps the existing
+// minute-based plans meaningful without pretending the page has a media duration.
+export const TEXT_LINK_EQUIVALENT_SECONDS = 60;
+
 export interface PlanLimits {
   secondsPerPeriod: number;
   videosPerPeriod: number | null;

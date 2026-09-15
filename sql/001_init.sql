@@ -168,12 +168,14 @@ CREATE TABLE IF NOT EXISTS transcript_cache (
   duration_seconds integer NOT NULL,
   transcript text NOT NULL,
   segments jsonb NOT NULL DEFAULT '[]'::jsonb,
-  source text NOT NULL CHECK (source IN ('caption','asr')),
+  source text NOT NULL CHECK (source IN ('caption','asr','post','page')),
   created_at timestamptz NOT NULL DEFAULT now(),
   expires_at timestamptz NOT NULL,
   UNIQUE(platform, canonical_media_id, language)
 );
 CREATE INDEX IF NOT EXISTS transcript_cache_exp_idx ON transcript_cache(expires_at);
+ALTER TABLE transcript_cache DROP CONSTRAINT IF EXISTS transcript_cache_source_check;
+ALTER TABLE transcript_cache ADD CONSTRAINT transcript_cache_source_check CHECK (source IN ('caption','asr','post','page'));
 
 CREATE TABLE IF NOT EXISTS transcript_jobs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

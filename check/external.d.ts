@@ -1,7 +1,7 @@
 declare var process: any;
 declare var Buffer: any;
 type Buffer = any;
-declare module 'node:crypto' { const x:any; export default x; }
+declare module 'node:crypto' { const x:any; export default x; export const randomUUID:any; }
 declare module 'node:util' { export const promisify:any; }
 declare module 'node:child_process' { export const spawn:any; }
 declare module 'node:fs/promises' { const x:any; export default x; export const readFile:any; }

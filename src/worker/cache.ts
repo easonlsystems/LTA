@@ -4,7 +4,7 @@ import type { TranscriptPayload } from '../media/types.js';
 
 export interface CacheRow {
   id: string;
-  platform: 'instagram'|'tiktok'|'youtube';
+  platform: 'instagram'|'tiktok'|'youtube'|'x'|'reddit'|'web';
   canonical_media_id: string;
   language: string;
   title: string | null;
@@ -13,7 +13,7 @@ export interface CacheRow {
   duration_seconds: number;
   transcript: string;
   segments: Array<{start:number;end:number;text:string}>;
-  source: 'caption'|'asr';
+  source: 'caption'|'asr'|'post'|'page';
 }
 
 export async function findCache(platform: string, canonicalId: string, language: string): Promise<CacheRow | null> {

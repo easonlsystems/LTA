@@ -4,6 +4,7 @@ import { parseMediaUrl } from '../media/url.js';
 import { createCheckoutSession } from '../billing/lemon.js';
 import { asLink2AIError, Link2AIError } from '../util/errors.js';
 import { reserveQuota, finalizeQuota, getUsageSnapshot } from '../quota/service.js';
+import { TEXT_LINK_EQUIVALENT_SECONDS } from '../quota/plans.js';
 import { findCache } from '../worker/cache.js';
 import { planForUser, priorityForPlan, markAwaitingPayment, markCompleted, setJobMetadata } from '../worker/jobs.js';
 
@@ -80,7 +81,7 @@ export async function startTranscriptJob(userId:string,url:string):Promise<ToolJ
     // resumed correctly after entitlement changes.
     await setJobMetadata(jobId,parsed.canonicalMediaId,cached.duration_seconds);
     try{
-      await reserveQuota(userId,jobId,cached.duration_seconds);
+      await reserveQuota(userId,jobId,(cached.source==='post'||cached.source==='page')?TEXT_LINK_EQUIVALENT_SECONDS:cached.duration_seconds);
       await finalizeQuota(userId,jobId);
       await markCompleted(jobId,cached.id,cached.duration_seconds);
       return await getJobResult(userId,jobId);
@@ -113,10 +114,10 @@ export async function getJobResult(userId:string,jobId:string):Promise<ToolJobRe
      FROM transcript_jobs j LEFT JOIN transcript_cache c ON c.id=j.transcript_cache_id
      WHERE j.id=$1 AND j.user_id=$2`,[jobId,userId]
   );
-  if(!r.rowCount)throw new Link2AIError('JOB_NOT_FOUND','Transcript job not found.',404);
+  if(!r.rowCount)throw new Link2AIError('JOB_NOT_FOUND','Link-reading job not found.',404);
   const row=r.rows[0];
   if(row.status==='completed'&&!row.transcript){
-    return {status:'failed',job_id:row.id,error_code:'TRANSCRIPT_EXPIRED',message:'This temporary result has expired. Call get_video_transcript with the original link to read it again.'};
+    return {status:'failed',job_id:row.id,error_code:'TRANSCRIPT_EXPIRED',message:'This temporary result has expired. Call Read link content with the original link to read it again.'};
   }
   if(row.status==='completed'){
     return {

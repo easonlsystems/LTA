@@ -50,7 +50,7 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
     }
     
     const csrf=csrfField(req.headers.cookie);
-    return reply.type('text/html').send(page(`<h1>Continue with ${esc(env().PUBLIC_BRAND_NAME)}</h1><div class="card"><h2>Basic — $4.99 / month</h2><p>500 minutes of content / month<br>Instagram, TikTok & YouTube<br>ChatGPT + Claude</p><form id="checkout-basic" method="post" action="/billing/checkout">${csrf}<input type="hidden" name="plan" value="basic"><input type="hidden" name="resume_job_id" value="${esc(resume)}"><button>Continue</button></form></div><p class="muted">Need more? Pro — $9.99 / month, 2,000 minutes of content and up to 120 minutes per link.</p><form id="checkout-pro" method="post" action="/billing/checkout">${csrf}<input type="hidden" name="plan" value="pro"><input type="hidden" name="resume_job_id" value="${esc(resume)}"><button>Choose Pro</button></form>`));
+    return reply.type('text/html').send(page(`<h1>Continue with ${esc(env().PUBLIC_BRAND_NAME)}</h1><div class="card"><h2>Basic — $4.99 / month</h2><p>500 content minutes / month<br>Text post/page = 1 content minute<br>Videos, posts & public webpages<br>ChatGPT + Claude</p><form id="checkout-basic" method="post" action="/billing/checkout">${csrf}<input type="hidden" name="plan" value="basic"><input type="hidden" name="resume_job_id" value="${esc(resume)}"><button>Continue</button></form></div><p class="muted">Need more? Pro — $9.99 / month, 2,000 minutes of content and up to 120 minutes per link.</p><form id="checkout-pro" method="post" action="/billing/checkout">${csrf}<input type="hidden" name="plan" value="pro"><input type="hidden" name="resume_job_id" value="${esc(resume)}"><button>Choose Pro</button></form>`));
   });
 
   app.post('/billing/checkout',async(req,reply)=>{
@@ -66,7 +66,7 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
     if(usage.plan==='trial'&&!resume){
       const usageRows=await pool.query<{count:string}>("SELECT COUNT(*)::text count FROM usage_ledger WHERE user_id=$1",[user.id]);
       if(Number(usageRows.rows[0].count)===0){
-        return reply.code(409).type('text/html').send(page(`<h1>${esc(env().PUBLIC_BRAND_NAME)}</h1><p>Complete one supported public link first.</p><p>Try reading a supported Instagram, TikTok, or YouTube link to activate your trial, then return here to upgrade.</p><p><a href="/connect">Back to ${esc(env().PUBLIC_BRAND_NAME)}</a></p>`));
+        return reply.code(409).type('text/html').send(page(`<h1>${esc(env().PUBLIC_BRAND_NAME)}</h1><p>Complete one supported public link first.</p><p>Try reading a supported public video, post, or webpage to activate your trial, then return here to upgrade.</p><p><a href="/connect">Back to ${esc(env().PUBLIC_BRAND_NAME)}</a></p>`));
       }
     }
     

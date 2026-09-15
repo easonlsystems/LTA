@@ -22,6 +22,9 @@
     "src/resolvers/fallback.ts",
     "src/transcription/format.ts",
     "src/auth/clientMetadata.ts",
-    "src/billing/order.ts"
+    "src/billing/order.ts",
+    "src/content/linkText.ts",
+    "src/util/process.ts",
+    "src/util/safeHttp.ts"
   ]
 }

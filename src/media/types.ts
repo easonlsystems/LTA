@@ -17,7 +17,7 @@ export interface TranscriptPayload {
   language: string;
   transcript: string;
   segments: TranscriptSegment[];
-  source: 'caption' | 'asr';
+  source: 'caption' | 'asr' | 'post' | 'page';
 }
 
 export interface MediaMetadata {

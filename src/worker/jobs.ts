@@ -7,7 +7,7 @@ import { env } from '../config/env.js';
 export interface JobRow {
   id: string;
   user_id: string;
-  platform: 'instagram'|'tiktok'|'youtube';
+  platform: 'instagram'|'tiktok'|'youtube'|'x'|'reddit'|'web';
   source_url: string;
   normalized_url: string;
   canonical_media_id: string;

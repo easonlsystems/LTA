@@ -39,7 +39,7 @@ try{
   assert.match(listed.result.tools[0].description,/LaunchBrand/);
   assert.match(listed.result.tools[1].description,/LaunchBrand/);
   assert.doesNotMatch(JSON.stringify(listed.result.tools),/\$\{env\(\)/);
-  assert.deepEqual(listed.result.tools[0].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false});
+  assert.deepEqual(listed.result.tools[0].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true});
   assert.equal(listed.result.tools[1].annotations.readOnlyHint,true);
   assert.equal(listed.result.tools[2].annotations.readOnlyHint,true);
 
@@ -47,6 +47,7 @@ try{
   const get_video_transcript_desc=listed.result.tools[0].description;
   assert.match(get_video_transcript_desc,/do not.*merely.*URL/i,'Description must warn against calling solely because URL is present');
   assert.match(get_video_transcript_desc,/sufficient access/i,'Description must reference needing sufficient access to content');
+  assert.match(get_video_transcript_desc,/Reddit/i,'Description must advertise Reddit post support');
   
   // Assertion for explicit opt-out wording
   assert.match(get_video_transcript_desc,/explicitly.*(?:request|requests).*NOT.*(?:use|call)|(?:user|user's).*explicitly.*(?:avoid|not|don't).*(?:fetch|external)/i,'Description must respect explicit user request not to use the tool');
