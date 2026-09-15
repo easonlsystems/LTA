@@ -14,6 +14,15 @@ export interface CacheRow {
   transcript: string;
   segments: Array<{start:number;end:number;text:string}>;
   source: 'caption'|'asr'|'post'|'page';
+  truncated:boolean;
+  truncation_reason:string|null;
+  extracted_token_estimate:number;
+  usage_units:number;
+  items_available:number|null;
+  items_extracted:number|null;
+  pages_available:number|null;
+  pages_extracted:number|null;
+  content_sections_truncated:string[];
 }
 
 export async function findCache(platform: string, canonicalId: string, language: string): Promise<CacheRow | null> {
@@ -40,15 +49,23 @@ export async function findUserCompletedCache(userId:string,platform:string,canon
 
 export async function saveCache(payload: TranscriptPayload): Promise<CacheRow> {
   const r = await pool.query<CacheRow>(
-    `INSERT INTO transcript_cache(platform,canonical_media_id,language,title,creator,caption,duration_seconds,transcript,segments,source,expires_at)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,now() + ($11 || ' hours')::interval)
+    `INSERT INTO transcript_cache(platform,canonical_media_id,language,title,creator,caption,duration_seconds,transcript,segments,source,expires_at,truncated,truncation_reason,extracted_token_estimate,usage_units,items_available,items_extracted,pages_available,pages_extracted,content_sections_truncated)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,now() + ($11 || ' hours')::interval,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb)
      ON CONFLICT(platform,canonical_media_id,language) DO UPDATE SET
        title=EXCLUDED.title, creator=EXCLUDED.creator, caption=EXCLUDED.caption,
        duration_seconds=EXCLUDED.duration_seconds, transcript=EXCLUDED.transcript, segments=EXCLUDED.segments,
-       source=EXCLUDED.source, created_at=now(), expires_at=EXCLUDED.expires_at
+       source=EXCLUDED.source, created_at=now(), expires_at=EXCLUDED.expires_at,
+       truncated=EXCLUDED.truncated,truncation_reason=EXCLUDED.truncation_reason,
+       extracted_token_estimate=EXCLUDED.extracted_token_estimate,usage_units=EXCLUDED.usage_units,
+       items_available=EXCLUDED.items_available,items_extracted=EXCLUDED.items_extracted,
+       pages_available=EXCLUDED.pages_available,pages_extracted=EXCLUDED.pages_extracted,
+       content_sections_truncated=EXCLUDED.content_sections_truncated
      RETURNING *`,
     [payload.platform,payload.canonicalMediaId,payload.language,payload.title ?? null,payload.creator ?? null,
-     payload.caption ?? null,payload.durationSeconds,payload.transcript,JSON.stringify(payload.segments),payload.source,env().TRANSCRIPT_CACHE_HOURS]
+     payload.caption ?? null,payload.durationSeconds,payload.transcript,JSON.stringify(payload.segments),payload.source,env().TRANSCRIPT_CACHE_HOURS,
+     payload.completeness.truncated,payload.completeness.truncationReason??null,payload.completeness.extractedTokenEstimate,payload.completeness.usageUnits,
+     payload.completeness.itemsAvailable??null,payload.completeness.itemsExtracted??null,payload.completeness.pagesAvailable??null,payload.completeness.pagesExtracted??null,
+     JSON.stringify(payload.completeness.contentSectionsTruncated??[])]
   );
   return r.rows[0];
 }

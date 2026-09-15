@@ -2,6 +2,7 @@ import type { PoolClient } from 'pg';
 import { pool } from '../db/pool.js';
 import { Link2AIError } from '../util/errors.js';
 import { PLAN_LIMITS, type Plan } from './plans.js';
+import { usageUnitsToLegacySeconds } from '../content/limits.js';
 
 interface Period { start: Date | null; end: Date | null; }
 
@@ -39,7 +40,8 @@ function periodSql(period: Period, alias: string): {sql:string; params:unknown[]
   return { sql: ` AND ${alias}.created_at >= $2 AND ${alias}.created_at < $3`, params: [period.start, period.end] };
 }
 
-export async function reserveQuota(userId: string, jobId: string, seconds: number): Promise<void> {
+export async function reserveQuota(userId: string, jobId: string, usageUnits: number, contentDurationSeconds?:number): Promise<void> {
+  const seconds=usageUnitsToLegacySeconds(usageUnits);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -56,7 +58,7 @@ export async function reserveQuota(userId: string, jobId: string, seconds: numbe
         plan,remaining_seconds:0,remaining_videos:0
       });
     }
-    if (seconds > limits.maxVideoSeconds) {
+    if (contentDurationSeconds!==undefined&&contentDurationSeconds > limits.maxVideoSeconds) {
       throw new Link2AIError('DURATION_LIMIT_EXCEEDED', `The content behind this link exceeds the ${Math.round(limits.maxVideoSeconds/60)} minute limit for ${plan}.`, 402, false, { plan, max_video_seconds: limits.maxVideoSeconds });
     }
 
@@ -69,7 +71,7 @@ export async function reserveQuota(userId: string, jobId: string, seconds: numbe
     );
     const reservations = await client.query<{seconds:string; videos:string}>(
       `SELECT COALESCE(SUM(r.seconds),0)::text AS seconds, COUNT(*)::text AS videos
-       FROM quota_reservations r WHERE r.user_id=$1 AND r.expires_at > now()`, [userId]
+       FROM quota_reservations r WHERE r.user_id=$1 AND r.job_id<>$2 AND r.expires_at > now()`, [userId,jobId]
     );
     const usedSeconds = Number(usage.rows[0].seconds) + Number(reservations.rows[0].seconds);
     const usedVideos = Number(usage.rows[0].videos) + Number(reservations.rows[0].videos);
@@ -78,6 +80,7 @@ export async function reserveQuota(userId: string, jobId: string, seconds: numbe
         plan,
         remaining_seconds: Math.max(0, limitSeconds - usedSeconds),
         remaining_videos: limitVideos === null ? null : Math.max(0, limitVideos - usedVideos)
+        ,remaining_usage_units:Math.floor(Math.max(0,limitSeconds-usedSeconds)/60)
       });
     }
     await client.query(
@@ -135,6 +138,9 @@ export interface UsageSnapshot {
   concurrent_jobs: number;
   concurrency_limit: number;
   period_end: string | null;
+  used_usage_units:number;
+  limit_usage_units:number;
+  remaining_usage_units:number;
 }
 
 export async function getUsageSnapshot(userId: string): Promise<UsageSnapshot> {
@@ -167,6 +173,9 @@ export async function getUsageSnapshot(userId: string): Promise<UsageSnapshot> {
       concurrent_jobs: Number(active.rows[0].count),
       concurrency_limit: limits.concurrency,
       period_end: period.end?.toISOString() ?? null
+      ,used_usage_units:Math.ceil(usedSeconds/60)
+      ,limit_usage_units:Math.floor((plan==='trial'&&!trialEligible?0:limitSeconds)/60)
+      ,remaining_usage_units:Math.floor((plan==='trial'&&!trialEligible?0:Math.max(0,limitSeconds-usedSeconds))/60)
     };
   } catch (err) {
     await client.query('ROLLBACK');

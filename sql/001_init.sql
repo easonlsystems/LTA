@@ -176,6 +176,15 @@ CREATE TABLE IF NOT EXISTS transcript_cache (
 CREATE INDEX IF NOT EXISTS transcript_cache_exp_idx ON transcript_cache(expires_at);
 ALTER TABLE transcript_cache DROP CONSTRAINT IF EXISTS transcript_cache_source_check;
 ALTER TABLE transcript_cache ADD CONSTRAINT transcript_cache_source_check CHECK (source IN ('caption','asr','post','page'));
+ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS truncated boolean NOT NULL DEFAULT false;
+ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS truncation_reason text;
+ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS extracted_token_estimate integer NOT NULL DEFAULT 0 CHECK (extracted_token_estimate >= 0);
+ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS usage_units integer NOT NULL DEFAULT 0 CHECK (usage_units >= 0);
+ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS items_available integer;
+ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS items_extracted integer;
+ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS pages_available integer;
+ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS pages_extracted integer;
+ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS content_sections_truncated jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE TABLE IF NOT EXISTS transcript_jobs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

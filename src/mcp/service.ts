@@ -4,7 +4,7 @@ import { parseMediaUrl } from '../media/url.js';
 import { createCheckoutSession } from '../billing/lemon.js';
 import { asLink2AIError, Link2AIError } from '../util/errors.js';
 import { reserveQuota, finalizeQuota, getUsageSnapshot } from '../quota/service.js';
-import { TEXT_LINK_EQUIVALENT_SECONDS } from '../quota/plans.js';
+import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limits.js';
 import { findCache } from '../worker/cache.js';
 import { planForUser, priorityForPlan, markAwaitingPayment, markCompleted, setJobMetadata } from '../worker/jobs.js';
 
@@ -25,6 +25,15 @@ export interface ToolJobResult {
   error_code?: string|null;
   message?: string;
   retry_after_seconds?: number;
+  truncated?:boolean;
+  truncation_reason?:string|null;
+  extracted_token_estimate?:number;
+  usage_units?:number;
+  items_available?:number|null;
+  items_extracted?:number|null;
+  pages_available?:number|null;
+  pages_extracted?:number|null;
+  content_sections_truncated?:string[];
 }
 
 async function checkoutForError(userId:string,jobId:string,duration:number|undefined):Promise<string|null>{
@@ -81,7 +90,8 @@ export async function startTranscriptJob(userId:string,url:string):Promise<ToolJ
     // resumed correctly after entitlement changes.
     await setJobMetadata(jobId,parsed.canonicalMediaId,cached.duration_seconds);
     try{
-      await reserveQuota(userId,jobId,(cached.source==='post'||cached.source==='page')?TEXT_LINK_EQUIVALENT_SECONDS:cached.duration_seconds);
+      const units=cached.usage_units>0?cached.usage_units:(cached.source==='post'||cached.source==='page'?textUsageUnits(estimateTokens(cached.transcript)):videoUsageUnits(cached.duration_seconds));
+      await reserveQuota(userId,jobId,units,(cached.source==='post'||cached.source==='page')?undefined:cached.duration_seconds);
       await finalizeQuota(userId,jobId);
       await markCompleted(jobId,cached.id,cached.duration_seconds);
       return await getJobResult(userId,jobId);
@@ -110,7 +120,8 @@ export async function waitForJob(userId:string,jobId:string,maxWaitMs:number):Pr
 
 export async function getJobResult(userId:string,jobId:string):Promise<ToolJobResult>{
   const r=await pool.query<any>(
-    `SELECT j.*, c.title,c.creator,c.caption,c.language AS cache_language,c.transcript,c.segments,c.source AS transcript_source,c.duration_seconds AS cache_duration
+    `SELECT j.*, c.title,c.creator,c.caption,c.language AS cache_language,c.transcript,c.segments,c.source AS transcript_source,c.duration_seconds AS cache_duration,
+       c.truncated,c.truncation_reason,c.extracted_token_estimate,c.usage_units,c.items_available,c.items_extracted,c.pages_available,c.pages_extracted,c.content_sections_truncated
      FROM transcript_jobs j LEFT JOIN transcript_cache c ON c.id=j.transcript_cache_id
      WHERE j.id=$1 AND j.user_id=$2`,[jobId,userId]
   );
@@ -120,10 +131,13 @@ export async function getJobResult(userId:string,jobId:string):Promise<ToolJobRe
     return {status:'failed',job_id:row.id,error_code:'TRANSCRIPT_EXPIRED',message:'This temporary result has expired. Call Read link content with the original link to read it again.'};
   }
   if(row.status==='completed'){
+    const returnedUsageUnits=Number(row.usage_units??0)>0?Number(row.usage_units):(row.transcript_source==='post'||row.transcript_source==='page'?textUsageUnits(estimateTokens(row.transcript)):videoUsageUnits(Number(row.cache_duration??row.duration_seconds??0)));
     return {
       status:'completed',job_id:row.id,platform:row.platform,source_url:row.source_url,title:row.title,creator:row.creator,
       caption:row.caption,duration_seconds:row.cache_duration??row.duration_seconds,language:row.cache_language??'und',
-      transcript:row.transcript,segments:row.segments??[],transcript_source:row.transcript_source
+      transcript:row.transcript,segments:row.segments??[],transcript_source:row.transcript_source,
+      truncated:Boolean(row.truncated),truncation_reason:row.truncation_reason,extracted_token_estimate:Number(row.extracted_token_estimate??0)||estimateTokens(row.transcript),usage_units:returnedUsageUnits,
+      items_available:row.items_available,items_extracted:row.items_extracted,pages_available:row.pages_available,pages_extracted:row.pages_extracted,content_sections_truncated:row.content_sections_truncated??[]
     };
   }
   if(row.status==='awaiting_payment')return {status:'payment_required',job_id:row.id,duration_seconds:row.duration_seconds??undefined,checkout_url:row.checkout_url,error_code:row.error_code,message:row.error_message};
@@ -144,5 +158,8 @@ export async function usageForTool(userId:string){
     concurrent_jobs:usage.concurrent_jobs,
     concurrency_limit:usage.concurrency_limit,
     period_end:usage.period_end
+    ,used_usage_units:usage.used_usage_units
+    ,limit_usage_units:usage.limit_usage_units
+    ,remaining_usage_units:usage.remaining_usage_units
   };
 }

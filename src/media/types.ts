@@ -1,4 +1,5 @@
 import type { Platform } from './url.js';
+import type { CompletenessMetadata } from '../content/limits.js';
 
 export interface TranscriptSegment {
   start: number;
@@ -18,6 +19,7 @@ export interface TranscriptPayload {
   transcript: string;
   segments: TranscriptSegment[];
   source: 'caption' | 'asr' | 'post' | 'page';
+  completeness: CompletenessMetadata;
 }
 
 export interface MediaMetadata {

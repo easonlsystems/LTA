@@ -8,15 +8,22 @@ import { normalizeAudioForAsr, probeMediaDurationSeconds } from '../media/audio.
 import { ResolverOrchestrator } from '../resolvers/orchestrator.js';
 import { transcribeAudio } from '../transcription/router.js';
 import { reserveQuota, finalizeQuota, releaseQuota } from '../quota/service.js';
-import { TEXT_LINK_EQUIVALENT_SECONDS } from '../quota/plans.js';
 import { saveCache, findCache, findUserCompletedCache } from './cache.js';
 import { asLink2AIError } from '../util/errors.js';
 import { createCheckoutSession } from '../billing/lemon.js';
 import { logEvent, logErrorEvent } from '../util/log.js';
 import { deferJob, heartbeatJob, markAwaitingPayment, markCompleted, markFailed, markRetry, planForUser, setJobMetadata, type JobRow } from './jobs.js';
 import { acquireMediaClaim, releaseMediaClaim } from './mediaClaims.js';
+import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limits.js';
 
 const resolver=new ResolverOrchestrator();
+
+function videoCompleteness(text:string,durationSeconds:number){
+  return {truncated:false,extractedTokenEstimate:estimateTokens(text),usageUnits:videoUsageUnits(durationSeconds)};
+}
+function cachedUsageUnits(cache:{usage_units:number;source:string;transcript:string;duration_seconds:number}):number{
+  return cache.usage_units>0?cache.usage_units:(cache.source==='post'||cache.source==='page'?textUsageUnits(estimateTokens(cache.transcript)):videoUsageUnits(cache.duration_seconds));
+}
 
 async function paymentUrl(job:JobRow,duration:number,code:string):Promise<string|null>{
   const plan=await planForUser(job.user_id);
@@ -55,7 +62,7 @@ export async function processJob(job:JobRow):Promise<void>{
 
       const existing=await findCache(job.platform,parsed.canonicalMediaId,job.language);
       if(existing){
-        await reserveQuota(job.user_id,job.id,TEXT_LINK_EQUIVALENT_SECONDS);reserved=true;
+        await reserveQuota(job.user_id,job.id,cachedUsageUnits(existing));reserved=true;
         await finalizeQuota(job.user_id,job.id);reserved=false;
         await markCompleted(job.id,existing.id,0);
         logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'cache',content_kind:parsed.kind,duration_seconds:0,processing_ms:Date.now()-startedAt});
@@ -64,7 +71,7 @@ export async function processJob(job:JobRow):Promise<void>{
 
       // A successful text-only post/page consumes one equivalent content minute.
       // The job itself still records duration_seconds=0 because this is not media duration.
-      await reserveQuota(job.user_id,job.id,TEXT_LINK_EQUIVALENT_SECONDS);reserved=true;
+      await reserveQuota(job.user_id,job.id,1);reserved=true;
       mediaClaim=await acquireMediaClaim(job.platform,parsed.canonicalMediaId,job.language,job.id);
       if(!mediaClaim){
         await releaseQuota(job.id);reserved=false;
@@ -75,6 +82,7 @@ export async function processJob(job:JobRow):Promise<void>{
 
       const afterClaimCache=await findCache(job.platform,parsed.canonicalMediaId,job.language);
       if(afterClaimCache){
+        await reserveQuota(job.user_id,job.id,cachedUsageUnits(afterClaimCache));reserved=true;
         await finalizeQuota(job.user_id,job.id);reserved=false;
         await markCompleted(job.id,afterClaimCache.id,0);
         logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'cache_after_claim',content_kind:parsed.kind,duration_seconds:0,processing_ms:Date.now()-startedAt});
@@ -82,14 +90,15 @@ export async function processJob(job:JobRow):Promise<void>{
       }
 
       const content=await extractTextLink(parsed);
+      await reserveQuota(job.user_id,job.id,content.completeness.usageUnits);reserved=true;
       const cache=await saveCache({
         platform:parsed.platform,canonicalMediaId:parsed.canonicalMediaId,sourceUrl:content.sourceUrl,
         title:content.title,creator:content.creator,caption:content.caption,durationSeconds:0,
-        language:content.language,transcript:content.text,segments:[],source:content.source
+        language:content.language,transcript:content.text,segments:[],source:content.source,completeness:content.completeness
       });
       await finalizeQuota(job.user_id,job.id);reserved=false;
       await markCompleted(job.id,cache.id,0);
-      logEvent('job_completed',{job_id:job.id,platform:job.platform,source:content.source,content_kind:parsed.kind,duration_seconds:0,characters:content.text.length,processing_ms:Date.now()-startedAt});
+      logEvent('job_completed',{job_id:job.id,platform:job.platform,source:content.source,content_kind:parsed.kind,duration_seconds:0,characters:content.text.length,extracted_token_estimate:content.completeness.extractedTokenEstimate,usage_units:content.completeness.usageUnits,truncated:content.completeness.truncated,truncation_reason:content.completeness.truncationReason??null,items_extracted:content.completeness.itemsExtracted??null,pages_extracted:content.completeness.pagesExtracted??null,processing_ms:Date.now()-startedAt});
       return;
     }
 
@@ -126,7 +135,7 @@ export async function processJob(job:JobRow):Promise<void>{
     const existing=await findCache(job.platform,metadata.canonicalMediaId,job.language);
     if(existing){
       if(metadata.durationSeconds<=0)await applyDuration(existing.duration_seconds);
-      await reserveQuota(job.user_id,job.id,metadata.durationSeconds);
+      await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);
       reserved=true;
       await finalizeQuota(job.user_id,job.id); reserved=false;
       await markCompleted(job.id,existing.id,metadata.durationSeconds);
@@ -138,7 +147,7 @@ export async function processJob(job:JobRow):Promise<void>{
     // the reservation until we can derive a real duration from captions or downloaded
     // audio. ASR never starts until quota is reserved.
     if(metadata.durationSeconds>0){
-      await reserveQuota(job.user_id,job.id,metadata.durationSeconds);
+      await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);
       reserved=true;
     }
 
@@ -155,7 +164,7 @@ export async function processJob(job:JobRow):Promise<void>{
     const afterClaimCache=await findCache(job.platform,metadata.canonicalMediaId,job.language);
     if(afterClaimCache){
       if(metadata.durationSeconds<=0)await applyDuration(afterClaimCache.duration_seconds);
-      if(!reserved){await reserveQuota(job.user_id,job.id,metadata.durationSeconds);reserved=true;}
+      if(!reserved){await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);reserved=true;}
       await finalizeQuota(job.user_id,job.id); reserved=false;
       await markCompleted(job.id,afterClaimCache.id,metadata.durationSeconds);
       logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'cache_after_claim',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,processing_ms:Date.now()-startedAt});
@@ -169,15 +178,15 @@ export async function processJob(job:JobRow):Promise<void>{
     }
 
     if(caption?.transcript&&metadata.durationSeconds>0){
-      if(!reserved){await reserveQuota(job.user_id,job.id,metadata.durationSeconds);reserved=true;}
+      if(!reserved){await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);reserved=true;}
       const cache=await saveCache({
         platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
         title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
-        language:caption.language,transcript:caption.transcript,segments:caption.segments,source:'caption'
+        language:caption.language,transcript:caption.transcript,segments:caption.segments,source:'caption',completeness:videoCompleteness(caption.transcript,metadata.durationSeconds)
       });
       await finalizeQuota(job.user_id,job.id); reserved=false;
       await markCompleted(job.id,cache.id,metadata.durationSeconds);
-      logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'caption',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,processing_ms:Date.now()-startedAt});
+      logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'caption',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,extracted_token_estimate:estimateTokens(caption.transcript),usage_units:videoUsageUnits(metadata.durationSeconds),truncated:false,processing_ms:Date.now()-startedAt});
       return;
     }
 
@@ -193,7 +202,7 @@ export async function processJob(job:JobRow):Promise<void>{
       await applyDuration(probedDuration);
       logEvent('resolver_duration_recovered',{job_id:job.id,platform:job.platform,duration_seconds:metadata.durationSeconds,source:'ffprobe'});
     }
-    if(!reserved){await reserveQuota(job.user_id,job.id,metadata.durationSeconds);reserved=true;}
+    if(!reserved){await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);reserved=true;}
 
     // If captions existed but had no usable timing, the audio probe supplied the missing
     // duration. Prefer those captions now instead of spending an ASR request.
@@ -201,7 +210,7 @@ export async function processJob(job:JobRow):Promise<void>{
       const cache=await saveCache({
         platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
         title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
-        language:caption.language,transcript:caption.transcript,segments:caption.segments,source:'caption'
+        language:caption.language,transcript:caption.transcript,segments:caption.segments,source:'caption',completeness:videoCompleteness(caption.transcript,metadata.durationSeconds)
       });
       await finalizeQuota(job.user_id,job.id); reserved=false;
       await markCompleted(job.id,cache.id,metadata.durationSeconds);
@@ -214,11 +223,11 @@ export async function processJob(job:JobRow):Promise<void>{
     const cache=await saveCache({
       platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
       title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
-      language:asr.language,transcript:asr.transcript,segments:asr.segments,source:'asr'
+      language:asr.language,transcript:asr.transcript,segments:asr.segments,source:'asr',completeness:videoCompleteness(asr.transcript,metadata.durationSeconds)
     });
     await finalizeQuota(job.user_id,job.id); reserved=false;
     await markCompleted(job.id,cache.id,metadata.durationSeconds);
-    logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'asr',resolver:metadata.resolver??'unknown',transcription_provider:asr.provider,duration_seconds:metadata.durationSeconds,processing_ms:Date.now()-startedAt});
+    logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'asr',resolver:metadata.resolver??'unknown',transcription_provider:asr.provider,duration_seconds:metadata.durationSeconds,extracted_token_estimate:estimateTokens(asr.transcript),usage_units:videoUsageUnits(metadata.durationSeconds),truncated:false,processing_ms:Date.now()-startedAt});
   }catch(e){
     if(reserved)await releaseQuota(job.id).catch(()=>{});
     const err=asLink2AIError(e);

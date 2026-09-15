@@ -34,10 +34,17 @@ function chunkResult(result:ToolJobResult,offset=0,maxChars=MAX_CHARS):Record<st
     creator:result.creator,title:result.title,caption:result.caption,duration_seconds:result.duration_seconds,
     language:result.language,transcript_source:result.transcript_source,content_type:contentType,
     content_text:contentText,
+    truncated:result.truncated??false,truncation_reason:result.truncation_reason,
+    extracted_token_estimate:result.extracted_token_estimate??0,usage_units:result.usage_units??0,
+    items_available:result.items_available,items_extracted:result.items_extracted,
+    pages_available:result.pages_available,pages_extracted:result.pages_extracted,
+    content_sections_truncated:result.content_sections_truncated??[],
     // Keep transcript for backward compatibility with already-connected MCP clients.
     transcript:contentText,
     content_scope:contentType==='video'?'spoken_and_caption_text':contentType==='post'?'public_post_text':'public_page_text',
-    visual_content_included:false,limitation_notice:visualNotice,
+    visual_content_included:false,limitation_notice:result.truncated
+      ? `Note: Link2AI processed only part of this source because it exceeded the safe content limit.${result.pages_extracted!==undefined&&result.pages_available!==undefined?` Processed ${result.pages_extracted} of ${result.pages_available} pages.`:''}${result.content_sections_truncated?.length?` Truncated sections: ${result.content_sections_truncated.join(', ')}.`:''}`
+      : visualNotice,
     transcript_offset:safeOffset,next_offset:next,total_characters:result.transcript.length,
     ...(safeOffset===0&&result.transcript.length<=size?{segments:result.segments}: {})
   };

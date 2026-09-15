@@ -18,7 +18,9 @@ child.stdout.on('data',chunk=>{output+=chunk});
 child.stderr.on('data',chunk=>{output+=chunk});
 
 try{
-  const deadline=Date.now()+10_000;
+  // Cold Windows/OneDrive dependency loading can exceed ten seconds even though the
+  // server starts normally. Keep this bounded but avoid a false release failure.
+  const deadline=Date.now()+45_000;
   let health;
   while(Date.now()<deadline){
     try{health=await fetch(`http://127.0.0.1:${port}/healthz`,{headers:{host:'link2ai.example'}});break;}

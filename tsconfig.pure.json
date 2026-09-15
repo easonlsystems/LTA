@@ -24,6 +24,7 @@
     "src/auth/clientMetadata.ts",
     "src/billing/order.ts",
     "src/content/linkText.ts",
+    "src/content/limits.ts",
     "src/util/process.ts",
     "src/util/safeHttp.ts"
   ]
