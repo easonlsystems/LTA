@@ -4,7 +4,7 @@ import type { TranscriptPayload } from '../media/types.js';
 
 export interface CacheRow {
   id: string;
-  platform: 'instagram'|'tiktok'|'youtube'|'x'|'reddit'|'web';
+  platform: 'instagram'|'tiktok'|'youtube'|'x'|'reddit'|'bluesky'|'github'|'hackernews'|'pdf'|'web';
   canonical_media_id: string;
   language: string;
   title: string | null;

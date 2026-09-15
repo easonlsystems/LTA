@@ -1,15 +1,16 @@
 import { Link2AIError } from '../util/errors.js';
 import { sha256 } from '../util/crypto.js';
 
-export type Platform = 'instagram' | 'tiktok' | 'youtube' | 'x' | 'reddit' | 'web';
-export type LinkKind = 'media' | 'post' | 'page';
+export type Platform = 'instagram' | 'tiktok' | 'youtube' | 'x' | 'reddit' | 'bluesky' | 'github' | 'hackernews' | 'pdf' | 'web';
+export type LinkKind = 'media' | 'post' | 'page' | 'document';
 
 const socialHosts = new Set([
   'instagram.com', 'www.instagram.com',
   'tiktok.com', 'www.tiktok.com', 'vm.tiktok.com', 'vt.tiktok.com', 'm.tiktok.com',
   'youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be',
   'x.com', 'www.x.com', 'twitter.com', 'www.twitter.com', 'mobile.twitter.com',
-  'reddit.com', 'www.reddit.com', 'old.reddit.com', 'new.reddit.com', 'redd.it'
+  'reddit.com', 'www.reddit.com', 'old.reddit.com', 'new.reddit.com', 'redd.it',
+  'bsky.app', 'github.com', 'news.ycombinator.com'
 ]);
 
 const trackingParams = new Set([
@@ -30,12 +31,11 @@ function normalizeHost(hostname: string): string {
 }
 
 function cleanUrl(url:URL):URL{
-  url.username='';
-  url.password='';
   url.hash='';
   for(const key of [...url.searchParams.keys()]){
     if(trackingParams.has(key.toLowerCase()))url.searchParams.delete(key);
   }
+  url.searchParams.sort();
   return url;
 }
 
@@ -44,6 +44,7 @@ export function parseMediaUrl(raw: string): ParsedMediaUrl {
   try { url = new URL(raw.trim()); }
   catch { throw new Link2AIError('INVALID_URL', 'The provided value is not a valid URL.'); }
   if (url.protocol !== 'https:') throw new Link2AIError('INVALID_URL', 'Only HTTPS URLs are accepted.');
+  if(url.username||url.password)throw new Link2AIError('INVALID_URL','URLs containing embedded credentials are not accepted.');
   if(raw.length>4096)throw new Link2AIError('INVALID_URL','This URL is too long.');
   cleanUrl(url);
   const host = normalizeHost(url.hostname);
@@ -54,6 +55,14 @@ export function parseMediaUrl(raw: string): ParsedMediaUrl {
   if (isDomain('tiktok.com')) return parseTikTok(url);
   if (isDomain('x.com')||isDomain('twitter.com')) return parseX(url);
   if (isDomain('reddit.com')||host==='redd.it') return parseReddit(url);
+  if (host==='bsky.app') return parseBluesky(url);
+  if (host==='github.com'||host==='www.github.com') return parseGitHub(url);
+  if (host==='news.ycombinator.com') return parseHackerNews(url);
+
+  if(/\.pdf$/i.test(url.pathname)){
+    const normalizedUrl=url.toString();
+    return {platform:'pdf',kind:'document',sourceUrl:normalizedUrl,normalizedUrl,canonicalMediaId:`pdf_${sha256(normalizedUrl).slice(0,40)}`};
+  }
 
   // Generic public webpages are supported as text pages. Network safety (DNS/IP,
   // redirect-by-redirect validation and response limits) is enforced by safeHttp.
@@ -62,6 +71,36 @@ export function parseMediaUrl(raw: string): ParsedMediaUrl {
     platform:'web', kind:'page', sourceUrl:normalizedUrl, normalizedUrl,
     canonicalMediaId:`web_${sha256(normalizedUrl).slice(0,40)}`
   };
+}
+
+function parseBluesky(url:URL):ParsedMediaUrl{
+  const parts=url.pathname.split('/').filter(Boolean);
+  if(parts.length!==4||parts[0]!=='profile'||parts[2]!=='post'||!/^[A-Za-z0-9._:%-]{1,253}$/.test(parts[1]??'')||!/^[A-Za-z0-9]{5,64}$/.test(parts[3]??'')){
+    throw new Link2AIError('UNSUPPORTED_URL','Link2AI supports individual public Bluesky posts, not profiles, feeds or timelines.');
+  }
+  const actor=decodeURIComponent(parts[1]).toLowerCase();
+  const rkey=parts[3];
+  const normalizedUrl=`https://bsky.app/profile/${encodeURIComponent(actor)}/post/${rkey}`;
+  return {platform:'bluesky',kind:'post',sourceUrl:normalizedUrl,normalizedUrl,canonicalMediaId:`${actor}/${rkey}`};
+}
+
+function parseGitHub(url:URL):ParsedMediaUrl{
+  const parts=url.pathname.split('/').filter(Boolean);
+  const owner=parts[0]??'',repo=parts[1]??'',type=parts[2]??'',number=parts[3]??'';
+  if(parts.length!==4||!owner||!repo||!['issues','pull'].includes(type)||!/^\d{1,12}$/.test(number)){
+    throw new Link2AIError('UNSUPPORTED_URL','Link2AI supports individual public GitHub issues and pull requests.');
+  }
+  const normalizedUrl=`https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${type}/${number}`;
+  return {platform:'github',kind:'post',sourceUrl:normalizedUrl,normalizedUrl,canonicalMediaId:`${owner.toLowerCase()}/${repo.toLowerCase()}/${type}/${number}`};
+}
+
+function parseHackerNews(url:URL):ParsedMediaUrl{
+  if(url.pathname!=='/item'||!/^[1-9]\d{0,11}$/.test(url.searchParams.get('id')??'')){
+    throw new Link2AIError('UNSUPPORTED_URL','Link2AI supports individual Hacker News story/item discussions, not feeds or homepages.');
+  }
+  const id=url.searchParams.get('id')!;
+  const normalizedUrl=`https://news.ycombinator.com/item?id=${id}`;
+  return {platform:'hackernews',kind:'post',sourceUrl:normalizedUrl,normalizedUrl,canonicalMediaId:id};
 }
 
 function parseYouTube(url: URL): ParsedMediaUrl {

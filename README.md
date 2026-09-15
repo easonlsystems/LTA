@@ -27,6 +27,10 @@ Claude / ChatGPT continues
 - Public Instagram posts
 - Individual public X posts
 - Individual public Reddit posts + a bounded set of top public comments
+- Individual public Bluesky posts with bounded directly-attached context
+- Public GitHub issues and pull requests with bounded discussion/reviews
+- Individual Hacker News items with a bounded comment tree
+- Direct public text-layer PDFs (no OCR, scripts, attachments, or embedded fetches)
 - Readable public HTTPS webpages and articles
 
 TikTok photo posts are accepted by the URL layer and use the post extractor when the public page exposes usable text.
