@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { parseMediaUrl } from '../media/url.js';
-import { extractTextLink } from '../content/linkText.js';
+import { extractTextLink, resolveRedditSharePost } from '../content/linkText.js';
 import { fetchBestCaption } from '../media/captions.js';
 import { normalizeAudioForAsr, probeMediaDurationSeconds } from '../media/audio.js';
 import { ResolverOrchestrator } from '../resolvers/orchestrator.js';
@@ -47,7 +47,13 @@ export async function processJob(job:JobRow):Promise<void>{
   const startedAt=Date.now();
   const heartbeat=setInterval(()=>void heartbeatJob(job.id).catch(()=>{}),60_000);
   try{
-    const parsed=parseMediaUrl(job.normalized_url);
+    let parsed=parseMediaUrl(job.normalized_url);
+    if(parsed.platform==='reddit'&&parsed.canonicalMediaId.startsWith('share_')){
+      const shareKey=parsed.canonicalMediaId;
+      parsed=await resolveRedditSharePost(parsed);
+      await setJobMetadata(job.id,parsed.canonicalMediaId,0);
+      logEvent('reddit_share_resolved',{job_id:job.id,platform:'reddit',share_key:shareKey,canonical_media_id:parsed.canonicalMediaId});
+    }
 
     if(parsed.kind!=='media'){
       await setJobMetadata(job.id,parsed.canonicalMediaId,0);

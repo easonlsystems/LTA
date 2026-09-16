@@ -130,6 +130,20 @@ CREATE TABLE IF NOT EXISTS founder_security_events (
 );
 CREATE INDEX IF NOT EXISTS founder_security_events_founder_idx ON founder_security_events(founder_user_id, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS founder_stepup_codes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  founder_user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_hash text NOT NULL,
+  code_hash text NOT NULL,
+  return_to text NOT NULL DEFAULT '/founder',
+  expires_at timestamptz NOT NULL,
+  consumed_at timestamptz,
+  attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS founder_stepup_codes_session_idx ON founder_stepup_codes(founder_user_id,session_hash,created_at DESC);
+CREATE INDEX IF NOT EXISTS founder_stepup_codes_created_idx ON founder_stepup_codes(created_at DESC);
+
 CREATE TABLE IF NOT EXISTS oauth_clients (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   client_id text NOT NULL UNIQUE,

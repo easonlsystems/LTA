@@ -36,7 +36,7 @@ try{
     assert.equal(page.status,200,`${route} should return 200`);
     const body=await page.text();
     assert.match(body,/LaunchBrand/);
-    if(route==='/'){assert.match(body,/Paste the link\./);assert.match(body,/Your AI can read it\./);assert.match(body,/Start free — 10 units/);assert.match(body,/See the 20-second example/);assert.match(body,/Before/);assert.match(body,/After/);assert.match(body,/V2 · public links → readable source context/);}
+    if(route==='/'){assert.match(body,/AI is smart\./);assert.match(body,/Until you give it a link\./);assert.match(body,/Try Link2AI free/);assert.match(body,/10 processing units · No card required · Failed reads cost 0/);assert.match(body,/Without Link2AI/);assert.match(body,/With Link2AI/);assert.match(body,/More than video links\./);assert.match(body,/Paste the link normally/);assert.match(body,/Try the link your AI just failed to read\./);assert.match(body,/No fixed link-count limit/);assert.match(body,/A product by Eason Systems/);assert.doesNotMatch(body,/V2 · public links → readable source context/);}
     if(route==='/connect'){assert.match(body,/Open Claude setup/);assert.match(body,/href=\"\/connect\/start\"/);assert.match(body,/target=\"_blank\"/);assert.match(body,/Email account/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }
@@ -80,6 +80,11 @@ try{
     assert.match(privateResponse.headers.get('cache-control')??'',/no-store/);
   }
 
+  const founderOtpSendSignedOut=await fetch(`http://127.0.0.1:${port}/founder/unlock/send`,{
+    method:'POST',headers:{host:'link2ai.example','content-type':'application/x-www-form-urlencoded'},body:'return_to=%2Ffounder&csrf=fake',redirect:'manual'
+  });
+  assert.equal(founderOtpSendSignedOut.status,404,'signed-out Founder OTP send must not disclose the private admin surface');
+
   // /status should respond (200 or 503 depending on db availability)
   const status=await fetch(`http://127.0.0.1:${port}/status`,{headers:{host:'link2ai.example'}});
   assert.ok(status.status===200||status.status===503,`/status should return 200 or 503, got ${status.status}`);
@@ -88,7 +93,7 @@ try{
   const pricing=await fetch(`http://127.0.0.1:${port}/pricing`,{headers:{host:'link2ai.example'},redirect:'manual'});
   assert.equal(pricing.status,200);
   const pricingText=await pricing.text();
-  assert.match(pricingText,/Start free\. Upgrade only when you know what you need\./);
+  assert.match(pricingText,/Try the link your AI just failed to read\./);
   assert.match(pricingText,/10 processing units/);
   assert.match(pricingText,/500 processing units \/ month/);
   assert.match(pricingText,/2,000 processing units \/ month/);

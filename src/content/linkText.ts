@@ -2,7 +2,7 @@ import { safeGetBuffer } from '../util/safeHttp.js';
 import { runProcess } from '../util/process.js';
 import { Link2AIError } from '../util/errors.js';
 import { clipExternalText, METADATA_LIMITS } from '../media/text.js';
-import type { ParsedMediaUrl } from '../media/url.js';
+import { parseMediaUrl, type ParsedMediaUrl } from '../media/url.js';
 import { boundExtractedText, EXTRACTION_LIMITS, type CompletenessMetadata, type TextContentClass } from './limits.js';
 
 const PAGE_MAX_BYTES=2_500_000;
@@ -37,6 +37,37 @@ function decodeEntities(value:string):string{
     if(e.startsWith('#')){const n=parseInt(e.slice(1),10);return Number.isFinite(n)?String.fromCodePoint(n):_m;}
     return named[e]??_m;
   });
+}
+
+export function resolveRedditShareCandidate(input:ParsedMediaUrl,finalUrl:string,html=''):ParsedMediaUrl{
+  if(input.platform!=='reddit'||!input.canonicalMediaId.startsWith('share_'))return input;
+  const candidates=[finalUrl];
+  for(const tag of html.match(/<(?:link|meta)\b[^>]*>/gi)??[]){
+    const attrs=new Map<string,string>();
+    for(const match of tag.matchAll(/([A-Za-z_:][-A-Za-z0-9_:.]*)\s*=\s*(["'])(.*?)\2/g)){
+      attrs.set(match[1].toLowerCase(),decodeEntities(match[3]));
+    }
+    const rel=(attrs.get('rel')??'').toLowerCase().split(/\s+/);
+    const property=(attrs.get('property')??attrs.get('name')??'').toLowerCase();
+    if(rel.includes('canonical')){const href=attrs.get('href');if(href)candidates.push(href);}
+    if(property==='og:url'){const content=attrs.get('content');if(content)candidates.push(content);}
+  }
+  for(const candidate of candidates){
+    try{
+      const resolved=parseMediaUrl(candidate);
+      if(resolved.platform==='reddit'&&!resolved.canonicalMediaId.startsWith('share_'))return resolved;
+    }catch{/* Ignore non-canonical candidates and try the next one. */}
+  }
+  throw new Link2AIError('EXTRACTION_FAILED','Reddit share link could not be resolved to a public post.',502,true);
+}
+
+export async function resolveRedditSharePost(input:ParsedMediaUrl):Promise<ParsedMediaUrl>{
+  if(input.platform!=='reddit'||!input.canonicalMediaId.startsWith('share_'))return input;
+  const response=await safeGetBuffer(input.normalizedUrl,{
+    maxBytes:PAGE_MAX_BYTES,timeoutMs:15_000,maxRedirects:5,userAgent:BROWSER_UA,
+    accept:'text/html,application/xhtml+xml;q=0.9,*/*;q=0.2'
+  });
+  return resolveRedditShareCandidate(input,response.finalUrl,response.bytes.toString('utf8'));
 }
 
 function cleanText(value:string,max=PAGE_MAX_CHARS):string{

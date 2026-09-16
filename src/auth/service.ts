@@ -150,20 +150,117 @@ export async function verifyPasswordLogin(emailRaw:string,password:string,return
 }
 
 
-export async function verifyPasswordForUser(userId:string,password:string):Promise<boolean>{
-  if(password.length>128)return false;
-  const r=await pool.query<{email:string|null;account_status:string;password_hash:string|null;password_salt:string|null}>(
-    `SELECT email,account_status,password_hash,password_salt FROM users WHERE id=$1`,[userId]
-  );
-  const row=r.rows[0];
-  if(!row?.email||row.account_status==='disabled')return false;
-  const email=normalizeAccountEmail(row.email);
-  await enforcePasswordAttemptLimit(email);
-  const ok=row.password_hash&&row.password_salt
-    ? await verifyAccountPassword(password,row.password_salt,row.password_hash)
-    : await verifyAccountPassword(password,'link2ai-dummy-password-salt','00'.repeat(64));
-  await recordPasswordAttempt(email,Boolean(ok));
-  return Boolean(ok);
+function founderStepUpSessionHash(userId:string,cookieHeader?:string):string|null{
+  const sessionToken=parseCookies(cookieHeader)[SESSION_COOKIE];
+  if(!sessionToken)return null;
+  return hmacSha256(env().APP_SECRET,`founder-stepup-session:${userId}:${sha256(sessionToken)}`);
+}
+
+export function founderStepUpChallengeHash(userId:string,cookieHeader:string|undefined,code:string):string|null{
+  const sessionHash=founderStepUpSessionHash(userId,cookieHeader);
+  if(!sessionHash)return null;
+  return hmacSha256(env().APP_SECRET,`founder-stepup-code:${userId}:${sessionHash}:${code.trim()}`);
+}
+
+export async function beginFounderStepUp(userId:string,emailRaw:string,cookieHeader:string|undefined,returnTo:string):Promise<{devCode?:string}>{
+  validateReturnTo(returnTo);
+  const email=normalizeAccountEmail(emailRaw);
+  const configuredFounder=env().FOUNDER_EMAIL?.trim().toLowerCase();
+  const sessionHash=founderStepUpSessionHash(userId,cookieHeader);
+  if(!configuredFounder||email!==configuredFounder||!sessionHash)throw new Link2AIError('AUTH_REQUIRED','Founder verification is unavailable.',401);
+  if(!env().RESEND_API_KEY)throw new Link2AIError('INTERNAL_ERROR','Founder verification email is not configured.',503);
+
+  const code=randomNumericCode(6);
+  const codeHash=founderStepUpChallengeHash(userId,cookieHeader,code);
+  if(!codeHash)throw new Link2AIError('AUTH_REQUIRED','Session expired.',401);
+  const client=await pool.connect();
+  let insertedId:string|undefined;
+  try{
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[`link2ai:founder-stepup:${userId}`]);
+    const recent=await client.query<{count:string;cooldown:boolean|null}>(
+      `SELECT COUNT(*)::text count,COALESCE(bool_or(created_at>now()-interval '60 seconds'),false) cooldown
+       FROM founder_stepup_codes WHERE founder_user_id=$1 AND created_at>now()-interval '15 minutes'`,[userId]
+    );
+    const count=Number(recent.rows[0]?.count??0);
+    if(count>=5)throw new Link2AIError('AUTH_REQUIRED','Too many verification codes requested. Try again later.',429);
+    if(Boolean(recent.rows[0]?.cooldown))throw new Link2AIError('AUTH_REQUIRED','A verification code was just sent. Try again in a moment.',429);
+    await client.query(`UPDATE founder_stepup_codes SET consumed_at=now() WHERE founder_user_id=$1 AND session_hash=$2 AND consumed_at IS NULL`,[userId,sessionHash]);
+    const inserted=await client.query<{id:string}>(
+      `INSERT INTO founder_stepup_codes(founder_user_id,session_hash,code_hash,return_to,expires_at) VALUES($1,$2,$3,$4,now()+interval '10 minutes') RETURNING id`,
+      [userId,sessionHash,codeHash,returnTo]
+    );
+    insertedId=inserted.rows[0].id;
+    await client.query('COMMIT');
+  }catch(error){
+    await client.query('ROLLBACK').catch(()=>{});
+    throw error;
+  }finally{client.release();}
+
+  try{
+    const response=await fetch('https://api.resend.com/emails',{
+      method:'POST',
+      headers:{authorization:`Bearer ${env().RESEND_API_KEY}`,'content-type':'application/json'},
+      body:JSON.stringify({
+        from:env().AUTH_FROM_EMAIL,
+        to:[configuredFounder],
+        subject:`${env().PUBLIC_BRAND_NAME} Founder verification code`,
+        html:`<p>Your ${env().PUBLIC_BRAND_NAME} Founder verification code is <strong>${code}</strong>.</p><p>It expires in 10 minutes and can be used once.</p>`
+      }),
+      signal:AbortSignal.timeout(15_000)
+    });
+    if(!response.ok)throw new Error(`Resend returned HTTP ${response.status}`);
+  }catch{
+    if(insertedId)await pool.query('DELETE FROM founder_stepup_codes WHERE id=$1',[insertedId]).catch(()=>{});
+    throw new Link2AIError('INTERNAL_ERROR','Could not send the Founder verification email.',502);
+  }
+
+  return {...(env().NODE_ENV!=='production'&&env().DEV_SHOW_LOGIN_CODE?{devCode:code}:{})};
+}
+
+export async function verifyFounderStepUp(userId:string,emailRaw:string,cookieHeader:string|undefined,codeRaw:string):Promise<{ok:boolean;locked:boolean}>{
+  const email=normalizeAccountEmail(emailRaw);
+  const configuredFounder=env().FOUNDER_EMAIL?.trim().toLowerCase();
+  const sessionHash=founderStepUpSessionHash(userId,cookieHeader);
+  if(!configuredFounder||email!==configuredFounder||!sessionHash)return {ok:false,locked:false};
+  const code=codeRaw.trim().slice(0,32);
+  const expectedHash=founderStepUpChallengeHash(userId,cookieHeader,code);
+  if(!expectedHash)return {ok:false,locked:false};
+
+  const client=await pool.connect();
+  let committed=false;
+  try{
+    await client.query('BEGIN');
+    const r=await client.query<{id:string;code_hash:string;attempts:number}>(
+      `SELECT id,code_hash,attempts FROM founder_stepup_codes
+       WHERE founder_user_id=$1 AND session_hash=$2 AND consumed_at IS NULL AND expires_at>now()
+       ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,[userId,sessionHash]
+    );
+    if(!r.rowCount){await client.query('COMMIT');committed=true;return {ok:false,locked:false};}
+    const validFormat=/^[0-9]{6}$/.test(code);
+    const ok=validFormat&&timingSafeEqualHex(r.rows[0].code_hash,expectedHash);
+    if(!ok){
+      const attempts=Number(r.rows[0].attempts??0)+1;
+      const locked=attempts>=5;
+      await client.query(`UPDATE founder_stepup_codes SET attempts=$2,consumed_at=CASE WHEN $2>=5 THEN now() ELSE consumed_at END WHERE id=$1`,[r.rows[0].id,attempts]);
+      await client.query('COMMIT');
+      committed=true;
+      return {ok:false,locked};
+    }
+    await client.query(`UPDATE founder_stepup_codes SET consumed_at=now() WHERE founder_user_id=$1 AND session_hash=$2 AND consumed_at IS NULL`,[userId,sessionHash]);
+    await client.query('COMMIT');
+    committed=true;
+    return {ok:true,locked:false};
+  }catch(error){
+    if(!committed)await client.query('ROLLBACK').catch(()=>{});
+    throw error;
+  }finally{client.release();}
+}
+
+export async function invalidateFounderStepUpChallenges(userId:string,cookieHeader?:string):Promise<void>{
+  const sessionHash=founderStepUpSessionHash(userId,cookieHeader);
+  if(!sessionHash)return;
+  await pool.query(`UPDATE founder_stepup_codes SET consumed_at=now() WHERE founder_user_id=$1 AND session_hash=$2 AND consumed_at IS NULL`,[userId,sessionHash]);
 }
 
 function founderStepUpSignature(sessionToken:string,expires:number):string{

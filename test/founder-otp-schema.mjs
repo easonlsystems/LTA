@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+const sql=await readFile(new URL('../sql/001_init.sql',import.meta.url),'utf8');
+assert.match(sql,/CREATE TABLE IF NOT EXISTS founder_stepup_codes/);
+assert.match(sql,/session_hash text NOT NULL/);
+assert.match(sql,/code_hash text NOT NULL/);
+assert.match(sql,/expires_at timestamptz NOT NULL/);
+assert.match(sql,/consumed_at timestamptz/);
+assert.match(sql,/attempts integer NOT NULL DEFAULT 0/);
+console.log('founder OTP schema tests PASS');

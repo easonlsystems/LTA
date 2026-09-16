@@ -170,6 +170,28 @@ function parseX(url:URL):ParsedMediaUrl{
 function parseReddit(url:URL):ParsedMediaUrl{
   const host=normalizeHost(url.hostname);
   const parts=url.pathname.split('/').filter(Boolean);
+
+  // Reddit's mobile share action can produce opaque links such as
+  // /r/<subreddit>/s/<share_token>. The token is not a post id, so keep the
+  // share URL as a temporary canonical key and let the worker resolve the
+  // redirect before cache lookup or quota finalization.
+  const subredditShare=host!=='redd.it'&&parts[0]==='r'&&parts[2]==='s'&&parts.length===4;
+  const directShare=host!=='redd.it'&&parts[0]==='s'&&parts.length===2;
+  if(subredditShare||directShare){
+    const subreddit=subredditShare?(parts[1]??''):'';
+    const shareToken=subredditShare?(parts[3]??''):(parts[1]??'');
+    if((subredditShare&&!/^[A-Za-z0-9_]{2,64}$/.test(subreddit))||!/^[A-Za-z0-9_-]{5,128}$/.test(shareToken)){
+      throw new Link2AIError('INVALID_URL','Invalid Reddit share URL.');
+    }
+    const normalizedUrl=subredditShare
+      ?`https://www.reddit.com/r/${encodeURIComponent(subreddit)}/s/${encodeURIComponent(shareToken)}/`
+      :`https://www.reddit.com/s/${encodeURIComponent(shareToken)}/`;
+    return {
+      platform:'reddit',kind:'post',sourceUrl:normalizedUrl,normalizedUrl,
+      canonicalMediaId:`share_${sha256(normalizedUrl).slice(0,24)}`
+    };
+  }
+
   let id='';
   if(host==='redd.it'){
     id=parts[0]??'';
