@@ -59,3 +59,13 @@ s = s2
 s = s.replace('.fd-funnel.activation{display:flex;overflow-x:auto;gap:8px;padding-bottom:4px}.fd-funnel.activation .fd-step{min-width:142px;flex:1}', '')
 
 p.write_text(s, encoding='utf-8')
+
+# Update the runtime smoke assertion to validate the intentional visual line split.
+tp = Path('test/runtime-smoke.mjs')
+t = tp.read_text(encoding='utf-8')
+old = "if(route==='/'){assert.match(body,/AI is smart\\./);assert.match(body,/Until you give it a link\\./);assert.match(body,/Try Link2AI free/);"
+new = "if(route==='/'){assert.match(body,/AI is smart\\./);assert.match(body,/hero-mid\\\">Until you give it<\\/span><span class=\\\"hero-last\\\">a link\\.<\\/span>/);assert.match(body,/Try Link2AI free/);"
+if t.count(old) != 1:
+    raise SystemExit(f'runtime hero assertion: expected 1 match, got {t.count(old)}')
+t = t.replace(old, new, 1)
+tp.write_text(t, encoding='utf-8')
