@@ -416,6 +416,26 @@ export function parseRedditJson(input:ParsedMediaUrl,payload:unknown):LinkTextPa
   },'discussion',{itemsAvailable:numComments,itemsExtracted:comments.length,truncated:numComments!==undefined&&comments.length<numComments,contentSectionsTruncated:numComments!==undefined&&comments.length<numComments?['comments']:undefined});
 }
 
+async function fetchRedditJsonViaBrowserFingerprint(postId:string):Promise<unknown>{
+  // Reddit can reset datacenter/Node TLS connections before an HTTP response exists.
+  // The production image already ships curl_cffi (via yt-dlp[default,curl-cffi]); use
+  // it only as a Reddit-specific transport fallback. Hosts are hard-coded here and the
+  // canonical post id is passed as argv, so this does not become an arbitrary URL fetch.
+  const python=`import sys\nfrom curl_cffi import requests\npost_id=sys.argv[1]\nlimit=sys.argv[2]\ndepth=sys.argv[3]\nurls=[\n f\"https://www.reddit.com/comments/{post_id}.json?raw_json=1&limit={limit}&depth={depth}&sort=top\",\n f\"https://old.reddit.com/comments/{post_id}.json?raw_json=1&limit={limit}&depth={depth}&sort=top\",\n f\"https://api.reddit.com/comments/{post_id}?raw_json=1&limit={limit}&depth={depth}&sort=top\"\n]\nheaders={\"accept\":\"application/json,text/plain,*/*\",\"accept-language\":\"en-US,en;q=0.9\",\"cache-control\":\"no-cache\"}\nlast=\"transport_failed\"\nfor url in urls:\n try:\n  response=requests.get(url,headers=headers,impersonate=\"chrome\",timeout=15,allow_redirects=True)\n  status=int(response.status_code)\n  if 200 <= status < 300:\n   body=response.content\n   if len(body)>3000000:\n    last=\"response_too_large\"\n    continue\n   sys.stdout.buffer.write(body)\n   raise SystemExit(0)\n  last=f\"http_{status}\"\n except SystemExit:\n  raise\n except Exception as exc:\n  last=type(exc).__name__\nprint(last,file=sys.stderr)\nraise SystemExit(2)\n`;
+  let result;
+  try{
+    result=await runProcess('python3',['-c',python,postId,String(REDDIT_MAX_COMMENTS),String(REDDIT_MAX_DEPTH)],{timeoutMs:35_000,maxOutputBytes:3_250_000});
+  }catch(error){
+    throw new Link2AIError('EXTRACTION_FAILED','Reddit browser-transport fallback failed.',502,true,{transport:'curl_cffi',cause_code:error instanceof Error?error.name:'process_error'});
+  }
+  if(result.code!==0||!result.stdout.trim()){
+    const token=(result.stderr.trim().split(/\s+/).pop()??'transport_failed').replace(/[^A-Za-z0-9_.-]/g,'').slice(0,80)||'transport_failed';
+    throw new Link2AIError('EXTRACTION_FAILED','Reddit browser-transport fallback did not return a public post response.',502,true,{transport:'curl_cffi',cause_code:token});
+  }
+  try{return JSON.parse(result.stdout);}
+  catch{throw new Link2AIError('EXTRACTION_FAILED','Reddit browser-transport fallback returned malformed JSON.',502,true,{transport:'curl_cffi',cause_code:'invalid_json'});}
+}
+
 async function fetchRedditPost(input:ParsedMediaUrl):Promise<LinkTextPayload>{
   const id=encodeURIComponent(input.canonicalMediaId);
   const endpoints=[
@@ -434,6 +454,12 @@ async function fetchRedditPost(input:ParsedMediaUrl):Promise<LinkTextPayload>{
       return parseRedditJson(input,data);
     }catch(error){lastError=error;}
   }
+  // If Reddit resets Node/datacenter TLS before sending any HTTP response, retry with
+  // curl_cffi's browser TLS fingerprint. This is still bounded to hard-coded Reddit
+  // hosts and the already-validated canonical post id.
+  try{return parseRedditJson(input,await fetchRedditJsonViaBrowserFingerprint(input.canonicalMediaId));}
+  catch(error){lastError=error;}
+
   // Final fallback for temporary JSON endpoint blocks. It is intentionally text-only;
   // private/login-gated posts should still fail the minimum-readable-text checks.
   try{
