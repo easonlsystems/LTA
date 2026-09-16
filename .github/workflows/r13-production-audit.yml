@@ -23,7 +23,16 @@ jobs:
           cache: npm
 
       - name: Apply systemic R13 patch
-        run: python3 scripts/r13_patch.py
+        run: |
+          python3 scripts/r13_patch.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/config/env.ts')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace("transform(v => ['1','true','yes','on'].includes((v ?? '').toLowerCase()))", "transform((v:string|undefined) => ['1','true','yes','on'].includes((v ?? '').toLowerCase()))")
+          s=s.replace("transform((v,ctx)=>{", "transform((v:string,ctx:any)=>{")
+          p.write_text(s,encoding='utf-8')
+          PY
 
       - name: Install dependencies
         run: npm ci
