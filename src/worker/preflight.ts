@@ -15,4 +15,5 @@ async function requireBinary(command:string,args:string[],label:string):Promise<
 export async function assertWorkerRuntime():Promise<void>{
   await requireBinary(env().YTDLP_BIN,['--version'],'yt-dlp');
   await requireBinary(env().FFMPEG_BIN,['-version'],'FFmpeg');
+  await requireBinary('python3',['-c','import curl_cffi; print(curl_cffi.__version__)'],'curl_cffi');
 }

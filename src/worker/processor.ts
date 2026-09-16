@@ -236,7 +236,9 @@ export async function processJob(job:JobRow):Promise<void>{
   }catch(e){
     if(reserved)await releaseQuota(job.id).catch(()=>{});
     const err=asLink2AIError(e);
-    logErrorEvent('job_error',e,{job_id:job.id,platform:job.platform,error_code:err.code,retryable:err.retryable,attempt:job.attempts,processing_ms:Date.now()-startedAt});
+    const causeCode=typeof err.details?.cause_code==='string'?err.details.cause_code.slice(0,80):undefined;
+    const transport=typeof err.details?.transport==='string'?err.details.transport.slice(0,40):undefined;
+    logErrorEvent('job_error',e,{job_id:job.id,platform:job.platform,error_code:err.code,retryable:err.retryable,attempt:job.attempts,processing_ms:Date.now()-startedAt,...(causeCode?{cause_code:causeCode}:{}),...(transport?{transport}:{} )});
     if(err.code==='QUOTA_EXCEEDED'||err.code==='DURATION_LIMIT_EXCEEDED'){
       const duration=Number(job.duration_seconds??(err.details?.max_video_seconds as number|undefined)??0);
       const checkout=await paymentUrl(job,duration,err.code).catch(()=>null);
