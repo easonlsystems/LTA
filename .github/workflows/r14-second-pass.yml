@@ -34,7 +34,7 @@ jobs:
               return text.replace(old, new, 1)
 
           def regex_once(text, pattern, replacement, label):
-              out, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              out, count = re.subn(pattern, lambda _m: replacement, text, count=1, flags=re.S)
               if count != 1:
                   raise SystemExit(f"{label}: expected exactly one regex match, found {count}")
               return out
@@ -47,25 +47,23 @@ jobs:
               "const allowedPublicHosts=publicHostAllowlist(env().PUBLIC_BASE_URL,[process.env.RAILWAY_PUBLIC_DOMAIN??'']);\nconst redditOAuthReady=Boolean(env().REDDIT_CLIENT_ID&&env().REDDIT_CLIENT_SECRET);\nconst app=Fastify();",
               'reddit capability flag'
           )
-          main = replace_once(main, '<button class=\"sim-tab\" type=\"button\" data-sim-source=\"reddit\">Reddit · paused</button>', '<button class=\"sim-tab\" type=\"button\" data-sim-source=\"reddit\">${redditOAuthReady?\'Reddit\':\'Reddit · paused\'}</button>', 'simulation reddit label')
-          main = replace_once(main, '<button class=\"source-button\" type=\"button\" data-source-key=\"reddit\"><span class=\"source-glyph\">R</span><strong>Reddit · paused</strong></button>', '<button class=\"source-button\" type=\"button\" data-source-key=\"reddit\"><span class=\"source-glyph\">R</span><strong>${redditOAuthReady?\'Reddit\':\'Reddit · paused\'}</strong></button>', 'source explorer reddit label')
+          main = replace_once(main, '<button class="sim-tab" type="button" data-sim-source="reddit">Reddit · paused</button>', '<button class="sim-tab" type="button" data-sim-source="reddit">${redditOAuthReady?\'Reddit\':\'Reddit · paused\'}</button>', 'simulation reddit label')
+          main = replace_once(main, '<button class="source-button" type="button" data-source-key="reddit"><span class="source-glyph">R</span><strong>Reddit · paused</strong></button>', '<button class="source-button" type="button" data-source-key="reddit"><span class="source-glyph">R</span><strong>${redditOAuthReady?\'Reddit\':\'Reddit · paused\'}</strong></button>', 'source explorer reddit label')
 
-          old_menu = '''          <div class=\"usecase-menu\" id=\"usecase-menu\">
-            <button class=\"usecase-option active\" type=\"button\" data-usecase=\"reddit\"><strong>Summarize this Reddit thread.</strong><span>Discussion → themes + disagreement</span></button>
-            <button class=\"usecase-option\" type=\"button\" data-usecase=\"youtube\"><strong>What is this YouTube video arguing?</strong><span>Video → claims + structure</span></button>
-            <button class=\"usecase-option\" type=\"button\" data-usecase=\"github\"><strong>Review this GitHub issue and suggest a fix.</strong><span>Issue → context + next step</span></button>
-            <button class=\"usecase-option\" type=\"button\" data-usecase=\"research\"><strong>Compare this PDF with this article.</strong><span>Research → overlap + differences</span></button>
-          </div>'''
-          new_menu = '''          <div class=\"usecase-menu\" id=\"usecase-menu\">
-            ${redditOAuthReady?`<button class=\"usecase-option active\" type=\"button\" data-usecase=\"reddit\"><strong>Summarize this Reddit thread.</strong><span>Discussion → themes + disagreement</span></button>`:`<button class=\"usecase-option\" type=\"button\" disabled aria-disabled=\"true\"><strong>Reddit · temporarily paused.</strong><span>Approved OAuth access required</span></button>`}
-            <button class=\"usecase-option${redditOAuthReady?'':' active'}\" type=\"button\" data-usecase=\"youtube\"><strong>What is this YouTube video arguing?</strong><span>Video → claims + structure</span></button>
-            <button class=\"usecase-option\" type=\"button\" data-usecase=\"github\"><strong>Review this GitHub issue and suggest a fix.</strong><span>Issue → context + next step</span></button>
-            <button class=\"usecase-option\" type=\"button\" data-usecase=\"research\"><strong>Compare this PDF with this article.</strong><span>Research → overlap + differences</span></button>
-          </div>'''
-          main = replace_once(main, old_menu, new_menu, 'usecase reddit gating')
+          menu_pattern = r'<div class="usecase-menu" id="usecase-menu">\s*<button class="usecase-option active" type="button" data-usecase="reddit">.*?</div>\s*<div class="usecase-display">'
+          new_menu = (
+              '<div class="usecase-menu" id="usecase-menu">\n'
+              '            ${redditOAuthReady?`<button class="usecase-option active" type="button" data-usecase="reddit"><strong>Summarize this Reddit thread.</strong><span>Discussion → themes + disagreement</span></button>`:`<button class="usecase-option" type="button" disabled aria-disabled="true"><strong>Reddit · temporarily paused.</strong><span>Approved OAuth access required</span></button>`}\n'
+              '            <button class="usecase-option${redditOAuthReady?\'\':\' active\'}" type="button" data-usecase="youtube"><strong>What is this YouTube video arguing?</strong><span>Video → claims + structure</span></button>\n'
+              '            <button class="usecase-option" type="button" data-usecase="github"><strong>Review this GitHub issue and suggest a fix.</strong><span>Issue → context + next step</span></button>\n'
+              '            <button class="usecase-option" type="button" data-usecase="research"><strong>Compare this PDF with this article.</strong><span>Research → overlap + differences</span></button>\n'
+              '          </div>\n'
+              '          <div class="usecase-display">'
+          )
+          main = regex_once(main, menu_pattern, new_menu, 'usecase reddit gating')
 
-          old_initial = '<div class=\"usecase-chat\"><div class=\"usecase-user\" id=\"usecase-user\">Summarize this Reddit thread and tell me where people disagree.</div><div class=\"usecase-result\" id=\"usecase-result\"><div class=\"usecase-result-label\">Example output · representative</div><strong>The disagreement is mostly about where the failure happens.</strong><ul><li>One side blames source access.</li><li>Another side points to whether the connector was loaded and invoked.</li><li>The useful follow-up is to separate source availability from tool-selection behavior.</li></ul></div></div>'
-          new_initial = '<div class=\"usecase-chat\"><div class=\"usecase-user\" id=\"usecase-user\">${redditOAuthReady?\'Summarize this Reddit thread and tell me where people disagree.\':\'What is this YouTube video arguing, and what evidence does it use?\'}</div><div class=\"usecase-result\" id=\"usecase-result\"><div class=\"usecase-result-label\">Example output · representative</div>${redditOAuthReady?`<strong>The disagreement is mostly about where the failure happens.</strong><ul><li>One side blames source access.</li><li>Another side points to whether the connector was loaded and invoked.</li><li>The useful follow-up is to separate source availability from tool-selection behavior.</li></ul>`:`<strong>The creator makes one central claim and supports it in three stages.</strong><ul><li>The opening establishes the problem.</li><li>The middle uses examples to support the thesis.</li><li>The ending narrows the claim but leaves one assumption unresolved.</li></ul>`}</div></div>'
+          old_initial = '<div class="usecase-chat"><div class="usecase-user" id="usecase-user">Summarize this Reddit thread and tell me where people disagree.</div><div class="usecase-result" id="usecase-result"><div class="usecase-result-label">Example output · representative</div><strong>The disagreement is mostly about where the failure happens.</strong><ul><li>One side blames source access.</li><li>Another side points to whether the connector was loaded and invoked.</li><li>The useful follow-up is to separate source availability from tool-selection behavior.</li></ul></div></div>'
+          new_initial = '<div class="usecase-chat"><div class="usecase-user" id="usecase-user">${redditOAuthReady?\'Summarize this Reddit thread and tell me where people disagree.\':\'What is this YouTube video arguing, and what evidence does it use?\'}</div><div class="usecase-result" id="usecase-result"><div class="usecase-result-label">Example output · representative</div>${redditOAuthReady?`<strong>The disagreement is mostly about where the failure happens.</strong><ul><li>One side blames source access.</li><li>Another side points to whether the connector was loaded and invoked.</li><li>The useful follow-up is to separate source availability from tool-selection behavior.</li></ul>`:`<strong>The creator makes one central claim and supports it in three stages.</strong><ul><li>The opening establishes the problem.</li><li>The middle uses examples to support the thesis.</li><li>The ending narrows the claim but leaves one assumption unresolved.</li></ul>`}</div></div>'
           main = replace_once(main, old_initial, new_initial, 'usecase initial result')
 
           main = replace_once(main, "const homeExperienceJs=`(()=>{\n      const demos={", "const homeExperienceJs=`(()=>{\n      const redditAvailable=${redditOAuthReady?'true':'false'};\n      const demos={", 'browser reddit availability')
@@ -102,7 +100,7 @@ jobs:
               raise SystemExit(f"runtime asset version: expected two r13 markers, found {smoke.count('20260917-r13')}")
           smoke = smoke.replace('20260917-r13','20260917-r14')
           home_assert = "assert.match(body,/Built by Eason Systems/);assert.doesNotMatch(body,/V2 · public links → readable source context/);"
-          home_assert_new = "assert.match(body,/Built by Eason Systems/);assert.match(body,/Reddit · paused/);assert.match(body,/Reddit · temporarily paused\./);assert.doesNotMatch(body,/Summarize this Reddit thread\./);assert.doesNotMatch(body,/V2 · public links → readable source context/);"
+          home_assert_new = "assert.match(body,/Built by Eason Systems/);assert.match(body,/Reddit · paused/);assert.match(body,/Reddit · temporarily paused\\./);assert.doesNotMatch(body,/Summarize this Reddit thread\\./);assert.doesNotMatch(body,/V2 · public links → readable source context/);"
           smoke = replace_once(smoke, home_assert, home_assert_new, 'homepage paused claim assertions')
           reset_anchor = "  assert.equal(ids['sim-right-state'].textContent,'Ready','Reset must cancel queued autoplay and keep right Ready');\n  // A real Run should survive the previous Reset and complete every stage."
           reset_insert = "  assert.equal(ids['sim-right-state'].textContent,'Ready','Reset must cancel queued autoplay and keep right Ready');\n  // Reddit is intentionally unavailable without OAuth credentials. Selecting it and then pressing Run must never turn it into a fake success.\n  simTabs[0].listeners.click();\n  assert.equal(ids['sim-right-state'].textContent,'Temporarily paused','Reddit tab must show paused when credentials are absent');\n  assert.match(ids['sim-tool'].innerHTML,/Approved OAuth access required/);\n  ids['sim-run'].listeners.click();\n  runAllTimers();\n  assert.equal(ids['sim-right-state'].textContent,'Temporarily paused','Run must not bypass the Reddit availability gate');\n  assert.doesNotMatch(ids['sim-tool'].innerHTML,/Source loaded/);\n  assert.match(ids['sim-right-answer'].innerHTML,/paused on this deployment/);\n  assert.equal(ids['sim-conclusion'].hidden,true,'paused Reddit must not show the success conclusion');\n  simTabs[1].listeners.click();\n  ids['sim-reset'].listeners.click();\n  // A real Run should survive the previous Reset and complete every stage."
