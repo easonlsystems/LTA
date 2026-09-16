@@ -22,7 +22,7 @@ async function rawPost(path,headers,body){
 }
 
 const child=spawn(process.execPath,['dist/src/api/main.js'],{
-  env:{...process.env,NODE_ENV:'production',PORT:String(port),DATABASE_URL:'postgres://127.0.0.1:1/link2ai',PUBLIC_BASE_URL:'https://link2ai.example',PUBLIC_BRAND_NAME:'LaunchBrand',APP_SECRET:'01234567890123456789012345678901',LEMONSQUEEZY_API_KEY:'lemon-secret-must-not-render',RESEND_API_KEY:'resend-secret-must-not-render',OPENAI_APPS_CHALLENGE:'review-challenge-token',REVIEWER_EMAIL:'reviewer@example.com',REVIEWER_PASSWORD:'this-is-a-long-review-password',FOUNDER_EMAIL:'founder@example.com'},
+  env:{...process.env,NODE_ENV:'production',PORT:String(port),DATABASE_URL:'postgres://127.0.0.1:1/link2ai',PUBLIC_BASE_URL:'https://link2ai.example',PUBLIC_BRAND_NAME:'LaunchBrand',RAILWAY_PUBLIC_DOMAIN:'internal.railway.local',APP_SECRET:'01234567890123456789012345678901',LEMONSQUEEZY_API_KEY:'lemon-secret-must-not-render',RESEND_API_KEY:'resend-secret-must-not-render',OPENAI_APPS_CHALLENGE:'review-challenge-token',REVIEWER_EMAIL:'reviewer@example.com',REVIEWER_PASSWORD:'this-is-a-long-review-password',FOUNDER_EMAIL:'founder@example.com'},
   stdio:['ignore','pipe','pipe']
 });
 let output='';
