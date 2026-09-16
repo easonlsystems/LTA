@@ -22,7 +22,7 @@ async function rawPost(path,headers,body){
 }
 
 const child=spawn(process.execPath,['dist/src/api/main.js'],{
-  env:{...process.env,NODE_ENV:'production',PORT:String(port),DATABASE_URL:'postgres://127.0.0.1:1/link2ai',PUBLIC_BASE_URL:'https://link2ai.example',PUBLIC_BRAND_NAME:'LaunchBrand',APP_SECRET:'01234567890123456789012345678901',LEMONSQUEEZY_API_KEY:'lemon-secret-must-not-render',RESEND_API_KEY:'resend-secret-must-not-render',OPENAI_APPS_CHALLENGE:'review-challenge-token',REVIEWER_EMAIL:'reviewer@example.com',REVIEWER_PASSWORD:'this-is-a-long-review-password',FOUNDER_EMAIL:'founder@example.com'},
+  env:{...process.env,NODE_ENV:'production',PORT:String(port),DATABASE_URL:'postgres://127.0.0.1:1/link2ai',PUBLIC_BASE_URL:'https://link2ai.example',PUBLIC_BRAND_NAME:'LaunchBrand',RAILWAY_PUBLIC_DOMAIN:'internal.railway.local',APP_SECRET:'01234567890123456789012345678901',LEMONSQUEEZY_API_KEY:'lemon-secret-must-not-render',RESEND_API_KEY:'resend-secret-must-not-render',OPENAI_APPS_CHALLENGE:'review-challenge-token',REVIEWER_EMAIL:'reviewer@example.com',REVIEWER_PASSWORD:'this-is-a-long-review-password',FOUNDER_EMAIL:'founder@example.com'},
   stdio:['ignore','pipe','pipe']
 });
 let output='';
@@ -49,7 +49,7 @@ try{
     const body=await page.text();
     assert.match(body,/LaunchBrand/);
     if(route==='/'){assert.match(body,/AI is smart\./);assert.match(body,/Until you give it a link\./);assert.match(body,/Try Link2AI free/);assert.match(body,/10 processing units · No card required · Failed reads cost 0/);assert.match(body,/Without Link2AI/);assert.match(body,/With Link2AI/);assert.match(body,/More than video links\./);assert.match(body,/Paste the link normally/);assert.match(body,/Try the link your AI just failed to read\./);assert.match(body,/No fixed link-count limit/);assert.match(body,/A product by Eason Systems/);assert.doesNotMatch(body,/V2 · public links → readable source context/);}
-    if(route==='/connect'){assert.match(body,/Open Claude Connectors Directory/);assert.match(body,/href=\"\/connect\/start\"/);assert.match(body,/target=\"_blank\"/);assert.match(body,/Always available/);assert.doesNotMatch(body,/Add custom connector|Tools already loaded|Register automatically/);}
+    if(route==='/connect'){assert.match(body,/Open Claude Connectors Directory/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Always available/);assert.doesNotMatch(body,/Add custom connector|Tools already loaded|Register automatically/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }
 
@@ -81,6 +81,11 @@ try{
     host:'link2ai.example',origin:'https://link2ai.example','content-type':'application/x-www-form-urlencoded'
   },'email=x%40example.com&password=not-a-real-password&return_to=%2Faccount');
   assert.notEqual(sameHostLogin.status,403,'same-host browser POSTs must not be rejected because PUBLIC_BASE_URL differs from the serving host');
+
+  const reverseProxyLogin=await rawPost('/auth/password/login',{
+    host:'internal.railway.local',origin:'https://link2ai.example','content-type':'application/x-www-form-urlencoded'
+  },'email=x%40example.com&password=not-a-real-password&return_to=%2Faccount');
+  assert.notEqual(reverseProxyLogin.status,403,'canonical public origin must not be rejected when a reverse proxy presents a different backend Host');
 
 
   const founder=await fetch(`http://127.0.0.1:${port}/founder`,{headers:{host:'link2ai.example'},redirect:'manual'});
@@ -197,4 +202,3 @@ try{
     new Promise(resolve=>setTimeout(resolve,3000))
   ]);
 }
-

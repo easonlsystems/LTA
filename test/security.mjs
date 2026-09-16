@@ -34,9 +34,17 @@ assert.equal(auth.founderStepUpChallengeHash('00000000-0000-4000-8000-0000000000
 
 const publicUrl=await import('../dist/src/config/publicUrl.js');
 assert.equal(publicUrl.browserSameOriginOk({host:'live.example',origin:'https://live.example'},'https://configured.example',true),true,'browser origin should match the actual serving host, not a stale configured base URL');
+assert.equal(publicUrl.browserSameOriginOk({host:'internal.railway.local',origin:'https://configured.example'},'https://configured.example',true),true,'canonical public origin must remain valid behind a reverse proxy whose backend Host differs');
 assert.equal(publicUrl.browserSameOriginOk({host:'live.example',origin:'https://evil.example'},'https://configured.example',true),false,'cross-site origin must be rejected');
 assert.equal(publicUrl.browserSameOriginOk({host:'live.example',origin:'null'},'https://configured.example',true),false,'opaque null origin must be rejected');
 assert.equal(publicUrl.browserSameOriginOk({host:'live.example','sec-fetch-site':'same-origin'},'https://configured.example',true),true,'same-origin Fetch Metadata may safely cover a suppressed Origin/Referer when CSRF is also required');
 assert.equal(publicUrl.browserSameOriginOk({host:'live.example','sec-fetch-site':'cross-site'},'https://configured.example',true),false,'cross-site Fetch Metadata must be rejected');
 assert.equal(publicUrl.browserSameOriginOk({host:'live.example',referer:'https://live.example/founder'},'https://configured.example',true),true,'same-host referer fallback should be accepted');
+
+const safeHttp=await import('../dist/src/util/safeHttp.js');
+assert.deepEqual(
+  safeHttp.orderPublicAddresses([{address:'2001:4860:4860::8888',family:6},{address:'8.8.8.8',family:4}]),
+  [{address:'8.8.8.8',family:4},{address:'2001:4860:4860::8888',family:6}],
+  'external HTTP should prefer IPv4 while retaining IPv6 fallback'
+);
 console.log('security tests PASS');

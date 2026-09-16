@@ -51,11 +51,19 @@ export function browserSameOriginOk(
   if(candidate.protocol!=='https:'&&candidate.protocol!=='http:')return false;
   if(production&&candidate.protocol!=='https:')return false;
 
+  const expectedOrigins=new Set<string>();
+  try{expectedOrigins.add(new URL(publicBaseUrl).origin);}catch{/* invalid configured base is handled elsewhere */}
+
   const hostHeader=firstHeader(headers.host).trim();
   if(hostHeader){
     const expected=originFromHostHeader(hostHeader,candidate.protocol as 'http:'|'https:');
-    return Boolean(expected&&candidate.origin===expected);
+    if(expected)expectedOrigins.add(expected);
   }
 
-  try{return candidate.origin===new URL(publicBaseUrl).origin;}catch{return false;}
+  // Behind a reverse proxy the backend Host can differ from the public host that
+  // actually served the browser page. Accept the canonical PUBLIC_BASE_URL as an
+  // equally valid same-origin target instead of requiring Host to match exactly.
+  // This remains strict against cross-site origins: the candidate must equal one
+  // of the explicitly known serving origins above.
+  return expectedOrigins.has(candidate.origin);
 }
