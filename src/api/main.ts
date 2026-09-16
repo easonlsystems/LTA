@@ -250,7 +250,11 @@ app.get('/',async(req,reply)=>{
       </div>
     </section>
 
-    <script>(()=>{
+    <script src="/home.js?v=20260917" defer></script>
+  </main>`, `${env().PUBLIC_BRAND_NAME} — Paste a link. Claude can read it.`, `/`));
+});
+
+const homeExperienceJs=`(()=>{
       const demos={
         reddit:{name:'Reddit thread',url:'reddit.com/r/ClaudeAI/comments/…',question:'What are people disagreeing about in this Reddit thread?',fail:'I can’t reliably access the contents of that Reddit page. If you paste the content here, I can help.',lead:'The thread splits around where the access failure actually happens.',points:['One group treats Reddit access itself as the blocker.','Another group points to whether the connector is loaded and invoked.','The useful follow-up is separating source availability from tool-selection behavior.']},
         youtube:{name:'YouTube video',url:'youtube.com/watch?v=…',question:'What is this YouTube video arguing, and what evidence does it use?',fail:'I can see the YouTube URL, but I do not have enough of the video content to summarize its argument reliably.',lead:'The video builds one main claim through three supporting points.',points:['The opening frames the problem and the creator’s thesis.','The middle section gives examples and counterarguments.','The conclusion narrows the claim and leaves one unresolved assumption.']},
@@ -281,7 +285,7 @@ app.get('/',async(req,reply)=>{
       const clearTimers=()=>{state.timers.forEach(clearTimeout);state.timers=[];};
       const setTimer=(fn,ms)=>{const id=setTimeout(fn,ms);state.timers.push(id);};
       const renderDemoSource=(key)=>{const d=demos[key];if(!d)return;state.source=key;q('#sim-source-name').textContent=d.name;q('#sim-url').textContent=d.url;q('#sim-question-text').textContent=d.question;qa('.sim-tab').forEach(b=>b.classList.toggle('active',b.dataset.simSource===key));resetDemo(false);};
-      const resetDemo=(keepSource=true)=>{clearTimers();q('#sim-left-state').textContent='Ready';q('#sim-right-state').textContent='Ready';q('#sim-left-state').className='sim-state';q('#sim-right-state').className='sim-state';q('#sim-left-answer').classList.remove('show');q('#sim-right-answer').classList.remove('show');q('#sim-tool').classList.remove('show');q('#sim-conclusion').classList.remove('show');q('#sim-conclusion').hidden=true;qa('#sim-left-thinking .sim-line,#sim-right-thinking .sim-line').forEach(el=>el.classList.remove('live'));if(!keepSource){};};
+      const resetDemo=(keepSource=true)=>{clearTimers();q('#sim-left-state').textContent='Ready';q('#sim-right-state').textContent='Ready';q('#sim-left-state').className='sim-state';q('#sim-right-state').className='sim-state';q('#sim-left-answer').classList.remove('show');q('#sim-right-answer').classList.remove('show');q('#sim-tool').classList.remove('show');q('#sim-tool').innerHTML='Link2AI · Reading source… <i>connected</i>';q('#sim-conclusion').classList.remove('show');q('#sim-conclusion').hidden=true;qa('#sim-left-thinking .sim-line,#sim-right-thinking .sim-line').forEach(el=>el.classList.remove('live'));if(!keepSource){};};
       const renderAnswer=(el,lead,points)=>{el.innerHTML='<span class="sim-example-tag">Example output · representative</span><strong>'+lead+'</strong><ul>'+points.map(x=>'<li>'+x+'</li>').join('')+'</ul>';};
       const runDemo=()=>{resetDemo();const d=demos[state.source];const reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;const t=reduced?0:1;q('#sim-left-state').textContent='Trying source';q('#sim-right-state').textContent='Starting';q('#sim-left-state').className='sim-state reading';q('#sim-right-state').className='sim-state reading';qa('#sim-left-thinking .sim-line,#sim-right-thinking .sim-line').forEach(el=>el.classList.add('live'));setTimer(()=>{q('#sim-tool').classList.add('show');q('#sim-right-state').textContent='Reading';},350*t);setTimer(()=>{q('#sim-left-state').textContent='Blocked';q('#sim-left-state').className='sim-state failed';qa('#sim-left-thinking .sim-line').forEach(el=>el.classList.remove('live'));q('#sim-left-answer').innerHTML='<span class="sim-example-tag">Claude</span>'+d.fail;q('#sim-left-answer').classList.add('show');},900*t);setTimer(()=>{q('#sim-tool').innerHTML='Link2AI · Source loaded <i>ready</i>';q('#sim-right-state').textContent='Source loaded';q('#sim-right-state').className='sim-state loaded';},1300*t);setTimer(()=>{qa('#sim-right-thinking .sim-line').forEach(el=>el.classList.remove('live'));renderAnswer(q('#sim-right-answer'),d.lead,d.points);q('#sim-right-answer').classList.add('show');},1750*t);setTimer(()=>{q('#sim-conclusion').hidden=false;q('#sim-conclusion').classList.add('show');},2150*t);};
       qa('.sim-tab').forEach(btn=>btn.addEventListener('click',()=>{renderDemoSource(btn.dataset.simSource);runDemo();}));q('#sim-run').addEventListener('click',runDemo);q('#sim-reset').addEventListener('click',()=>resetDemo());
@@ -291,9 +295,8 @@ app.get('/',async(req,reply)=>{
       qa('.usecase-option').forEach(btn=>btn.addEventListener('click',()=>showUsecase(btn.dataset.usecase)));
       const reveals=qa('.reveal');if('IntersectionObserver' in window&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches){const io=new IntersectionObserver(entries=>{entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('in');io.unobserve(entry.target);}});},{threshold:.13});reveals.forEach(el=>io.observe(el));}else{reveals.forEach(el=>el.classList.add('in'));}
       setTimer(runDemo,650);
-    })();</script>
-  </main>`, `${env().PUBLIC_BRAND_NAME} — Paste a link. Claude can read it.`, `/`));
-});
+})();`;
+app.get('/home.js',async(_req,reply)=>reply.header('Cache-Control','public,max-age=300').type('application/javascript; charset=utf-8').send(homeExperienceJs));
 
 app.get('/connect',async(req,reply)=>{
   await trackWebsiteVisit(req,reply,'/connect');
