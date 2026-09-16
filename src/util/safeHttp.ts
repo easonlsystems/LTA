@@ -77,7 +77,20 @@ export async function safeGetBuffer(rawUrl:string,opts:{maxBytes:number;timeoutM
         result=await new Promise<{status:number;headers:IncomingHttpHeaders;bytes:Buffer}>((resolve,reject)=>{
           const chunks:Buffer[]=[]; let total=0;
           let hardDeadlineTimer:ReturnType<typeof setTimeout>|undefined;
+          let settled=false;
           const clearHardDeadline=()=>{if(hardDeadlineTimer){clearTimeout(hardDeadlineTimer);hardDeadlineTimer=undefined;}};
+          const fail=(error:unknown)=>{
+            if(settled)return;
+            settled=true;
+            clearHardDeadline();
+            reject(error);
+          };
+          const succeed=(value:{status:number;headers:IncomingHttpHeaders;bytes:Buffer})=>{
+            if(settled)return;
+            settled=true;
+            clearHardDeadline();
+            resolve(value);
+          };
           const req=https.request({
             protocol:'https:',hostname:url.hostname,port:url.port?Number(url.port):443,path:`${url.pathname}${url.search}`,method:'GET',
             servername:url.hostname,headers:{'user-agent':opts.userAgent??'Link2AI/1.0','accept':opts.accept??'*/*','accept-encoding':'identity'},
@@ -88,15 +101,17 @@ export async function safeGetBuffer(rawUrl:string,opts:{maxBytes:number;timeoutM
               if(total>opts.maxBytes){req.destroy(new Link2AIError('EXTRACTION_FAILED','Remote content response exceeded safety limit.',502));return;}
               chunks.push(b);
             });
-            res.on('end',()=>{clearHardDeadline();resolve({status:res.statusCode??0,headers:res.headers,bytes:Buffer.concat(chunks)});});
+            res.on('aborted',()=>fail(new Link2AIError('EXTRACTION_FAILED','Remote content response ended unexpectedly.',502,true)));
+            res.on('error',fail);
+            res.on('end',()=>succeed({status:res.statusCode??0,headers:res.headers,bytes:Buffer.concat(chunks)}));
           });
           // ClientRequest#setTimeout is only an inactivity timeout and resets when data
           // keeps arriving. A slow-drip source could therefore hold a worker slot far
-          // beyond opts.timeoutMs. Enforce the remaining wall-clock budget explicitly.
+          // beyond opts.timeoutMs. Enforce the remaining wall-clock budget explicitly,
+          // and keep it armed until the response body finishes or errors.
           hardDeadlineTimer=setTimeout(()=>req.destroy(new Link2AIError('EXTRACTION_FAILED','Remote content request timed out.',504,true)),remainingMs);
           hardDeadlineTimer.unref?.();
-          req.on('error',error=>{clearHardDeadline();reject(error);});
-          req.on('close',clearHardDeadline);
+          req.on('error',fail);
           req.end();
         });
         break;
