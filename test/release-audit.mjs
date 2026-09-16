@@ -22,5 +22,8 @@ assert.match(authSource,/browserSameOriginOk/,'Auth browser POSTs must use the s
 assert.match(publicUrlSource,/expectedOrigins/,'Browser same-origin checks must accept the canonical public origin behind a reverse proxy');
 assert.match(safeHttpSource,/orderPublicAddresses/,'External HTTP must order validated public addresses instead of betting on the first DNS answer');
 assert.match(safeHttpSource,/requestDeadline/,'External HTTP address fallback must stay inside the configured timeout budget');
+assert.match(safeHttpSource,/hardDeadlineTimer=setTimeout/,'External HTTP must enforce a wall-clock deadline, not only a socket inactivity timeout');
+assert.match(safeHttpSource,/clearHardDeadline/,'External HTTP must clear its hard deadline timer after completion or failure');
+assert.doesNotMatch(safeHttpSource,/req\.setTimeout\(/,'External HTTP must not rely on ClientRequest inactivity timeout as its total deadline');
 assert.doesNotMatch(audioSource,/V1 transcription limit/,'User-facing errors must not expose internal V1 naming');
 console.log('release audit tests PASS');
