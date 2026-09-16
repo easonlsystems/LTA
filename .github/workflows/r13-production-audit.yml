@@ -27,6 +27,7 @@ jobs:
           python3 scripts/r13_patch.py
           python3 - <<'PY'
           from pathlib import Path
+
           p=Path('src/config/env.ts')
           s=p.read_text(encoding='utf-8')
           s=s.replace("transform(v => ['1','true','yes','on'].includes((v ?? '').toLowerCase()))", "transform((v:string|undefined) => ['1','true','yes','on'].includes((v ?? '').toLowerCase()))")
@@ -36,6 +37,38 @@ jobs:
           p=Path('test/mcp-smoke.mjs')
           s=p.read_text(encoding='utf-8')
           s=s.replace("  assert.match(get_video_transcript_desc,/Reddit/i,'Description must advertise Reddit post support');", "  assert.doesNotMatch(get_video_transcript_desc,/Reddit/i,'Without approved Reddit OAuth credentials, MCP must not advertise Reddit as live');\n  assert.doesNotMatch(listed.result.tools[0].description,/Reddit/i,'Primary tool must also hide unavailable Reddit support');")
+          p.write_text(s,encoding='utf-8')
+
+          p=Path('src/util/safeHttp.ts')
+          s=p.read_text(encoding='utf-8')
+          marker="async function resolvePublic(hostname:string):Promise<Array<{address:string;family:4|6}>>{"
+          helper="""export function pinnedLookup(address:string,family:4|6){
+            return (_hostname:string,options:any,callback:any)=>{
+              if(options&&typeof options==='object'&&options.all){callback(null,[{address,family}]);return;}
+              callback(null,address,family);
+            };
+          }
+
+          """
+          if helper.strip() not in s:
+            if marker not in s: raise SystemExit('safeHttp helper marker missing')
+            s=s.replace(marker,helper+marker,1)
+          old="lookup:(_hostname:string,_options:any,callback:any)=>callback(null,resolved.address,resolved.family)"
+          if old not in s: raise SystemExit('safeHttp pinned lookup call missing')
+          s=s.replace(old,"lookup:pinnedLookup(resolved.address,resolved.family)",1)
+          p.write_text(s,encoding='utf-8')
+
+          p=Path('test/source-matrix.mjs')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace("import {isPublicAddress,orderPublicAddresses} from '../dist/src/util/safeHttp.js';", "import {isPublicAddress,orderPublicAddresses,pinnedLookup} from '../dist/src/util/safeHttp.js';")
+          needle="assert.equal(ordered[0].family,4,'IPv4 should be preferred in current Railway environment');\n"
+          extra="""assert.equal(ordered[0].family,4,'IPv4 should be preferred in current Railway environment');
+          const lookup=pinnedLookup('1.1.1.1',4);
+          await new Promise((resolve,reject)=>lookup('example.com',{all:true},(err,addresses)=>{try{assert.ifError(err);assert.deepEqual(addresses,[{address:'1.1.1.1',family:4}]);resolve();}catch(e){reject(e);}}));
+          await new Promise((resolve,reject)=>lookup('example.com',{all:false},(err,address,family)=>{try{assert.ifError(err);assert.equal(address,'1.1.1.1');assert.equal(family,4);resolve();}catch(e){reject(e);}}));
+          """
+          if needle not in s: raise SystemExit('source matrix lookup insertion marker missing')
+          s=s.replace(needle,extra,1)
           p.write_text(s,encoding='utf-8')
           PY
 
@@ -56,6 +89,12 @@ jobs:
           docker run --rm link2ai:r13 python3 -c "import curl_cffi; print('runtime curl_cffi import PASS')"
           docker run --rm link2ai:r13 yt-dlp --version
           docker run --rm link2ai:r13 ffmpeg -version | head -n 1
+          set +e
+          docker run --rm link2ai:r13 yt-dlp --skip-download --no-warnings --print '%(id)s|%(duration)s' 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+          echo "YouTube live metadata probe exit=$? (observational; provider bot policy can differ by egress)"
+          docker run --rm link2ai:r13 yt-dlp --skip-download --no-warnings --print '%(id)s|%(duration)s' 'https://www.tiktok.com/@scout2015/video/6718335390845095173'
+          echo "TikTok live metadata probe exit=$? (observational; sample/platform availability can change)"
+          set -e
 
       - name: Commit validated R13
         run: |
