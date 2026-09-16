@@ -39,7 +39,12 @@ export function browserSameOriginOk(
   const originHeader=firstHeader(headers.origin).trim();
   const refererHeader=firstHeader(headers.referer).trim();
   const candidateRaw=originHeader||refererHeader;
-  if(candidateRaw.toLowerCase()==='null')return false;
+  if(candidateRaw.toLowerCase()==='null'){
+    // Some legitimate browser surfaces submit an opaque Origin while still exposing
+    // Fetch Metadata. Accept it only when the browser itself classifies the request as
+    // same-origin; cross-site opaque origins remain rejected. CSRF is checked separately.
+    return firstHeader(headers['sec-fetch-site']).trim().toLowerCase()==='same-origin';
+  }
   if(!candidateRaw){
     // Referrer-Policy may intentionally suppress Referer. Modern browsers still expose
     // Fetch Metadata; with the per-session CSRF token this is a safe same-origin fallback.

@@ -189,6 +189,11 @@ try{
   assert.equal(ready.status,503);
   assert.deepEqual((await ready.json()).issues,['database unavailable']);
 
+  const mcpOpaqueOrigin=await rawPost('/mcp',{
+    host:'link2ai.example',origin:'null','sec-fetch-site':'same-origin','content-type':'application/json'
+  },'{}');
+  assert.equal(mcpOpaqueOrigin.status,403,'MCP must keep rejecting opaque browser origins even when site metadata says same-origin');
+
   const unauthorized=await fetch(`http://127.0.0.1:${port}/mcp`,{
     method:'POST',headers:{host:'link2ai.example','content-type':'application/json'},body:'{}'
   });

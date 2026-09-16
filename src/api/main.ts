@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
-import { createMcpFastifyApp } from '@modelcontextprotocol/fastify';
-import type { FastifyReply, FastifyRequest } from 'fastify';
+import { hostHeaderValidation } from '@modelcontextprotocol/fastify';
+import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { toNodeHandler } from '@modelcontextprotocol/node';
-import { createMcpHandler } from '@modelcontextprotocol/server';
+import { createMcpHandler, validateOriginHeader } from '@modelcontextprotocol/server';
 import { env } from '../config/env.js';
 import { pool } from '../db/pool.js';
 import { registerAuthRoutes } from '../auth/routes.js';
@@ -15,7 +15,8 @@ import { getUsageSnapshot } from '../quota/service.js';
 import { trackWebsiteEvent, trackWebsiteVisit } from '../analytics/visitors.js';
 
 const allowedPublicHosts=publicHostAllowlist(env().PUBLIC_BASE_URL,[process.env.RAILWAY_PUBLIC_DOMAIN??'']);
-const app=createMcpFastifyApp({host:'0.0.0.0',allowedHosts:allowedPublicHosts,allowedOrigins:allowedPublicHosts});
+const app=Fastify();
+app.addHook('onRequest',hostHeaderValidation(allowedPublicHosts));
 
 // Billing webhooks require the exact raw request bytes for signature verification.
 app.removeContentTypeParser('application/json');
@@ -32,6 +33,11 @@ const mcpHandler=createMcpHandler(buildMcpServer);
 const nodeMcp=toNodeHandler(mcpHandler,{onerror:(err)=>app.log.error(err)});
 
 app.all('/mcp',async(request,reply)=>{
+  const originHeader=Array.isArray(request.headers.origin)?request.headers.origin[0]:request.headers.origin;
+  const originCheck=validateOriginHeader(originHeader,allowedPublicHosts);
+  if(!originCheck.ok){
+    return reply.code(403).send({jsonrpc:'2.0',error:{code:-32000,message:originCheck.message},id:null});
+  }
   const auth=await authInfoFromBearer(request.headers.authorization);
   if(!auth){
     reply.header('WWW-Authenticate',`Bearer resource_metadata="${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp", scope="link2ai:read"`);
