@@ -17,6 +17,7 @@ export function readinessIssues(role:RuntimeRole):string[]{
       catch{issues.push('MEDIA_PROVIDER_URL is invalid');}
     }
   }
+  if(Boolean(e.REDDIT_CLIENT_ID)!==Boolean(e.REDDIT_CLIENT_SECRET))issues.push('REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET must be configured together');
   if(role==='api'){
     if(e.PUBLIC_EMAIL_LOGIN_ENABLED&&!e.RESEND_API_KEY)issues.push('RESEND_API_KEY is missing while public email login is enabled');
     if(!e.LEMONSQUEEZY_API_KEY)issues.push('LEMONSQUEEZY_API_KEY is missing');

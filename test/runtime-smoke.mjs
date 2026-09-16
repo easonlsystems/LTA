@@ -48,12 +48,12 @@ try{
     assert.equal(page.status,200,`${route} should return 200`);
     const body=await page.text();
     assert.match(body,/LaunchBrand/);
-    if(route==='/'){assert.match(body,/Paste a link\./);assert.match(body,/Claude can read it\./);assert.match(body,/Interactive demo · Claude-first beta/);assert.match(body,/Run comparison/);assert.match(body,/src="\/home\.js\?v=20260917-r13" defer/);assert.match(body,/Same AI\. Same link\./);assert.match(body,/What do you want Claude to read\?/);assert.match(body,/Ask the question you already wanted to ask\./);assert.match(body,/Same link\. Real result\./);assert.match(body,/No synthetic testimonials\./);assert.match(body,/500 processing units \/ month/);assert.match(body,/2,000 processing units \/ month/);assert.match(body,/No fixed link-count limit/);assert.match(body,/Try the link Claude just failed to read\./);assert.match(body,/Built by Eason Systems/);assert.doesNotMatch(body,/V2 · public links → readable source context/);}
+    if(route==='/'){assert.match(body,/Paste a link\./);assert.match(body,/Claude can read it\./);assert.match(body,/Interactive demo · Claude-first beta/);assert.match(body,/Run comparison/);assert.match(body,/src="\/home\.js\?v=20260917-r14" defer/);assert.match(body,/Same AI\. Same link\./);assert.match(body,/What do you want Claude to read\?/);assert.match(body,/Ask the question you already wanted to ask\./);assert.match(body,/Same link\. Real result\./);assert.match(body,/No synthetic testimonials\./);assert.match(body,/500 processing units \/ month/);assert.match(body,/2,000 processing units \/ month/);assert.match(body,/No fixed link-count limit/);assert.match(body,/Try the link Claude just failed to read\./);assert.match(body,/Built by Eason Systems/);assert.match(body,/Reddit · paused/);assert.match(body,/Reddit · temporarily paused\./);assert.doesNotMatch(body,/Summarize this Reddit thread\./);assert.doesNotMatch(body,/V2 · public links → readable source context/);}
     if(route==='/connect'){assert.match(body,/Open Claude Connectors Directory/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Always available/);assert.doesNotMatch(body,/Add custom connector|Tools already loaded|Register automatically/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }
 
-  const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917-r13`,{headers:{host:'link2ai.example'}});
+  const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917-r14`,{headers:{host:'link2ai.example'}});
   assert.equal(homeJsResponse.status,200,'homepage JS endpoint must return 200');
   assert.match(homeJsResponse.headers.get('content-type')??'',/javascript/);
   const homeJs=await homeJsResponse.text();
@@ -107,6 +107,18 @@ try{
   runAllTimers();
   assert.equal(ids['sim-left-state'].textContent,'Ready','Reset must cancel queued autoplay and keep left Ready');
   assert.equal(ids['sim-right-state'].textContent,'Ready','Reset must cancel queued autoplay and keep right Ready');
+  // Reddit is intentionally unavailable without OAuth credentials. Selecting it and then pressing Run must never turn it into a fake success.
+  simTabs[0].listeners.click();
+  assert.equal(ids['sim-right-state'].textContent,'Temporarily paused','Reddit tab must show paused when credentials are absent');
+  assert.match(ids['sim-tool'].innerHTML,/Approved OAuth access required/);
+  ids['sim-run'].listeners.click();
+  runAllTimers();
+  assert.equal(ids['sim-right-state'].textContent,'Temporarily paused','Run must not bypass the Reddit availability gate');
+  assert.doesNotMatch(ids['sim-tool'].innerHTML,/Source loaded/);
+  assert.match(ids['sim-right-answer'].innerHTML,/paused on this deployment/);
+  assert.equal(ids['sim-conclusion'].hidden,true,'paused Reddit must not show the success conclusion');
+  simTabs[1].listeners.click();
+  ids['sim-reset'].listeners.click();
   // A real Run should survive the previous Reset and complete every stage.
   ids['sim-run'].listeners.click();
   assert.equal(ids['sim-left-state'].textContent,'Trying source');
