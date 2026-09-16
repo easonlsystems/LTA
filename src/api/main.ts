@@ -4,6 +4,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { toNodeHandler } from '@modelcontextprotocol/node';
 import { createMcpHandler, validateOriginHeader } from '@modelcontextprotocol/server';
 import { env } from '../config/env.js';
+import { sourceCapabilities } from '../config/sourceCapabilities.js';
 import { pool } from '../db/pool.js';
 import { registerAuthRoutes } from '../auth/routes.js';
 import { registerBillingRoutes } from '../billing/routes.js';
@@ -15,6 +16,7 @@ import { getUsageSnapshot } from '../quota/service.js';
 import { trackWebsiteEvent, trackWebsiteVisit } from '../analytics/visitors.js';
 
 const allowedPublicHosts=publicHostAllowlist(env().PUBLIC_BASE_URL,[process.env.RAILWAY_PUBLIC_DOMAIN??'']);
+const publicSourceCapabilities=sourceCapabilities();
 const app=Fastify();
 app.addHook('onRequest',hostHeaderValidation(allowedPublicHosts));
 
@@ -137,7 +139,7 @@ app.get('/',async(req,reply)=>{
         </div>
         <div class="sim-shell reveal" id="comparison-demo" aria-label="Interactive Link2AI comparison simulation">
           <div class="sim-tabs" role="tablist" aria-label="Choose a source for the comparison">
-            <button class="sim-tab" type="button" data-sim-source="reddit">Reddit · paused</button>
+            ${publicSourceCapabilities.reddit?'<button class="sim-tab" type="button" data-sim-source="reddit">Reddit</button>':''}
             <button class="sim-tab active" type="button" data-sim-source="youtube">YouTube</button>
             <button class="sim-tab" type="button" data-sim-source="github">GitHub</button>
             <button class="sim-tab" type="button" data-sim-source="pdf">PDF</button>
@@ -180,7 +182,7 @@ app.get('/',async(req,reply)=>{
         <div class="source-head reveal"><div><span class="story-eyebrow">Explore sources</span><h2>What do you want Claude to read?</h2></div><p>Choose a source to see the kind of question Link2AI is built to unblock. Public, supported content only; availability still depends on the source.</p></div>
         <div class="source-explorer reveal">
           <div class="source-buttons" id="source-buttons">
-            <button class="source-button" type="button" data-source-key="reddit"><span class="source-glyph">R</span><strong>Reddit · paused</strong></button>
+            ${publicSourceCapabilities.reddit?'<button class="source-button" type="button" data-source-key="reddit"><span class="source-glyph">R</span><strong>Reddit</strong></button>':''}
             <button class="source-button active" type="button" data-source-key="youtube"><span class="source-glyph">▶</span><strong>YouTube</strong></button>
             <button class="source-button" type="button" data-source-key="github"><span class="source-glyph">&lt;/&gt;</span><strong>GitHub</strong></button>
             <button class="source-button" type="button" data-source-key="x"><span class="source-glyph">X</span><strong>X</strong></button>
@@ -207,14 +209,14 @@ app.get('/',async(req,reply)=>{
         <div class="usecase-head reveal"><span class="story-eyebrow">Use cases</span><h2>Ask the question you already wanted to ask.</h2><p>No feature vocabulary required. Pick a prompt and watch the source become something Claude can actually work with.</p></div>
         <div class="usecase-stage reveal">
           <div class="usecase-menu" id="usecase-menu">
-            <button class="usecase-option active" type="button" data-usecase="reddit"><strong>Summarize this Reddit thread.</strong><span>Discussion → themes + disagreement</span></button>
-            <button class="usecase-option" type="button" data-usecase="youtube"><strong>What is this YouTube video arguing?</strong><span>Video → claims + structure</span></button>
+            ${publicSourceCapabilities.reddit?'<button class="usecase-option" type="button" data-usecase="reddit"><strong>Summarize this Reddit thread.</strong><span>Discussion → themes + disagreement</span></button>':''}
+            <button class="usecase-option active" type="button" data-usecase="youtube"><strong>What is this YouTube video arguing?</strong><span>Video → claims + structure</span></button>
             <button class="usecase-option" type="button" data-usecase="github"><strong>Review this GitHub issue and suggest a fix.</strong><span>Issue → context + next step</span></button>
             <button class="usecase-option" type="button" data-usecase="research"><strong>Compare this PDF with this article.</strong><span>Research → overlap + differences</span></button>
           </div>
           <div class="usecase-display">
             <div class="usecase-browser"><i></i><i></i><i></i><span>Claude + Link2AI</span></div>
-            <div class="usecase-chat"><div class="usecase-user" id="usecase-user">Summarize this Reddit thread and tell me where people disagree.</div><div class="usecase-result" id="usecase-result"><div class="usecase-result-label">Example output · representative</div><strong>The disagreement is mostly about where the failure happens.</strong><ul><li>One side blames source access.</li><li>Another side points to whether the connector was loaded and invoked.</li><li>The useful follow-up is to separate source availability from tool-selection behavior.</li></ul></div></div>
+            <div class="usecase-chat"><div class="usecase-user" id="usecase-user">What is this YouTube video arguing, and what evidence does it use?</div><div class="usecase-result" id="usecase-result"><div class="usecase-result-label">Example output · representative</div><strong>The creator makes one central claim and supports it in three stages.</strong><ul><li>The opening establishes the problem.</li><li>The middle uses examples to support the thesis.</li><li>The ending narrows the claim but leaves one assumption unresolved.</li></ul></div></div>
           </div>
         </div>
       </div>
@@ -250,20 +252,23 @@ app.get('/',async(req,reply)=>{
       </div>
     </section>
 
-    <script src="/home.js?v=20260917-r13" defer></script>
+    <script src="/home.js?v=20260917-r14" defer></script>
   </main>`, `${env().PUBLIC_BRAND_NAME} — Paste a link. Claude can read it.`, `/`));
 });
 
+const redditDemoJs=publicSourceCapabilities.reddit?`reddit:{name:'Reddit thread',url:'reddit.com/r/ClaudeAI/comments/…',question:'What are people disagreeing about in this Reddit thread?',fail:'I can’t reliably access the contents of that Reddit page. If you paste the content here, I can help.',lead:'The thread splits around where the access failure actually happens.',points:['One group treats Reddit access itself as the blocker.','Another group points to whether the connector is loaded and invoked.','The useful follow-up is separating source availability from tool-selection behavior.']},`:'';
+const redditExploreJs=publicSourceCapabilities.reddit?`reddit:{label:'Reddit · public discussion',title:'Read the discussion across the thread.',question:'“Where do people disagree in this Reddit thread?”',result:'Supported public Reddit threads can be retrieved through approved OAuth Data API access.',sim:'reddit'},`:'';
+const redditUsecaseJs=publicSourceCapabilities.reddit?`reddit:{prompt:'Summarize this Reddit thread and tell me where people disagree.',lead:'The disagreement is mostly about where the failure happens.',points:['One side blames source access.','Another side points to whether the connector was loaded and invoked.','The useful follow-up is to separate source availability from tool-selection behavior.']},`:'';
 const homeExperienceJs=`(()=>{
       const demos={
-        reddit:{name:'Reddit thread',url:'reddit.com/r/ClaudeAI/comments/…',question:'What are people disagreeing about in this Reddit thread?',fail:'I can’t reliably access the contents of that Reddit page. If you paste the content here, I can help.',lead:'The thread splits around where the access failure actually happens.',points:['One group treats Reddit access itself as the blocker.','Another group points to whether the connector is loaded and invoked.','The useful follow-up is separating source availability from tool-selection behavior.']},
+        ${redditDemoJs}
         youtube:{name:'YouTube video',url:'youtube.com/watch?v=…',question:'What is this YouTube video arguing, and what evidence does it use?',fail:'I can see the YouTube URL, but I do not have enough of the video content to summarize its argument reliably.',lead:'The video builds one main claim through three supporting points.',points:['The opening frames the problem and the creator’s thesis.','The middle section gives examples and counterarguments.','The conclusion narrows the claim and leaves one unresolved assumption.']},
         github:{name:'GitHub issue',url:'github.com/example/project/issues/…',question:'Review this GitHub issue and suggest the next fix to try.',fail:'I can’t reliably inspect the full Issue thread from the URL alone. Paste the Issue body and comments and I can review it.',lead:'The Issue points to one likely failure path and one missing diagnostic.',points:['The report is reproducible only after reconnecting.','Comments narrow the failure to state carried between requests.','The next useful step is instrumenting the reconnect path before changing behavior.']},
         pdf:{name:'Public PDF',url:'example.org/research-paper.pdf',question:'What are the paper’s main findings and biggest limitation?',fail:'I can’t reliably read the PDF contents from that link alone. Upload the file or paste the relevant text.',lead:'The paper reports a clear result, but the strongest limitation is in how broadly it can be generalized.',points:['The central finding is consistent across the reported experiments.','The evidence is strongest inside the study’s measured setting.','The paper itself leaves external validity as the main caution.']},
         web:{name:'Public webpage',url:'example.org/article',question:'Summarize this article and separate evidence from opinion.',fail:'I can’t reliably access enough of that webpage to summarize it from the URL alone.',lead:'The article mixes reported facts with the author’s interpretation.',points:['The factual section relies on named events and published figures.','The analysis section makes a broader causal claim.','The conclusion is more confident than the evidence shown earlier.']}
       };
       const sourceExplore={
-        reddit:{label:'Reddit · temporarily paused',title:'Reddit now requires approved Data API access from hosted services.',question:'Link2AI will re-enable Reddit after approved OAuth access is configured.',result:'We do not bypass Reddit’s access controls. Failed or unavailable reads cost 0 units.',sim:null},
+        ${redditExploreJs}
         youtube:{label:'YouTube · public video',title:'Turn the video into a conversation.',question:'“What is this video arguing, and what evidence does it use?”',result:'Link2AI can supply transcript-based source context for supported public videos.',sim:'youtube'},
         github:{label:'GitHub · public Issue / PR',title:'Keep the whole developer thread in view.',question:'“Review this Issue and suggest the next fix to try.”',result:'Claude can work from the public Issue or PR context instead of just the URL.',sim:'github'},
         x:{label:'X · supported public post',title:'Bring a public post into context.',question:'“What claim is this post making, and what context matters?”',result:'Supported public X content can be retrieved when available.',sim:null},
@@ -275,7 +280,7 @@ const homeExperienceJs=`(()=>{
         bluesky:{label:'Bluesky · public post',title:'Bring the public conversation with you.',question:'“Summarize the claim and the key replies around it.”',result:'Supported public Bluesky content can be retrieved when available.',sim:null}
       };
       const usecases={
-        reddit:{prompt:'Summarize this Reddit thread and tell me where people disagree.',lead:'The disagreement is mostly about where the failure happens.',points:['One side blames source access.','Another side points to whether the connector was loaded and invoked.','The useful follow-up is to separate source availability from tool-selection behavior.']},
+        ${redditUsecaseJs}
         youtube:{prompt:'What is this YouTube video arguing, and what evidence does it use?',lead:'The creator makes one central claim and supports it in three stages.',points:['The opening establishes the problem.','The middle uses examples to support the thesis.','The ending narrows the claim but leaves one assumption unresolved.']},
         github:{prompt:'Review this GitHub issue and suggest the next fix to try.',lead:'The Issue points to one likely failure path before a code change is justified.',points:['The bug appears after a reconnect flow.','Comments narrow the likely state boundary.','Instrument the reconnect path first, then change the smallest confirmed cause.']},
         research:{prompt:'Compare this PDF with this article. Where do they agree and disagree?',lead:'The sources overlap on the core observation but diverge on how strongly to interpret it.',points:['Both sources describe the same underlying trend.','The PDF is more cautious about generalization.','The article makes a broader causal claim than the paper directly supports.']}
@@ -288,7 +293,7 @@ const homeExperienceJs=`(()=>{
       const renderDemoSource=(key)=>{const d=demos[key];if(!d)return;state.source=key;q('#sim-source-name').textContent=d.name;q('#sim-url').textContent=d.url;q('#sim-question-text').textContent=d.question;qa('.sim-tab').forEach(b=>b.classList.toggle('active',b.dataset.simSource===key));resetDemo();};
       const renderAnswer=(el,lead,points)=>{el.innerHTML='<span class="sim-example-tag">Example output · representative</span><strong>'+lead+'</strong><ul>'+points.map(x=>'<li>'+x+'</li>').join('')+'</ul>';};
       const runDemo=(markInteraction=false)=>{if(markInteraction)state.interacted=true;resetDemo();const runId=state.runId;const d=demos[state.source];const reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;const t=reduced?0:1;q('#sim-left-state').textContent='Trying source';q('#sim-right-state').textContent='Starting';q('#sim-left-state').className='sim-state reading';q('#sim-right-state').className='sim-state reading';qa('#sim-left-thinking .sim-line,#sim-right-thinking .sim-line').forEach(el=>el.classList.add('live'));setTimer(()=>{q('#sim-tool').classList.add('show');q('#sim-right-state').textContent='Reading';},350*t,runId);setTimer(()=>{q('#sim-left-state').textContent='Blocked';q('#sim-left-state').className='sim-state failed';qa('#sim-left-thinking .sim-line').forEach(el=>el.classList.remove('live'));q('#sim-left-answer').innerHTML='<span class="sim-example-tag">Claude</span>'+d.fail;q('#sim-left-answer').classList.add('show');},900*t,runId);setTimer(()=>{q('#sim-tool').innerHTML='Link2AI · Source loaded <i>ready</i>';q('#sim-right-state').textContent='Source loaded';q('#sim-right-state').className='sim-state loaded';},1300*t,runId);setTimer(()=>{qa('#sim-right-thinking .sim-line').forEach(el=>el.classList.remove('live'));renderAnswer(q('#sim-right-answer'),d.lead,d.points);q('#sim-right-answer').classList.add('show');},1750*t,runId);setTimer(()=>{q('#sim-conclusion').hidden=false;q('#sim-conclusion').classList.add('show');},2150*t,runId);};
-      qa('.sim-tab').forEach(btn=>btn.addEventListener('click',()=>{state.interacted=true;renderDemoSource(btn.dataset.simSource);if(btn.dataset.simSource==='reddit'){q('#sim-right-state').textContent='Temporarily paused';q('#sim-right-state').className='sim-state failed';q('#sim-tool').classList.add('show');q('#sim-tool').innerHTML='Reddit · Approved OAuth access required <i>0 units</i>';q('#sim-right-answer').innerHTML='<span class="sim-example-tag">Current availability</span>Reddit reads are paused on this deployment rather than bypassing Reddit’s hosted-service access controls.';q('#sim-right-answer').classList.add('show');return;}runDemo(false);}));q('#sim-run').addEventListener('click',()=>runDemo(true));q('#sim-reset').addEventListener('click',()=>resetDemo(true));
+      qa('.sim-tab').forEach(btn=>btn.addEventListener('click',()=>{state.interacted=true;renderDemoSource(btn.dataset.simSource);runDemo(false);}));q('#sim-run').addEventListener('click',()=>runDemo(true));q('#sim-reset').addEventListener('click',()=>resetDemo(true));
       const showSource=(key)=>{const d=sourceExplore[key];if(!d)return;qa('.source-button').forEach(b=>b.classList.toggle('active',b.dataset.sourceKey===key));q('#source-preview-label').textContent=d.label;q('#source-preview-title').textContent=d.title;q('#source-preview-question').textContent=d.question;q('#source-mini-result').innerHTML='<strong>What changes</strong>'+d.result;q('#source-open-sim').hidden=!d.sim;q('#source-open-sim').dataset.sim=d.sim||'';};
       qa('.source-button').forEach(btn=>btn.addEventListener('click',()=>{state.interacted=true;showSource(btn.dataset.sourceKey);}));q('#source-open-sim').addEventListener('click',(e)=>{state.interacted=true;const key=e.currentTarget.dataset.sim;if(!key)return;renderDemoSource(key);document.getElementById('simulation').scrollIntoView({behavior:'smooth'});setTimer(()=>runDemo(false),420,state.runId);});
       const showUsecase=(key)=>{const d=usecases[key];if(!d)return;qa('.usecase-option').forEach(b=>b.classList.toggle('active',b.dataset.usecase===key));q('#usecase-user').textContent=d.prompt;q('#usecase-result').innerHTML='<div class="usecase-result-label">Example output · representative</div><strong>'+d.lead+'</strong><ul>'+d.points.map(x=>'<li>'+x+'</li>').join('')+'</ul>';};

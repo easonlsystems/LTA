@@ -87,7 +87,9 @@ export async function deferJob(jobId:string,seconds=3):Promise<void>{
 }
 
 export async function recoverStaleJobs(): Promise<void> {
-  // Disabled accounts must not continue consuming extraction/transcription resources.
+  // Disabled accounts cannot start or resume queued work. A job that was already claimed
+  // is allowed to finish its current attempt: deleting its live quota reservation here
+  // would make finalizeQuota fail deterministically after the expensive work already ran.
   await pool.query(
     `UPDATE transcript_jobs j SET status='failed',error_code='AUTH_REQUIRED',
        error_message='This account is disabled.',retryable=false,checkout_url=NULL,
@@ -96,8 +98,9 @@ export async function recoverStaleJobs(): Promise<void> {
        AND j.status IN ('queued','awaiting_payment')`
   );
   await pool.query(
-    `DELETE FROM quota_reservations r USING users u
-     WHERE r.user_id=u.id AND u.account_status='disabled'`
+    `DELETE FROM quota_reservations r USING users u, transcript_jobs j
+     WHERE r.user_id=u.id AND r.job_id=j.id AND u.account_status='disabled'
+       AND j.status<>'processing'`
   );
   await pool.query(
     `DELETE FROM billing_resume_intents b USING users u

@@ -3,6 +3,7 @@ import * as z from 'zod/v4';
 import { getJobResult, startTranscriptJob, usageForTool, type ToolJobResult } from './service.js';
 import { asLink2AIError } from '../util/errors.js';
 import { env } from '../config/env.js';
+import { sourceCapabilities, supportedSourceDescription } from '../config/sourceCapabilities.js';
 
 const MAX_CHARS=30_000;
 
@@ -65,9 +66,9 @@ async function safeToolCall(action:()=>Promise<Record<string,unknown>>){
 
 export function buildMcpServer(){
   const e=env();
-  const redditReady=Boolean(e.REDDIT_CLIENT_ID?.trim()&&e.REDDIT_CLIENT_SECRET?.trim());
-  const supportedSources=`${redditReady?'Reddit, ':''}YouTube/Shorts, TikTok, Instagram, X, Bluesky, GitHub Issue/PR, Hacker News, readable webpage/article, or text-layer PDF`;
-  const server=new McpServer({name:e.PUBLIC_BRAND_NAME,version:'1.4.0'},{instructions:`${e.PUBLIC_BRAND_NAME} is the source reader for supported public links. When the user provides a supported public ${supportedSources} link and asks a question that requires the contents of that link, use read_public_link before concluding that the source is inaccessible or asking the user to paste its contents. If a built-in browser/fetch attempt fails on a supported source, try ${e.PUBLIC_BRAND_NAME} rather than stopping at that failure. Do not use ${e.PUBLIC_BRAND_NAME} for unrelated URLs, profiles, feeds, timelines, private/login-gated content, broad crawling, or when the user explicitly asks not to fetch external content.${redditReady?'':' Reddit is not currently advertised because this deployment does not have approved Reddit OAuth Data API credentials configured.'}`});
+  const capabilities=sourceCapabilities();
+  const supportedSources=supportedSourceDescription(capabilities);
+  const server=new McpServer({name:e.PUBLIC_BRAND_NAME,version:'1.4.0'},{instructions:`${e.PUBLIC_BRAND_NAME} is the source reader for supported public links. When the user provides a supported public ${supportedSources} link and asks a question that requires the contents of that link, use read_public_link before concluding that the source is inaccessible or asking the user to paste its contents. If a built-in browser/fetch attempt fails on a supported source, try ${e.PUBLIC_BRAND_NAME} rather than stopping at that failure. Do not use ${e.PUBLIC_BRAND_NAME} for unrelated URLs, profiles, feeds, timelines, private/login-gated content, broad crawling, or when the user explicitly asks not to fetch external content.${capabilities.reddit?'':' Reddit is not currently advertised because this deployment does not have approved Reddit OAuth Data API credentials configured.'}`});
 
   const readPublicLinkConfig={
     title:'Read public link',
