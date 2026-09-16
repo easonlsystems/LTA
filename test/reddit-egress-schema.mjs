@@ -7,6 +7,10 @@ const docker=fs.readFileSync(new URL('../Dockerfile',import.meta.url),'utf8');
 
 assert.ok(source.includes('fetchRedditJsonViaBrowserFingerprint'));
 assert.ok(source.includes('from curl_cffi import requests'));
+assert.ok(source.includes('import json,sys'));
+assert.ok(source.includes('payload=response.json()'));
+assert.ok(source.includes('non_json_'));
+assert.ok(source.indexOf('https://api.reddit.com/comments/{post_id}') < source.indexOf('https://www.reddit.com/comments/{post_id}'));
 assert.match(source,/impersonate=.*chrome/);
 assert.ok(source.includes('https://www.reddit.com/comments/{post_id}'));
 assert.ok(source.includes('https://old.reddit.com/comments/{post_id}'));
