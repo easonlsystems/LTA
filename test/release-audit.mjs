@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-const [linkSource,mcpSource,apiSource,authSource,audioSource,safeHttpSource,publicUrlSource]=await Promise.all([
+const [linkSource,mcpSource,apiSource,authSource,audioSource,safeHttpSource,publicUrlSource,jobsSource]=await Promise.all([
   readFile(new URL('../src/content/linkText.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/mcp/server.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/api/main.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/auth/routes.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/media/audio.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/util/safeHttp.ts',import.meta.url),'utf8'),
-  readFile(new URL('../src/config/publicUrl.ts',import.meta.url),'utf8')
+  readFile(new URL('../src/config/publicUrl.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/worker/jobs.ts',import.meta.url),'utf8')
 ]);
 assert.match(linkSource,/safeJsonArrayPages/,'GitHub discussions must use bounded pagination');
 assert.match(linkSource,/GitHub comments/);
@@ -25,5 +26,7 @@ assert.match(safeHttpSource,/requestDeadline/,'External HTTP address fallback mu
 assert.match(safeHttpSource,/hardDeadlineTimer=setTimeout/,'External HTTP must enforce a wall-clock deadline, not only a socket inactivity timeout');
 assert.match(safeHttpSource,/clearHardDeadline/,'External HTTP must clear its hard deadline timer after completion or failure');
 assert.doesNotMatch(safeHttpSource,/req\.setTimeout\(/,'External HTTP must not rely on ClientRequest inactivity timeout as its total deadline');
+assert.match(jobsSource,/r\.job_id=j\.id/,'Disabled-account reservation cleanup must be tied to the owning job');
+assert.match(jobsSource,/j\.status<>'processing'/,'Disabled-account cleanup must preserve live reservations until in-flight jobs finish');
 assert.doesNotMatch(audioSource,/V1 transcription limit/,'User-facing errors must not expose internal V1 naming');
 console.log('release audit tests PASS');
