@@ -56,6 +56,7 @@ jobs:
         run: |
           git config user.name "easonsystems"
           git config user.email "easonlsy1019@gmail.com"
+          rm -f .r13-trigger
           git rm .github/workflows/r13-production-audit.yml scripts/r13_patch.py
           git add -A
           git diff --cached --check
