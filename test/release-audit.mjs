@@ -24,8 +24,10 @@ assert.match(publicUrlSource,/expectedOrigins/,'Browser same-origin checks must 
 assert.match(safeHttpSource,/orderPublicAddresses/,'External HTTP must order validated public addresses instead of betting on the first DNS answer');
 assert.match(safeHttpSource,/requestDeadline/,'External HTTP address fallback must stay inside the configured timeout budget');
 assert.match(safeHttpSource,/hardDeadlineTimer=setTimeout/,'External HTTP must enforce a wall-clock deadline, not only a socket inactivity timeout');
+assert.match(safeHttpSource,/res\.on\('aborted'/,'External HTTP must keep the deadline/error path active through response-body completion');
 assert.match(safeHttpSource,/clearHardDeadline/,'External HTTP must clear its hard deadline timer after completion or failure');
 assert.doesNotMatch(safeHttpSource,/req\.setTimeout\(/,'External HTTP must not rely on ClientRequest inactivity timeout as its total deadline');
+assert.doesNotMatch(safeHttpSource,/req\.on\('close',clearHardDeadline\)/,'Request close must not disarm the response-body deadline early');
 assert.match(jobsSource,/r\.job_id=j\.id/,'Disabled-account reservation cleanup must be tied to the owning job');
 assert.match(jobsSource,/j\.status<>'processing'/,'Disabled-account cleanup must preserve live reservations until in-flight jobs finish');
 assert.doesNotMatch(audioSource,/V1 transcription limit/,'User-facing errors must not expose internal V1 naming');
