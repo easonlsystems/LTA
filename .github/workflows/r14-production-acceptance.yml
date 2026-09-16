@@ -1,0 +1,40 @@
+name: R14 production acceptance
+
+on:
+  push:
+    branches: ["verify/r14-production-20260917"]
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify production homepage and runtime gate
+        shell: bash
+        env:
+          BASE_URL: https://api-production-0383e.up.railway.app
+        run: |
+          set -euo pipefail
+          health="$(curl -fsS --retry 4 --retry-all-errors --retry-delay 2 "$BASE_URL/healthz")"
+          printf '%s' "$health" | grep -q '"ok":true'
+
+          ready="$(curl -fsS --retry 4 --retry-all-errors --retry-delay 2 "$BASE_URL/readyz")"
+          printf '%s' "$ready" | grep -q '"ok":true'
+
+          home="$(curl -fsS --retry 4 --retry-all-errors --retry-delay 2 "$BASE_URL/")"
+          printf '%s' "$home" | grep -q 'home.js?v=20260917-r14'
+          printf '%s' "$home" | grep -q 'Reddit · paused'
+          printf '%s' "$home" | grep -q 'Reddit · temporarily paused.'
+          if printf '%s' "$home" | grep -q 'Summarize this Reddit thread.'; then
+            echo 'Homepage still advertises an active Reddit success use case without credentials.' >&2
+            exit 1
+          fi
+
+          js="$(curl -fsS --retry 4 --retry-all-errors --retry-delay 2 "$BASE_URL/home.js?v=20260917-r14")"
+          printf '%s' "$js" | grep -q 'const redditAvailable=false;'
+          printf '%s' "$js" | grep -q "state.source==='reddit'&&!redditAvailable"
+          printf '%s' "$js" | grep -q 'Approved OAuth access required'
+          echo 'R14 production acceptance passed.'
