@@ -32,6 +32,11 @@ jobs:
           s=s.replace("transform(v => ['1','true','yes','on'].includes((v ?? '').toLowerCase()))", "transform((v:string|undefined) => ['1','true','yes','on'].includes((v ?? '').toLowerCase()))")
           s=s.replace("transform((v,ctx)=>{", "transform((v:string,ctx:any)=>{")
           p.write_text(s,encoding='utf-8')
+
+          p=Path('test/mcp-smoke.mjs')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace("  assert.match(get_video_transcript_desc,/Reddit/i,'Description must advertise Reddit post support');", "  assert.doesNotMatch(get_video_transcript_desc,/Reddit/i,'Without approved Reddit OAuth credentials, MCP must not advertise Reddit as live');\n  assert.doesNotMatch(listed.result.tools[0].description,/Reddit/i,'Primary tool must also hide unavailable Reddit support');")
+          p.write_text(s,encoding='utf-8')
           PY
 
       - name: Install dependencies
