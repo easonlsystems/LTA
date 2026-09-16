@@ -49,10 +49,9 @@ export async function processJob(job:JobRow):Promise<void>{
   try{
     let parsed=parseMediaUrl(job.normalized_url);
     if(parsed.platform==='reddit'&&parsed.canonicalMediaId.startsWith('share_')){
-      const shareKey=parsed.canonicalMediaId;
       parsed=await resolveRedditSharePost(parsed);
       await setJobMetadata(job.id,parsed.canonicalMediaId,0);
-      logEvent('reddit_share_resolved',{job_id:job.id,platform:'reddit',share_key:shareKey,canonical_media_id:parsed.canonicalMediaId});
+      logEvent('reddit_share_resolved',{job_id:job.id,platform:'reddit',canonical_media_id:parsed.canonicalMediaId});
     }
 
     if(parsed.kind!=='media'){

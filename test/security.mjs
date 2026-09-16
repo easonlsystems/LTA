@@ -31,4 +31,12 @@ assert.notEqual(otpHash,auth.founderStepUpChallengeHash('00000000-0000-4000-8000
 assert.notEqual(otpHash,auth.founderStepUpChallengeHash('00000000-0000-4000-8000-000000000002',sessionCookie,'123456'),'founder OTP must be bound to the founder user');
 assert.notEqual(otpHash,auth.founderStepUpChallengeHash('00000000-0000-4000-8000-000000000001',sessionCookie,'654321'),'different OTP codes must hash differently');
 assert.equal(auth.founderStepUpChallengeHash('00000000-0000-4000-8000-000000000001',undefined,'123456'),null,'founder OTP must not work without a session');
+
+const publicUrl=await import('../dist/src/config/publicUrl.js');
+assert.equal(publicUrl.browserSameOriginOk({host:'live.example',origin:'https://live.example'},'https://configured.example',true),true,'browser origin should match the actual serving host, not a stale configured base URL');
+assert.equal(publicUrl.browserSameOriginOk({host:'live.example',origin:'https://evil.example'},'https://configured.example',true),false,'cross-site origin must be rejected');
+assert.equal(publicUrl.browserSameOriginOk({host:'live.example',origin:'null'},'https://configured.example',true),false,'opaque null origin must be rejected');
+assert.equal(publicUrl.browserSameOriginOk({host:'live.example','sec-fetch-site':'same-origin'},'https://configured.example',true),true,'same-origin Fetch Metadata may safely cover a suppressed Origin/Referer when CSRF is also required');
+assert.equal(publicUrl.browserSameOriginOk({host:'live.example','sec-fetch-site':'cross-site'},'https://configured.example',true),false,'cross-site Fetch Metadata must be rejected');
+assert.equal(publicUrl.browserSameOriginOk({host:'live.example',referer:'https://live.example/founder'},'https://configured.example',true),true,'same-host referer fallback should be accepted');
 console.log('security tests PASS');

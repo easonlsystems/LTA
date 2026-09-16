@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { env } from '../config/env.js';
+import { browserSameOriginOk } from '../config/publicUrl.js';
 import { Link2AIError } from '../util/errors.js';
 import {
   beginEmailLogin, beginGuestLogin, createAuthorizationCode, csrfTokenFromSessionCookie, exchangeAuthorizationCode, exchangeRefreshToken,
@@ -94,13 +95,7 @@ function loginFlowCookie(value:string,maxAge:number):string{
 }
 
 function browserPostOriginOk(headers:Record<string,string|string[]|undefined>):boolean{
-  let expected:string;
-  try{expected=new URL(env().PUBLIC_BASE_URL).origin;}catch{return false;}
-  const origin=Array.isArray(headers.origin)?headers.origin[0]:headers.origin;
-  if(origin)return origin===expected;
-  const referer=Array.isArray(headers.referer)?headers.referer[0]:headers.referer;
-  if(!referer)return false;
-  try{return new URL(referer).origin===expected;}catch{return false;}
+  return browserSameOriginOk(headers,env().PUBLIC_BASE_URL,env().NODE_ENV==='production');
 }
 
 function rejectCrossSiteBrowserPost(req:{headers:Record<string,string|string[]|undefined>},reply:FastifyReply):boolean{

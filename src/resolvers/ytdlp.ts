@@ -185,7 +185,7 @@ export class YtDlpResolver implements MediaResolver {
     const stat = await fs.stat(fullPath);
     if (stat.size > env().MAX_DOWNLOAD_BYTES) {
       await fs.rm(fullPath, { force: true });
-      throw new Link2AIError('DOWNLOAD_TOO_LARGE', 'The extracted audio exceeds the V1 safety limit.', 413);
+      throw new Link2AIError('DOWNLOAD_TOO_LARGE', 'The extracted audio exceeds the transcription safety limit.', 413);
     }
     return fullPath;
   }

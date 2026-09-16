@@ -20,6 +20,6 @@ assert.ok(resolveIndex>=0,'Worker must resolve Reddit share URLs');
 assert.ok(nonMediaIndex>resolveIndex,'Worker must resolve the share URL before entering the text extraction path');
 assert.ok(firstQuotaIndex>resolveIndex,'Worker must resolve the canonical Reddit post before quota reservation');
 assert.match(processorSource,/findUserCompletedCache\(job\.user_id,job\.platform,parsed\.canonicalMediaId\)/,'Worker must re-check the user cache with the resolved post id');
-assert.doesNotMatch(processorSource,/share_url:/,'Opaque Reddit share URLs must not be written to structured logs');
+assert.doesNotMatch(processorSource,/share_url:|share_key:/,'Opaque Reddit share identifiers must not be written to structured logs');
 
 console.log('reddit share schema tests PASS');

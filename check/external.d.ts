@@ -24,3 +24,4 @@ declare module 'pg' {
   export class Pool { constructor(opts?:any); query<T=any>(text:string, params?:any[]):Promise<QueryResult<T>>; connect():Promise<PoolClient>; end():Promise<void>; }
   const pg:{Pool:typeof Pool}; export default pg;
 }
+declare module 'pdfjs-dist/legacy/build/pdf.mjs' { export const getDocument:any; }

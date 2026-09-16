@@ -43,12 +43,14 @@ try{
   assert.equal(listed.result.tools[1].annotations.readOnlyHint,true);
   assert.equal(listed.result.tools[2].annotations.readOnlyHint,true);
 
-  // Assertions for new guidance: do not call merely because URL is present
+  // Assertions for the production selection contract: use Link2AI when the user's
+  // question actually depends on supported link contents, while avoiding unrelated URLs.
   const get_video_transcript_desc=listed.result.tools[0].description;
-  assert.match(get_video_transcript_desc,/do not.*merely.*URL/i,'Description must warn against calling solely because URL is present');
-  assert.match(get_video_transcript_desc,/sufficient access/i,'Description must reference needing sufficient access to content');
+  assert.match(get_video_transcript_desc,/request depends on reading or analyzing the contents of a supported public link/i,'Description must tell Claude when Link2AI is the relevant reader');
+  assert.match(get_video_transcript_desc,/load\/call Link2AI rather than assuming the link is inaccessible/i,'Description must prefer Link2AI when supported source content is required');
+  assert.match(get_video_transcript_desc,/Do not use it for unrelated URLs/i,'Description must still reject unrelated URL use');
   assert.match(get_video_transcript_desc,/Reddit/i,'Description must advertise Reddit post support');
-  
+
   // Assertion for explicit opt-out wording
   assert.match(get_video_transcript_desc,/explicitly.*(?:request|requests).*NOT.*(?:use|call)|(?:user|user's).*explicitly.*(?:avoid|not|don't).*(?:fetch|external)/i,'Description must respect explicit user request not to use the tool');
 

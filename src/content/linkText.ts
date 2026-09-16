@@ -193,6 +193,27 @@ async function safeJson(url:string,description:string,maxBytes=API_MAX_BYTES):Pr
   catch{throw new Link2AIError('EXTRACTION_FAILED',`${description} returned malformed JSON.`,502,true);}
 }
 
+
+async function safeJsonArrayPages(url:string,description:string,maxItems:number):Promise<{items:unknown[];truncated:boolean}>{
+  const items:unknown[]=[];
+  const perPage=100;
+  let page=1;
+  let truncated=false;
+  while(items.length<maxItems){
+    const u=new URL(url);
+    u.searchParams.set('per_page',String(perPage));
+    u.searchParams.set('page',String(page));
+    const value=await safeJson(u.toString(),description);
+    if(!Array.isArray(value))throw new Link2AIError('EXTRACTION_FAILED',`${description} returned an invalid list.`,502,true);
+    const remaining=maxItems-items.length;
+    items.push(...value.slice(0,remaining));
+    if(value.length<perPage)break;
+    if(items.length>=maxItems){truncated=true;break;}
+    page++;
+  }
+  return {items,truncated};
+}
+
 function isoTimestamp(value:unknown):string{
   if(typeof value!=='string'||!value.trim())return '';
   const time=Date.parse(value);return Number.isFinite(time)?new Date(time).toISOString():'';
@@ -224,7 +245,7 @@ async function fetchBlueskyPost(input:ParsedMediaUrl):Promise<LinkTextPayload>{
   return parseBlueskyThread(input,data);
 }
 
-export function parseGitHubDiscussion(input:ParsedMediaUrl,itemValue:unknown,commentsValue:unknown,reviewsValue:unknown=[],diff=''):LinkTextPayload{
+export function parseGitHubDiscussion(input:ParsedMediaUrl,itemValue:unknown,commentsValue:unknown,reviewsValue:unknown=[],diff='',sourceTruncated=false):LinkTextPayload{
   const item=jsonObject(itemValue);if(!item)throw new Link2AIError('EXTRACTION_FAILED','GitHub returned invalid issue metadata.',502,true);
   const repo=input.canonicalMediaId.split('/').slice(0,2).join('/');const isPr=input.canonicalMediaId.includes('/pull/');
   const user=jsonObject(item.user);const labels=Array.isArray(item.labels)?item.labels.map(v=>jsonString(jsonObject(v)?.name)).filter(Boolean).slice(0,20):[];
@@ -242,17 +263,23 @@ export function parseGitHubDiscussion(input:ParsedMediaUrl,itemValue:unknown,com
   const beforeDiff=cleanText(sections.filter(Boolean).join('\n\n'),Number.MAX_SAFE_INTEGER);const diffBudget=Math.max(0,maxChars-beforeDiff.length-40);const cleanedDiff=isPr?cleanText(diff,diffBudget):'';
   if(cleanedDiff)sections.push(`Pull request diff (bounded, lowest priority):\n${cleanedDiff}`);
   const diffTruncated=isPr&&cleanText(diff,Number.MAX_SAFE_INTEGER).length>cleanedDiff.length;const rawText=cleanText(sections.filter(Boolean).join('\n\n'),maxChars);
-  const title=jsonString(item.title);return complete({platform:'github',canonicalMediaId:input.canonicalMediaId,sourceUrl:jsonString(item.html_url)||input.normalizedUrl,title:clipExternalText(title,METADATA_LIMITS.title),creator:clipExternalText(jsonString(user?.login),METADATA_LIMITS.creator),caption:clipExternalText(jsonString(item.body),METADATA_LIMITS.description),language:'und',text:rawText,source:'post'},isPr?'github_pr':'github_issue',{itemsAvailable:allDiscussion.length,itemsExtracted:discussions.length,truncated:allDiscussion.length>discussions.length||diffTruncated,contentSectionsTruncated:[...(allDiscussion.length>discussions.length?['discussion']:[]),...(diffTruncated?['diff']:[])]});
+  const discussionTruncated=sourceTruncated||allDiscussion.length>discussions.length;
+  const title=jsonString(item.title);return complete({platform:'github',canonicalMediaId:input.canonicalMediaId,sourceUrl:jsonString(item.html_url)||input.normalizedUrl,title:clipExternalText(title,METADATA_LIMITS.title),creator:clipExternalText(jsonString(user?.login),METADATA_LIMITS.creator),caption:clipExternalText(jsonString(item.body),METADATA_LIMITS.description),language:'und',text:rawText,source:'post'},isPr?'github_pr':'github_issue',{itemsAvailable:allDiscussion.length,itemsExtracted:discussions.length,truncated:discussionTruncated||diffTruncated,contentSectionsTruncated:[...(discussionTruncated?['discussion']:[]),...(diffTruncated?['diff']:[])]});
 }
 
 async function fetchGitHubDiscussion(input:ParsedMediaUrl):Promise<LinkTextPayload>{
   const [owner,repo,type,number]=input.canonicalMediaId.split('/');const apiBase=`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
   const isPr=type==='pull';
   const item=await safeJson(`${apiBase}/${isPr?'pulls':'issues'}/${number}`,'GitHub');
-  const comments=await safeJson(`${apiBase}/issues/${number}/comments?per_page=100`,'GitHub');
-  const reviews=isPr?await safeJson(`${apiBase}/pulls/${number}/reviews?per_page=100`,'GitHub'):[];
+  const maxItems=EXTRACTION_LIMITS[isPr?'github_pr':'github_issue'].hardItems;
+  const commentsPage=await safeJsonArrayPages(`${apiBase}/issues/${number}/comments`,'GitHub comments',maxItems);
+  const reviewsPage=isPr?await safeJsonArrayPages(`${apiBase}/pulls/${number}/reviews`,'GitHub reviews',maxItems):{items:[] as unknown[],truncated:false};
+  const combined=[...commentsPage.items,...reviewsPage.items]
+    .sort((a,b)=>Date.parse(jsonString(jsonObject(a)?.created_at)||jsonString(jsonObject(a)?.submitted_at)||'')-Date.parse(jsonString(jsonObject(b)?.created_at)||jsonString(jsonObject(b)?.submitted_at)||''))
+    .slice(0,maxItems);
+  const sourceTruncated=commentsPage.truncated||reviewsPage.truncated||(commentsPage.items.length+reviewsPage.items.length)>maxItems;
   let diff='';if(isPr){const response=await safeGetBuffer(`${apiBase}/pulls/${number}`,{maxBytes:5_000_000,timeoutMs:15_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/vnd.github.v3.diff'});diff=response.bytes.toString('utf8');}
-  return parseGitHubDiscussion(input,item,comments,reviews,diff);
+  return parseGitHubDiscussion(input,item,combined,[],diff,sourceTruncated);
 }
 
 type HnRendered={lines:string[];count:number};

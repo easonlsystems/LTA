@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import net from 'node:net';
+import http from 'node:http';
 
 const probe=net.createServer();
 await new Promise((resolve,reject)=>probe.once('error',reject).listen(0,'127.0.0.1',resolve));
@@ -8,6 +9,17 @@ const address=probe.address();
 assert.ok(address&&typeof address==='object');
 const port=address.port;
 await new Promise(resolve=>probe.close(resolve));
+
+async function rawPost(path,headers,body){
+  return await new Promise((resolve,reject)=>{
+    const request=http.request({host:'127.0.0.1',port,path,method:'POST',headers:{...headers,'content-length':Buffer.byteLength(body)}},response=>{
+      response.resume();
+      response.on('end',()=>resolve({status:response.statusCode??0,headers:response.headers}));
+    });
+    request.on('error',reject);
+    request.end(body);
+  });
+}
 
 const child=spawn(process.execPath,['dist/src/api/main.js'],{
   env:{...process.env,NODE_ENV:'production',PORT:String(port),DATABASE_URL:'postgres://127.0.0.1:1/link2ai',PUBLIC_BASE_URL:'https://link2ai.example',PUBLIC_BRAND_NAME:'LaunchBrand',APP_SECRET:'01234567890123456789012345678901',LEMONSQUEEZY_API_KEY:'lemon-secret-must-not-render',RESEND_API_KEY:'resend-secret-must-not-render',OPENAI_APPS_CHALLENGE:'review-challenge-token',REVIEWER_EMAIL:'reviewer@example.com',REVIEWER_PASSWORD:'this-is-a-long-review-password',FOUNDER_EMAIL:'founder@example.com'},
@@ -37,7 +49,7 @@ try{
     const body=await page.text();
     assert.match(body,/LaunchBrand/);
     if(route==='/'){assert.match(body,/AI is smart\./);assert.match(body,/Until you give it a link\./);assert.match(body,/Try Link2AI free/);assert.match(body,/10 processing units · No card required · Failed reads cost 0/);assert.match(body,/Without Link2AI/);assert.match(body,/With Link2AI/);assert.match(body,/More than video links\./);assert.match(body,/Paste the link normally/);assert.match(body,/Try the link your AI just failed to read\./);assert.match(body,/No fixed link-count limit/);assert.match(body,/A product by Eason Systems/);assert.doesNotMatch(body,/V2 · public links → readable source context/);}
-    if(route==='/connect'){assert.match(body,/Open Claude setup/);assert.match(body,/href=\"\/connect\/start\"/);assert.match(body,/target=\"_blank\"/);assert.match(body,/Email account/);}
+    if(route==='/connect'){assert.match(body,/Open Claude Connectors Directory/);assert.match(body,/href=\"\/connect\/start\"/);assert.match(body,/target=\"_blank\"/);assert.match(body,/Always available/);assert.doesNotMatch(body,/Add custom connector|Tools already loaded|Register automatically/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }
 
@@ -48,9 +60,7 @@ try{
   const connectStart=await fetch(`http://127.0.0.1:${port}/connect/start`,{headers:{host:'link2ai.example'},redirect:'manual'});
   assert.equal(connectStart.status,302);
   const connectLocation=connectStart.headers.get('location')??'';
-  assert.match(connectLocation,/^https:\/\/claude\.ai\/customize\/connectors\?/);
-  assert.match(connectLocation,/connectorName=LaunchBrand/);
-  assert.match(connectLocation,/connectorUrl=https%3A%2F%2Flink2ai\.example%2Fmcp/);
+  assert.equal(connectLocation,'https://claude.ai/directory');
 
   const analyticsWrite=await fetch(`http://127.0.0.1:${port}/api/analytics/event`,{
     method:'POST',headers:{host:'link2ai.example','content-type':'application/json'},body:'{"event":"connect_install_click"}'
@@ -64,6 +74,14 @@ try{
     redirect:'manual'
   });
   assert.equal(crossSiteLogin.status,403,'browser auth POSTs must reject cross-site origins before touching account state');
+
+  // node:fetch intentionally overwrites the Host header, so use node:http here to
+  // exercise the real serving-host check instead of accidentally testing 127.0.0.1.
+  const sameHostLogin=await rawPost('/auth/password/login',{
+    host:'link2ai.example',origin:'https://link2ai.example','content-type':'application/x-www-form-urlencoded'
+  },'email=x%40example.com&password=not-a-real-password&return_to=%2Faccount');
+  assert.notEqual(sameHostLogin.status,403,'same-host browser POSTs must not be rejected because PUBLIC_BASE_URL differs from the serving host');
+
 
   const founder=await fetch(`http://127.0.0.1:${port}/founder`,{headers:{host:'link2ai.example'},redirect:'manual'});
   assert.equal(founder.status,404,'signed-out /founder must not disclose the private admin surface');
