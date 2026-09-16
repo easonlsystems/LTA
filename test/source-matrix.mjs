@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {parseMediaUrl} from '../dist/src/media/url.js';
-import {isPublicAddress,orderPublicAddresses} from '../dist/src/util/safeHttp.js';
+import {isPublicAddress,orderPublicAddresses,pinnedLookup} from '../dist/src/util/safeHttp.js';
 import {textUsageUnits,videoUsageUnits,estimateTokens} from '../dist/src/content/limits.js';
 
 const cases=[
@@ -55,6 +55,9 @@ for(const privateIp of ['127.0.0.1','10.0.0.1','172.16.0.1','192.168.1.1','169.2
 for(const publicIp of ['1.1.1.1','8.8.8.8','2606:4700:4700::1111'])assert.equal(isPublicAddress(publicIp),true,`${publicIp} should be public`);
 const ordered=orderPublicAddresses([{address:'2606:4700:4700::1111',family:6},{address:'1.1.1.1',family:4}]);
 assert.equal(ordered[0].family,4,'IPv4 should be preferred in current Railway environment');
+const lookup=pinnedLookup('1.1.1.1',4);
+await new Promise((resolve,reject)=>lookup('example.com',{all:true},(err,addresses)=>{try{assert.ifError(err);assert.deepEqual(addresses,[{address:'1.1.1.1',family:4}]);resolve();}catch(e){reject(e);}}));
+await new Promise((resolve,reject)=>lookup('example.com',{all:false},(err,address,family)=>{try{assert.ifError(err);assert.equal(address,'1.1.1.1');assert.equal(family,4);resolve();}catch(e){reject(e);}}));
 
 assert.equal(videoUsageUnits(1),1);
 assert.equal(videoUsageUnits(60),1);

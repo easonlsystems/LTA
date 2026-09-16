@@ -48,12 +48,12 @@ try{
     assert.equal(page.status,200,`${route} should return 200`);
     const body=await page.text();
     assert.match(body,/LaunchBrand/);
-    if(route==='/'){assert.match(body,/Paste a link\./);assert.match(body,/Claude can read it\./);assert.match(body,/Interactive demo · Claude-first beta/);assert.match(body,/Run comparison/);assert.match(body,/src="\/home\.js\?v=20260917" defer/);assert.match(body,/Same AI\. Same link\./);assert.match(body,/What do you want Claude to read\?/);assert.match(body,/Ask the question you already wanted to ask\./);assert.match(body,/Same link\. Real result\./);assert.match(body,/No synthetic testimonials\./);assert.match(body,/500 processing units \/ month/);assert.match(body,/2,000 processing units \/ month/);assert.match(body,/No fixed link-count limit/);assert.match(body,/Try the link Claude just failed to read\./);assert.match(body,/Built by Eason Systems/);assert.doesNotMatch(body,/V2 · public links → readable source context/);}
+    if(route==='/'){assert.match(body,/Paste a link\./);assert.match(body,/Claude can read it\./);assert.match(body,/Interactive demo · Claude-first beta/);assert.match(body,/Run comparison/);assert.match(body,/src="\/home\.js\?v=20260917-r13" defer/);assert.match(body,/Same AI\. Same link\./);assert.match(body,/What do you want Claude to read\?/);assert.match(body,/Ask the question you already wanted to ask\./);assert.match(body,/Same link\. Real result\./);assert.match(body,/No synthetic testimonials\./);assert.match(body,/500 processing units \/ month/);assert.match(body,/2,000 processing units \/ month/);assert.match(body,/No fixed link-count limit/);assert.match(body,/Try the link Claude just failed to read\./);assert.match(body,/Built by Eason Systems/);assert.doesNotMatch(body,/V2 · public links → readable source context/);}
     if(route==='/connect'){assert.match(body,/Open Claude Connectors Directory/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Always available/);assert.doesNotMatch(body,/Add custom connector|Tools already loaded|Register automatically/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }
 
-  const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917`,{headers:{host:'link2ai.example'}});
+  const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917-r13`,{headers:{host:'link2ai.example'}});
   assert.equal(homeJsResponse.status,200,'homepage JS endpoint must return 200');
   assert.match(homeJsResponse.headers.get('content-type')??'',/javascript/);
   const homeJs=await homeJsResponse.text();
@@ -93,19 +93,49 @@ try{
     },
     getElementById(id){return ids[id]??null;}
   };
-  const fakeWindow={matchMedia:()=>({matches:true})};
-  let timerId=0;
-  const immediateTimer=(fn)=>{fn();return ++timerId;};
-  assert.doesNotThrow(()=>new Function('document','window','setTimeout','clearTimeout',homeJs)(fakeDocument,fakeWindow,immediateTimer,()=>{}),'homepage interaction JS must execute');
-  assert.equal(ids['sim-left-state'].textContent,'Blocked','simulation autoplay must reach blocked state without Link2AI');
-  assert.equal(ids['sim-right-state'].textContent,'Source loaded','simulation autoplay must reach loaded state with Link2AI');
-  assert.equal(ids['sim-conclusion'].hidden,false,'simulation conclusion must reveal');
-  assert.ok(ids['sim-right-answer'].classList.contains('show'),'simulation answer must reveal');
-  simTabs[1].listeners.click();
-  assert.match(ids['sim-url'].textContent,/youtube\.com/,'source tabs must switch the simulation content');
+  const fakeWindow={matchMedia:()=>({matches:false})};
+  let nextTimerId=1;
+  const timers=new Map();
+  const queuedTimer=(fn,ms)=>{const id=nextTimerId++;timers.set(id,{fn,ms});return id;};
+  const queuedClear=(id)=>{timers.delete(id);};
+  const runNextTimer=()=>{const entry=[...timers.entries()].sort((a,b)=>a[1].ms-b[1].ms||a[0]-b[0])[0];if(!entry)return false;timers.delete(entry[0]);entry[1].fn();return true;};
+  const runAllTimers=()=>{let guard=0;while(runNextTimer()){if(++guard>100)throw new Error('timer loop');}};
+  assert.doesNotThrow(()=>new Function('document','window','setTimeout','clearTimeout',homeJs)(fakeDocument,fakeWindow,queuedTimer,queuedClear),'homepage interaction JS must execute');
+  // Autoplay is queued, not magically completed. User Reset must cancel it.
+  assert.equal(ids['sim-left-state'].textContent,'','simulation should not jump ahead before timers run');
   ids['sim-reset'].listeners.click();
-  assert.equal(ids['sim-left-state'].textContent,'Ready','Reset must restore left state');
-  assert.equal(ids['sim-right-state'].textContent,'Ready','Reset must restore right state');
+  runAllTimers();
+  assert.equal(ids['sim-left-state'].textContent,'Ready','Reset must cancel queued autoplay and keep left Ready');
+  assert.equal(ids['sim-right-state'].textContent,'Ready','Reset must cancel queued autoplay and keep right Ready');
+  // A real Run should survive the previous Reset and complete every stage.
+  ids['sim-run'].listeners.click();
+  assert.equal(ids['sim-left-state'].textContent,'Trying source');
+  assert.equal(ids['sim-right-state'].textContent,'Starting');
+  assert.ok(runNextTimer(),'first staged timer should exist');
+  assert.equal(ids['sim-right-state'].textContent,'Reading');
+  // Reset in the middle of a run must invalidate every stale callback.
+  ids['sim-reset'].listeners.click();
+  runAllTimers();
+  assert.equal(ids['sim-left-state'].textContent,'Ready','mid-run Reset must defeat stale left callbacks');
+  assert.equal(ids['sim-right-state'].textContent,'Ready','mid-run Reset must defeat stale right callbacks');
+  assert.equal(ids['sim-conclusion'].hidden,true,'mid-run Reset must keep conclusion hidden');
+  // Run again after Reset and complete the whole comparison.
+  ids['sim-run'].listeners.click();
+  runAllTimers();
+  assert.equal(ids['sim-left-state'].textContent,'Blocked','rerun after Reset must reach blocked state');
+  assert.equal(ids['sim-right-state'].textContent,'Source loaded','rerun after Reset must reach loaded state');
+  assert.equal(ids['sim-conclusion'].hidden,false,'rerun after Reset must reveal conclusion');
+  assert.ok(ids['sim-right-answer'].classList.contains('show'),'rerun after Reset must reveal the answer');
+  // Switching source during a run must invalidate old-source callbacks.
+  ids['sim-run'].listeners.click();
+  assert.ok(runNextTimer());
+  simTabs[2].listeners.click();
+  runAllTimers();
+  assert.match(ids['sim-url'].textContent,/github\.com/,'source tabs must switch simulation content');
+  assert.equal(ids['sim-right-state'].textContent,'Source loaded','new source run must complete without stale timers');
+  ids['sim-reset'].listeners.click();
+  assert.equal(ids['sim-left-state'].textContent,'Ready','final Reset must restore left state');
+  assert.equal(ids['sim-right-state'].textContent,'Ready','final Reset must restore right state');
   assert.match(ids['sim-tool'].innerHTML,/Reading source/,'Reset must restore the tool card before another run');
 
   const start=await fetch(`http://127.0.0.1:${port}/start?from=hero`,{headers:{host:'link2ai.example'},redirect:'manual'});

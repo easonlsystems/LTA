@@ -10,8 +10,8 @@ const [urlSource,linkSource,processorSource]=await Promise.all([
 assert.match(urlSource,/parts\[0\]==='r'&&parts\[2\]==='s'/,'Reddit subreddit /s/ share URLs must be recognized');
 assert.match(urlSource,/parts\[0\]==='s'&&parts\.length===2/,'Direct reddit.com\/s\/ share URLs must be recognized');
 assert.match(urlSource,/canonicalMediaId:`share_\$\{sha256\(normalizedUrl\)\.slice\(0,24\)\}`/,'Opaque share tokens must use a temporary non-post cache key');
-assert.match(linkSource,/export async function resolveRedditSharePost/,'Reddit share URLs need a network canonicalization step');
-assert.match(linkSource,/resolveRedditShareCandidate/,'Reddit share resolver must validate the canonical candidate');
+assert.match(linkSource,/export async function resolveRedditSharePost/,'Reddit share URLs need an explicit pre-quota handling step');
+assert.match(linkSource,/reddit_opaque_share_url/,'Opaque Reddit share URLs must fail clearly without scraping around access controls');
 
 const resolveIndex=processorSource.indexOf("parsed=await resolveRedditSharePost(parsed)");
 const nonMediaIndex=processorSource.indexOf("if(parsed.kind!=='media')");

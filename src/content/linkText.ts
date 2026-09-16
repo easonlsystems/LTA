@@ -1,6 +1,7 @@
 import { safeGetBuffer } from '../util/safeHttp.js';
 import { runProcess } from '../util/process.js';
 import { Link2AIError } from '../util/errors.js';
+import { env } from '../config/env.js';
 import { clipExternalText, METADATA_LIMITS } from '../media/text.js';
 import { parseMediaUrl, type ParsedMediaUrl } from '../media/url.js';
 import { boundExtractedText, EXTRACTION_LIMITS, type CompletenessMetadata, type TextContentClass } from './limits.js';
@@ -63,11 +64,14 @@ export function resolveRedditShareCandidate(input:ParsedMediaUrl,finalUrl:string
 
 export async function resolveRedditSharePost(input:ParsedMediaUrl):Promise<ParsedMediaUrl>{
   if(input.platform!=='reddit'||!input.canonicalMediaId.startsWith('share_'))return input;
-  const response=await safeGetBuffer(input.normalizedUrl,{
-    maxBytes:PAGE_MAX_BYTES,timeoutMs:15_000,maxRedirects:5,userAgent:BROWSER_UA,
-    accept:'text/html,application/xhtml+xml;q=0.9,*/*;q=0.2'
-  });
-  return resolveRedditShareCandidate(input,response.finalUrl,response.bytes.toString('utf8'));
+  // Opaque /s/ tokens are not Reddit post IDs and the approved Data API does not
+  // provide a supported token-to-post lookup. Do not scrape/impersonate around that
+  // boundary: ask for the canonical /comments/<post_id>/ URL instead.
+  throw new Link2AIError(
+    'UNSUPPORTED_URL',
+    'This Reddit share URL is opaque. Open the post and use its canonical /comments/ URL.',
+    422,false,{cause_code:'reddit_opaque_share_url'}
+  );
 }
 
 function cleanText(value:string,max=PAGE_MAX_CHARS):string{
@@ -416,63 +420,90 @@ export function parseRedditJson(input:ParsedMediaUrl,payload:unknown):LinkTextPa
   },'discussion',{itemsAvailable:numComments,itemsExtracted:comments.length,truncated:numComments!==undefined&&comments.length<numComments,contentSectionsTruncated:numComments!==undefined&&comments.length<numComments?['comments']:undefined});
 }
 
-async function fetchRedditJsonViaBrowserFingerprint(postId:string):Promise<unknown>{
-  // Reddit can reset datacenter/Node TLS connections before an HTTP response exists.
-  // The production image already ships curl_cffi (via yt-dlp[default,curl-cffi]); use
-  // it only as a Reddit-specific transport fallback. Hosts are hard-coded here and the
-  // canonical post id is passed as argv, so this does not become an arbitrary URL fetch.
-  const python=`import json,sys\nfrom curl_cffi import requests\npost_id=sys.argv[1]\nlimit=sys.argv[2]\ndepth=sys.argv[3]\nurls=[\n f\"https://api.reddit.com/comments/{post_id}?raw_json=1&limit={limit}&depth={depth}&sort=top\",\n f\"https://www.reddit.com/comments/{post_id}.json?raw_json=1&limit={limit}&depth={depth}&sort=top\",\n f\"https://old.reddit.com/comments/{post_id}.json?raw_json=1&limit={limit}&depth={depth}&sort=top\"\n]\nheaders={\"accept\":\"application/json,text/plain,*/*\",\"accept-language\":\"en-US,en;q=0.9\",\"cache-control\":\"no-cache\",\"user-agent\":\"Link2AI/1.2 public-link-reader (+https://api-production-0383e.up.railway.app/support)\"}\nlast=\"transport_failed\"\nfor url in urls:\n try:\n  response=requests.get(url,headers=headers,impersonate=\"chrome\",timeout=15,allow_redirects=True)\n  status=int(response.status_code)\n  if 200 <= status < 300:\n   body=response.content\n   if len(body)>3000000:\n    last=\"response_too_large\"\n    continue\n   try:\n    payload=response.json()\n   except Exception:\n    content_type=(response.headers.get(\"content-type\") or \"unknown\").split(\";\",1)[0]\n    safe_type=\"\".join(ch for ch in content_type if ch.isalnum() or ch in \"/+.-\")[:40] or \"unknown\"\n    last=f\"non_json_{status}_{safe_type}\"\n    continue\n   sys.stdout.write(json.dumps(payload,ensure_ascii=False,separators=(\",\",\":\")))\n   raise SystemExit(0)\n  last=f\"http_{status}\"\n except SystemExit:\n  raise\n except Exception as exc:\n  last=type(exc).__name__\nprint(last,file=sys.stderr)\nraise SystemExit(2)\n`;
-  let result;
+type RedditTokenCache={accessToken:string;expiresAt:number};
+let redditTokenCache:RedditTokenCache|undefined;
+
+export function redditOAuthConfigured():boolean{
+  const e=env();
+  return Boolean(e.REDDIT_CLIENT_ID?.trim()&&e.REDDIT_CLIENT_SECRET?.trim());
+}
+
+async function redditAccessToken(force=false):Promise<string>{
+  const e=env();
+  const clientId=e.REDDIT_CLIENT_ID?.trim();
+  const clientSecret=e.REDDIT_CLIENT_SECRET?.trim();
+  if(!clientId||!clientSecret){
+    throw new Link2AIError(
+      'PLATFORM_BLOCKED',
+      'Reddit reads are temporarily unavailable while approved Reddit Data API access is being configured.',
+      503,false,{cause_code:'reddit_oauth_not_configured',transport:'reddit_oauth'}
+    );
+  }
+  if(!force&&redditTokenCache&&redditTokenCache.expiresAt>Date.now()+60_000)return redditTokenCache.accessToken;
+  const auth=Buffer.from(`${clientId}:${clientSecret}`,'utf8').toString('base64');
+  let response:Response;
   try{
-    result=await runProcess('python3',['-c',python,postId,String(REDDIT_MAX_COMMENTS),String(REDDIT_MAX_DEPTH)],{timeoutMs:35_000,maxOutputBytes:3_250_000});
+    response=await fetch('https://www.reddit.com/api/v1/access_token',{
+      method:'POST',
+      headers:{'authorization':`Basic ${auth}`,'content-type':'application/x-www-form-urlencoded','user-agent':e.REDDIT_USER_AGENT},
+      body:'grant_type=client_credentials',
+      signal:AbortSignal.timeout(12_000)
+    });
   }catch(error){
-    throw new Link2AIError('EXTRACTION_FAILED','Reddit browser-transport fallback failed.',502,true,{transport:'curl_cffi',cause_code:error instanceof Error?error.name:'process_error'});
+    throw new Link2AIError('EXTRACTION_FAILED','Reddit OAuth could not be reached.',502,true,{transport:'reddit_oauth',cause_code:error instanceof Error?error.name:'network_error'});
   }
-  if(result.code!==0||!result.stdout.trim()){
-    const token=(result.stderr.trim().split(/\s+/).pop()??'transport_failed').replace(/[^A-Za-z0-9_.-]/g,'').slice(0,80)||'transport_failed';
-    throw new Link2AIError('EXTRACTION_FAILED','Reddit browser-transport fallback did not return a public post response.',502,true,{transport:'curl_cffi',cause_code:token});
+  const body=(await response.text()).slice(0,64_000);
+  if(!response.ok){
+    const retryable=response.status===429||response.status>=500;
+    throw new Link2AIError(
+      response.status===429?'RATE_LIMITED':'PLATFORM_BLOCKED',
+      retryable?'Reddit OAuth is temporarily unavailable.':'Reddit OAuth credentials were rejected or are not approved for this access.',
+      response.status===429?429:503,retryable,{transport:'reddit_oauth',cause_code:`oauth_http_${response.status}`}
+    );
   }
-  try{return JSON.parse(result.stdout);}
-  catch{throw new Link2AIError('EXTRACTION_FAILED','Reddit browser-transport fallback returned malformed JSON.',502,true,{transport:'curl_cffi',cause_code:'invalid_json'});}
+  let payload:any;
+  try{payload=JSON.parse(body);}catch{throw new Link2AIError('EXTRACTION_FAILED','Reddit OAuth returned malformed JSON.',502,true,{transport:'reddit_oauth',cause_code:'oauth_invalid_json'});}
+  const token=typeof payload?.access_token==='string'?payload.access_token:'';
+  const expiresIn=Number(payload?.expires_in??3600);
+  if(!token)throw new Link2AIError('PLATFORM_BLOCKED','Reddit OAuth did not issue an access token.',503,false,{transport:'reddit_oauth',cause_code:'oauth_missing_token'});
+  redditTokenCache={accessToken:token,expiresAt:Date.now()+Math.max(60,Math.min(3600,Number.isFinite(expiresIn)?expiresIn:3600))*1000};
+  return token;
+}
+
+async function redditOAuthJson(postId:string,retry401=true):Promise<unknown>{
+  const token=await redditAccessToken(!retry401);
+  const e=env();
+  const endpoint=`https://oauth.reddit.com/comments/${encodeURIComponent(postId)}?raw_json=1&limit=${REDDIT_MAX_COMMENTS}&depth=${REDDIT_MAX_DEPTH}&sort=top`;
+  let response:Response;
+  try{
+    response=await fetch(endpoint,{headers:{'authorization':`Bearer ${token}`,'accept':'application/json','user-agent':e.REDDIT_USER_AGENT},signal:AbortSignal.timeout(15_000)});
+  }catch(error){
+    throw new Link2AIError('EXTRACTION_FAILED','Reddit Data API could not be reached.',502,true,{transport:'reddit_oauth',cause_code:error instanceof Error?error.name:'network_error'});
+  }
+  if(response.status===401&&retry401){redditTokenCache=undefined;return await redditOAuthJson(postId,false);}
+  if(response.status===404)throw new Link2AIError('MEDIA_NOT_FOUND','This Reddit post was not found or is no longer public.',404,false,{transport:'reddit_oauth',cause_code:'reddit_http_404'});
+  if(response.status===403)throw new Link2AIError('PLATFORM_BLOCKED','Reddit did not permit this app to access the requested public post.',403,false,{transport:'reddit_oauth',cause_code:'reddit_http_403'});
+  if(response.status===429)throw new Link2AIError('RATE_LIMITED','Reddit rate-limited this request. Try again later.',429,true,{transport:'reddit_oauth',cause_code:'reddit_http_429'});
+  if(!response.ok)throw new Link2AIError('EXTRACTION_FAILED',`Reddit Data API returned HTTP ${response.status}.`,502,response.status>=500,{transport:'reddit_oauth',cause_code:`reddit_http_${response.status}`});
+  const declared=Number(response.headers.get('content-length')??0);
+  if(Number.isFinite(declared)&&declared>API_MAX_BYTES)throw new Link2AIError('EXTRACTION_FAILED','Reddit response exceeded the safe content limit.',502,false,{transport:'reddit_oauth',cause_code:'response_too_large'});
+  const bytes=Buffer.from(await response.arrayBuffer());
+  if(bytes.length>API_MAX_BYTES)throw new Link2AIError('EXTRACTION_FAILED','Reddit response exceeded the safe content limit.',502,false,{transport:'reddit_oauth',cause_code:'response_too_large'});
+  const ct=(response.headers.get('content-type')??'').toLowerCase();
+  if(ct&&!ct.includes('json'))throw new Link2AIError('EXTRACTION_FAILED','Reddit Data API returned a non-JSON response.',502,true,{transport:'reddit_oauth',cause_code:`non_json_${response.status}`});
+  try{return JSON.parse(bytes.toString('utf8'));}
+  catch{throw new Link2AIError('EXTRACTION_FAILED','Reddit Data API returned malformed JSON.',502,true,{transport:'reddit_oauth',cause_code:'invalid_json'});}
 }
 
 async function fetchRedditPost(input:ParsedMediaUrl):Promise<LinkTextPayload>{
-  const id=encodeURIComponent(input.canonicalMediaId);
-  const endpoints=[
-    `https://www.reddit.com/comments/${id}.json?raw_json=1&limit=${REDDIT_MAX_COMMENTS}&depth=${REDDIT_MAX_DEPTH}&sort=top`,
-    `https://old.reddit.com/comments/${id}.json?raw_json=1&limit=${REDDIT_MAX_COMMENTS}&depth=${REDDIT_MAX_DEPTH}&sort=top`
-  ];
-  let lastError:unknown;
-  for(const endpoint of endpoints){
-    try{
-      const response=await safeGetBuffer(endpoint,{maxBytes:3_000_000,timeoutMs:15_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/json,text/json;q=0.9'});
-      const ct=(response.contentType??'').toLowerCase();
-      if(ct&&!ct.includes('json')&&!ct.includes('javascript')&&!ct.includes('text/plain'))throw new Link2AIError('EXTRACTION_FAILED','Reddit returned a non-JSON response.',502,true);
-      let data:unknown;
-      try{data=JSON.parse(response.bytes.toString('utf8'));}
-      catch{throw new Link2AIError('EXTRACTION_FAILED','Reddit returned invalid public-post JSON.',502,true);}
-      return parseRedditJson(input,data);
-    }catch(error){lastError=error;}
+  if(!redditOAuthConfigured()){
+    throw new Link2AIError(
+      'PLATFORM_BLOCKED',
+      'Reddit reads are temporarily unavailable while approved Reddit Data API access is being configured.',
+      503,false,{cause_code:'reddit_oauth_not_configured',transport:'reddit_oauth'}
+    );
   }
-  // If Reddit resets Node/datacenter TLS before sending any HTTP response, retry with
-  // curl_cffi's browser TLS fingerprint. This is still bounded to hard-coded Reddit
-  // hosts and the already-validated canonical post id.
-  try{return parseRedditJson(input,await fetchRedditJsonViaBrowserFingerprint(input.canonicalMediaId));}
-  catch(error){lastError=error;}
-
-  // Final fallback for temporary JSON endpoint blocks. It is intentionally text-only;
-  // private/login-gated posts should still fail the minimum-readable-text checks.
-  try{
-    const fallback=await fetchPage({...input,normalizedUrl:`https://old.reddit.com/comments/${id}/`});
-    const lower=fallback.text.toLowerCase();
-    if(lower.includes('private community')||lower.includes('you must be logged in')||lower.includes('log in to continue')){
-      throw new Link2AIError('LOGIN_REQUIRED','This Reddit post requires login or community access.',403,false);
-    }
-    return {...fallback,platform:'reddit',source:'post',canonicalMediaId:input.canonicalMediaId};
-  }catch{
-    if(lastError instanceof Link2AIError)throw lastError;
-    throw new Link2AIError('EXTRACTION_FAILED','Reddit could not expose this public post right now.',502,true);
-  }
+  return parseRedditJson(input,await redditOAuthJson(input.canonicalMediaId));
 }
 
 function collectGalleryCandidates(node:unknown,out:{texts:string[];creators:string[];titles:string[]}):void{
