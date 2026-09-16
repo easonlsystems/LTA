@@ -33,19 +33,25 @@ async function call(body){
 try{
   const initialized=await call({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'audit',version:'1'}}});
   assert.equal(initialized.result.serverInfo.name,'LaunchBrand');
+  assert.match(initialized.result.instructions??'',/use read_public_link before concluding.*inaccessible/i);
+  assert.match(initialized.result.instructions??'',/built-in browser\/fetch attempt fails/i);
 
   const listed=await call({jsonrpc:'2.0',id:2,method:'tools/list',params:{}});
-  assert.deepEqual(listed.result.tools.map(tool=>tool.name),['get_video_transcript','get_transcript_result','get_usage']);
+  assert.deepEqual(listed.result.tools.map(tool=>tool.name),['read_public_link','get_video_transcript','get_transcript_result','get_usage']);
   assert.match(listed.result.tools[0].description,/LaunchBrand/);
-  assert.match(listed.result.tools[1].description,/LaunchBrand/);
+  assert.match(listed.result.tools[0].description,/built-in browser\/fetch fails/i);
+  assert.match(listed.result.tools[0].description,/instead of asking the user to paste/i);
+  assert.match(listed.result.tools[1].description,/Prefer read_public_link/i);
+  assert.match(listed.result.tools[2].description,/LaunchBrand/);
   assert.doesNotMatch(JSON.stringify(listed.result.tools),/\$\{env\(\)/);
   assert.deepEqual(listed.result.tools[0].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true});
-  assert.equal(listed.result.tools[1].annotations.readOnlyHint,true);
+  assert.deepEqual(listed.result.tools[1].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true});
   assert.equal(listed.result.tools[2].annotations.readOnlyHint,true);
+  assert.equal(listed.result.tools[3].annotations.readOnlyHint,true);
 
   // Assertions for the production selection contract: use Link2AI when the user's
   // question actually depends on supported link contents, while avoiding unrelated URLs.
-  const get_video_transcript_desc=listed.result.tools[0].description;
+  const get_video_transcript_desc=listed.result.tools[1].description;
   assert.match(get_video_transcript_desc,/request depends on reading or analyzing the contents of a supported public link/i,'Description must tell Claude when Link2AI is the relevant reader');
   assert.match(get_video_transcript_desc,/load\/call Link2AI rather than assuming the link is inaccessible/i,'Description must prefer Link2AI when supported source content is required');
   assert.match(get_video_transcript_desc,/Do not use it for unrelated URLs/i,'Description must still reject unrelated URL use');

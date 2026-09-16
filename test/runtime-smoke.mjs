@@ -48,10 +48,65 @@ try{
     assert.equal(page.status,200,`${route} should return 200`);
     const body=await page.text();
     assert.match(body,/LaunchBrand/);
-    if(route==='/'){assert.match(body,/Paste a link\./);assert.match(body,/Claude can read it\./);assert.match(body,/Interactive demo · Claude-first beta/);assert.match(body,/Run comparison/);assert.match(body,/Same AI\. Same link\./);assert.match(body,/What do you want Claude to read\?/);assert.match(body,/Ask the question you already wanted to ask\./);assert.match(body,/Same link\. Real result\./);assert.match(body,/No synthetic testimonials\./);assert.match(body,/500 processing units \/ month/);assert.match(body,/2,000 processing units \/ month/);assert.match(body,/No fixed link-count limit/);assert.match(body,/Try the link Claude just failed to read\./);assert.match(body,/Built by Eason Systems/);assert.doesNotMatch(body,/V2 · public links → readable source context/);}
+    if(route==='/'){assert.match(body,/Paste a link\./);assert.match(body,/Claude can read it\./);assert.match(body,/Interactive demo · Claude-first beta/);assert.match(body,/Run comparison/);assert.match(body,/src="\/home\.js\?v=20260917" defer/);assert.match(body,/Same AI\. Same link\./);assert.match(body,/What do you want Claude to read\?/);assert.match(body,/Ask the question you already wanted to ask\./);assert.match(body,/Same link\. Real result\./);assert.match(body,/No synthetic testimonials\./);assert.match(body,/500 processing units \/ month/);assert.match(body,/2,000 processing units \/ month/);assert.match(body,/No fixed link-count limit/);assert.match(body,/Try the link Claude just failed to read\./);assert.match(body,/Built by Eason Systems/);assert.doesNotMatch(body,/V2 · public links → readable source context/);}
     if(route==='/connect'){assert.match(body,/Open Claude Connectors Directory/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Always available/);assert.doesNotMatch(body,/Add custom connector|Tools already loaded|Register automatically/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }
+
+  const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917`,{headers:{host:'link2ai.example'}});
+  assert.equal(homeJsResponse.status,200,'homepage JS endpoint must return 200');
+  assert.match(homeJsResponse.headers.get('content-type')??'',/javascript/);
+  const homeJs=await homeJsResponse.text();
+  assert.doesNotThrow(()=>new Function(homeJs),'homepage interaction JS must parse');
+
+  class FakeClassList{
+    constructor(owner){this.owner=owner;this.values=new Set();}
+    add(...names){names.forEach(name=>this.values.add(name));}
+    remove(...names){names.forEach(name=>this.values.delete(name));}
+    toggle(name,force){const next=force===undefined?!this.values.has(name):Boolean(force);if(next)this.values.add(name);else this.values.delete(name);return next;}
+    contains(name){return this.values.has(name);}
+  }
+  class FakeElement{
+    constructor(id='',dataset={}){this.id=id;this.dataset={...dataset};this.textContent='';this.innerHTML='';this.className='';this.hidden=false;this.listeners={};this.classList=new FakeClassList(this);}
+    addEventListener(name,fn){this.listeners[name]=fn;}
+    scrollIntoView(){}
+  }
+  const ids={};
+  for(const id of ['sim-source-name','sim-url','sim-question-text','sim-left-state','sim-right-state','sim-left-answer','sim-right-answer','sim-tool','sim-conclusion','sim-run','sim-reset','source-preview-label','source-preview-title','source-preview-question','source-mini-result','source-open-sim','usecase-user','usecase-result','simulation'])ids[id]=new FakeElement(id);
+  ids['sim-conclusion'].hidden=true;
+  const simTabs=['reddit','youtube','github','pdf','web'].map(value=>new FakeElement('',{simSource:value}));
+  const sourceButtons=['reddit','youtube','github','x','web','pdf','instagram','tiktok','hn','bluesky'].map(value=>new FakeElement('',{sourceKey:value}));
+  const usecaseButtons=['reddit','youtube','github','research'].map(value=>new FakeElement('',{usecase:value}));
+  const leftLines=[new FakeElement(),new FakeElement(),new FakeElement()];
+  const rightLines=[new FakeElement(),new FakeElement(),new FakeElement()];
+  const fakeDocument={
+    querySelector(selector){if(selector.startsWith('#'))return ids[selector.slice(1)]??null;return null;},
+    querySelectorAll(selector){
+      if(selector==='.sim-tab')return simTabs;
+      if(selector==='.source-button')return sourceButtons;
+      if(selector==='.usecase-option')return usecaseButtons;
+      if(selector==='.reveal')return [];
+      if(selector==='#sim-left-thinking .sim-line')return leftLines;
+      if(selector==='#sim-right-thinking .sim-line')return rightLines;
+      if(selector==='#sim-left-thinking .sim-line,#sim-right-thinking .sim-line')return [...leftLines,...rightLines];
+      return [];
+    },
+    getElementById(id){return ids[id]??null;}
+  };
+  const fakeWindow={matchMedia:()=>({matches:true})};
+  let timerId=0;
+  const immediateTimer=(fn)=>{fn();return ++timerId;};
+  assert.doesNotThrow(()=>new Function('document','window','setTimeout','clearTimeout',homeJs)(fakeDocument,fakeWindow,immediateTimer,()=>{}),'homepage interaction JS must execute');
+  assert.equal(ids['sim-left-state'].textContent,'Blocked','simulation autoplay must reach blocked state without Link2AI');
+  assert.equal(ids['sim-right-state'].textContent,'Source loaded','simulation autoplay must reach loaded state with Link2AI');
+  assert.equal(ids['sim-conclusion'].hidden,false,'simulation conclusion must reveal');
+  assert.ok(ids['sim-right-answer'].classList.contains('show'),'simulation answer must reveal');
+  simTabs[1].listeners.click();
+  assert.match(ids['sim-url'].textContent,/youtube\.com/,'source tabs must switch the simulation content');
+  ids['sim-reset'].listeners.click();
+  assert.equal(ids['sim-left-state'].textContent,'Ready','Reset must restore left state');
+  assert.equal(ids['sim-right-state'].textContent,'Ready','Reset must restore right state');
+  assert.match(ids['sim-tool'].innerHTML,/Reading source/,'Reset must restore the tool card before another run');
 
   const start=await fetch(`http://127.0.0.1:${port}/start?from=hero`,{headers:{host:'link2ai.example'},redirect:'manual'});
   assert.equal(start.status,302);
