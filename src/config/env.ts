@@ -1,14 +1,14 @@
 import { z } from 'zod';
 import { normalizePublicBaseUrl } from './publicUrl.js';
 
-const boolish = z.string().optional().transform(v => ['1','true','yes','on'].includes((v ?? '').toLowerCase()));
+const boolish = z.string().optional().transform((v:string|undefined) => ['1','true','yes','on'].includes((v ?? '').toLowerCase()));
 
 const schema = z.object({
   NODE_ENV: z.enum(['development','test','production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
   DATABASE_URL: z.string().min(1),
   PUBLIC_BRAND_NAME: z.string().trim().min(2).max(40).regex(/^[A-Za-z0-9][A-Za-z0-9 ._-]*$/).default('Link2AI'),
-  PUBLIC_BASE_URL: z.string().url().transform((v,ctx)=>{
+  PUBLIC_BASE_URL: z.string().url().transform((v:string,ctx:any)=>{
     try{return normalizePublicBaseUrl(v);}
     catch(e){ctx.addIssue({code:'custom',message:e instanceof Error?e.message:'Invalid PUBLIC_BASE_URL'});return z.NEVER;}
   }),
@@ -22,6 +22,9 @@ const schema = z.object({
   AUDIO_EXTRACTION_TIMEOUT_MS: z.coerce.number().int().positive().default(600_000),
   TRANSCRIPTION_TIMEOUT_MS: z.coerce.number().int().positive().default(600_000),
   GROQ_API_KEY: z.string().optional(),
+  REDDIT_CLIENT_ID: z.string().trim().min(1).optional(),
+  REDDIT_CLIENT_SECRET: z.string().trim().min(1).optional(),
+  REDDIT_USER_AGENT: z.string().trim().min(8).max(256).default('Link2AI/1.3 public-link-reader'),
   GROQ_TRANSCRIPTION_MODEL: z.string().default('whisper-large-v3-turbo'),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_TRANSCRIPTION_MODEL: z.string().default('whisper-1'),

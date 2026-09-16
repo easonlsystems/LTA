@@ -46,6 +46,13 @@ export function orderPublicAddresses(addresses:Array<{address:string;family:numb
     .sort((a,b)=>a.family===b.family?0:(a.family===4?-1:1));
 }
 
+export function pinnedLookup(address:string,family:4|6){
+  return (_hostname:string,options:any,callback:any)=>{
+    if(options&&typeof options==='object'&&options.all){callback(null,[{address,family}]);return;}
+    callback(null,address,family);
+  };
+}
+
 async function resolvePublic(hostname:string):Promise<Array<{address:string;family:4|6}>>{
   let addresses:Array<{address:string;family:number}>;
   try { addresses=await lookup(hostname,{all:true,verbatim:true}) as Array<{address:string;family:number}>; }
@@ -72,7 +79,7 @@ export async function safeGetBuffer(rawUrl:string,opts:{maxBytes:number;timeoutM
           const req=https.request({
             protocol:'https:',hostname:url.hostname,port:url.port?Number(url.port):443,path:`${url.pathname}${url.search}`,method:'GET',
             servername:url.hostname,headers:{'user-agent':opts.userAgent??'Link2AI/1.0','accept':opts.accept??'*/*','accept-encoding':'identity'},
-            lookup:(_hostname:string,_options:any,callback:any)=>callback(null,resolved.address,resolved.family)
+            lookup:pinnedLookup(resolved.address,resolved.family)
           },(res:any)=>{
             res.on('data',(chunk:Buffer|string)=>{
               const b=Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk); total+=b.length;
