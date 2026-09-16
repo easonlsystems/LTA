@@ -1,0 +1,54 @@
+name: R13 production audit
+
+on:
+  push:
+    branches:
+      - r13-production-audit-20260917
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply systemic R13 patch
+        run: python3 scripts/r13_patch.py
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Full deterministic regression
+        run: npm test
+
+      - name: Live provider canary audit
+        run: node scripts/provider-audit.mjs
+
+      - name: Build production image
+        run: docker build -t link2ai:r13 .
+
+      - name: Runtime dependency smoke
+        run: |
+          docker run --rm link2ai:r13 python3 -c "import curl_cffi; print('runtime curl_cffi import PASS')"
+          docker run --rm link2ai:r13 yt-dlp --version
+          docker run --rm link2ai:r13 ffmpeg -version | head -n 1
+
+      - name: Commit validated R13
+        run: |
+          git config user.name "easonsystems"
+          git config user.email "easonlsy1019@gmail.com"
+          git rm .github/workflows/r13-production-audit.yml scripts/r13_patch.py
+          git add -A
+          git diff --cached --check
+          git commit -m "Harden production sources and simulation runtime"
+          git push origin HEAD:r13-production-audit-20260917
