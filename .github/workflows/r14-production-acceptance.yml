@@ -18,23 +18,38 @@ jobs:
           BASE_URL: https://api-production-0383e.up.railway.app
         run: |
           set -euo pipefail
-          health="$(curl -fsS --retry 4 --retry-all-errors --retry-delay 2 "$BASE_URL/healthz")"
-          printf '%s' "$health" | grep -q '"ok":true'
+          fetch() { curl -fsSL --retry 4 --retry-all-errors --retry-delay 2 "$1"; }
+          require_contains() {
+            local label="$1" content="$2" needle="$3"
+            if ! grep -Fq -- "$needle" <<<"$content"; then
+              echo "FAIL: $label missing: $needle" >&2
+              exit 1
+            fi
+            echo "PASS: $label"
+          }
+          require_absent() {
+            local label="$1" content="$2" needle="$3"
+            if grep -Fq -- "$needle" <<<"$content"; then
+              echo "FAIL: $label unexpectedly contains: $needle" >&2
+              exit 1
+            fi
+            echo "PASS: $label"
+          }
 
-          ready="$(curl -fsS --retry 4 --retry-all-errors --retry-delay 2 "$BASE_URL/readyz")"
-          printf '%s' "$ready" | grep -q '"ok":true'
+          health="$(fetch "$BASE_URL/healthz")"
+          require_contains health "$health" '"ok":true'
 
-          home="$(curl -fsS --retry 4 --retry-all-errors --retry-delay 2 "$BASE_URL/")"
-          printf '%s' "$home" | grep -q 'home.js?v=20260917-r14'
-          printf '%s' "$home" | grep -q 'Reddit · paused'
-          printf '%s' "$home" | grep -q 'Reddit · temporarily paused.'
-          if printf '%s' "$home" | grep -q 'Summarize this Reddit thread.'; then
-            echo 'Homepage still advertises an active Reddit success use case without credentials.' >&2
-            exit 1
-          fi
+          ready="$(fetch "$BASE_URL/readyz")"
+          require_contains readiness "$ready" '"ok":true'
 
-          js="$(curl -fsS --retry 4 --retry-all-errors --retry-delay 2 "$BASE_URL/home.js?v=20260917-r14")"
-          printf '%s' "$js" | grep -q 'const redditAvailable=false;'
-          printf '%s' "$js" | grep -q "state.source==='reddit'&&!redditAvailable"
-          printf '%s' "$js" | grep -q 'Approved OAuth access required'
+          home="$(fetch "$BASE_URL/")"
+          require_contains homepage_asset "$home" 'home.js?v=20260917-r14'
+          require_contains homepage_tab "$home" 'Reddit · paused'
+          require_contains homepage_usecase_pause "$home" 'Reddit · temporarily paused.'
+          require_absent homepage_active_reddit_claim "$home" 'Summarize this Reddit thread.'
+
+          js="$(fetch "$BASE_URL/home.js?v=20260917-r14")"
+          require_contains runtime_availability "$js" 'const redditAvailable=false;'
+          require_contains runtime_hard_gate "$js" "state.source==='reddit'&&!redditAvailable"
+          require_contains runtime_oauth_message "$js" 'Approved OAuth access required'
           echo 'R14 production acceptance passed.'
