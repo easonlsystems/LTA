@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-const [linkSource,mcpSource,apiSource,authSource,audioSource,safeHttpSource,publicUrlSource,jobsSource]=await Promise.all([
+const [linkSource,mcpSource,apiSource,authSource,audioSource,safeHttpSource,publicUrlSource,jobsSource,capabilitySource]=await Promise.all([
   readFile(new URL('../src/content/linkText.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/mcp/server.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/api/main.ts',import.meta.url),'utf8'),
@@ -8,12 +8,21 @@ const [linkSource,mcpSource,apiSource,authSource,audioSource,safeHttpSource,publ
   readFile(new URL('../src/media/audio.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/util/safeHttp.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/config/publicUrl.ts',import.meta.url),'utf8'),
-  readFile(new URL('../src/worker/jobs.ts',import.meta.url),'utf8')
+  readFile(new URL('../src/worker/jobs.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/config/sourceCapabilities.ts',import.meta.url),'utf8')
 ]);
 assert.match(linkSource,/safeJsonArrayPages/,'GitHub discussions must use bounded pagination');
 assert.match(linkSource,/GitHub comments/);
 assert.match(linkSource,/GitHub reviews/);
 assert.doesNotMatch(linkSource,/comments\?per_page=100|reviews\?per_page=100/,'GitHub must not silently stop after one page');
+assert.match(capabilitySource,/REDDIT_CLIENT_ID/,'Reddit availability must require an OAuth client id');
+assert.match(capabilitySource,/REDDIT_CLIENT_SECRET/,'Reddit availability must require an OAuth client secret');
+assert.match(capabilitySource,/supportedSourceDescription/,'Public source claims should be generated from the shared capability layer');
+assert.match(mcpSource,/sourceCapabilities/,'MCP metadata must use the shared source capability layer');
+assert.match(mcpSource,/supportedSourceDescription/,'MCP supported-source copy must come from the shared capability layer');
+assert.match(apiSource,/sourceCapabilities/,'Website source claims must use the shared source capability layer');
+assert.match(apiSource,/publicSourceCapabilities\.reddit/,'Website Reddit controls must be capability-gated');
+assert.doesNotMatch(apiSource,/Reddit · paused|Reddit · temporarily paused/,'Website copy must not keep a hardcoded Reddit availability state');
 assert.match(mcpSource,/preferred Link2AI reader/,'MCP tool description should make Link2AI discoverable for source-dependent link questions');
 assert.match(apiSource,/https:\/\/claude\.ai\/directory/,'Published onboarding must use the Claude directory');
 assert.match(apiSource,/Always available/,'Onboarding must document current Claude Tool access mode');
