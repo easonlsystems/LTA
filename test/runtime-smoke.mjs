@@ -21,8 +21,11 @@ async function rawPost(path,headers,body){
   });
 }
 
+const childEnv={...process.env};
+delete childEnv.REDDIT_CLIENT_ID;
+delete childEnv.REDDIT_CLIENT_SECRET;
 const child=spawn(process.execPath,['dist/src/api/main.js'],{
-  env:{...process.env,NODE_ENV:'production',PORT:String(port),DATABASE_URL:'postgres://127.0.0.1:1/link2ai',PUBLIC_BASE_URL:'https://link2ai.example',PUBLIC_BRAND_NAME:'LaunchBrand',RAILWAY_PUBLIC_DOMAIN:'internal.railway.local',APP_SECRET:'01234567890123456789012345678901',LEMONSQUEEZY_API_KEY:'lemon-secret-must-not-render',RESEND_API_KEY:'resend-secret-must-not-render',OPENAI_APPS_CHALLENGE:'review-challenge-token',REVIEWER_EMAIL:'reviewer@example.com',REVIEWER_PASSWORD:'this-is-a-long-review-password',FOUNDER_EMAIL:'founder@example.com'},
+  env:{...childEnv,NODE_ENV:'production',PORT:String(port),DATABASE_URL:'postgres://127.0.0.1:1/link2ai',PUBLIC_BASE_URL:'https://link2ai.example',PUBLIC_BRAND_NAME:'LaunchBrand',RAILWAY_PUBLIC_DOMAIN:'internal.railway.local',APP_SECRET:'01234567890123456789012345678901',LEMONSQUEEZY_API_KEY:'lemon-secret-must-not-render',RESEND_API_KEY:'resend-secret-must-not-render',OPENAI_APPS_CHALLENGE:'review-challenge-token',REVIEWER_EMAIL:'reviewer@example.com',REVIEWER_PASSWORD:'this-is-a-long-review-password',FOUNDER_EMAIL:'founder@example.com'},
   stdio:['ignore','pipe','pipe']
 });
 let output='';
@@ -48,15 +51,19 @@ try{
     assert.equal(page.status,200,`${route} should return 200`);
     const body=await page.text();
     assert.match(body,/LaunchBrand/);
-    if(route==='/'){assert.match(body,/Paste a link\./);assert.match(body,/Claude can read it\./);assert.match(body,/Interactive demo · Claude-first beta/);assert.match(body,/Run comparison/);assert.match(body,/src="\/home\.js\?v=20260917-r13" defer/);assert.match(body,/Same AI\. Same link\./);assert.match(body,/What do you want Claude to read\?/);assert.match(body,/Ask the question you already wanted to ask\./);assert.match(body,/Same link\. Real result\./);assert.match(body,/No synthetic testimonials\./);assert.match(body,/500 processing units \/ month/);assert.match(body,/2,000 processing units \/ month/);assert.match(body,/No fixed link-count limit/);assert.match(body,/Try the link Claude just failed to read\./);assert.match(body,/Built by Eason Systems/);assert.doesNotMatch(body,/V2 · public links → readable source context/);}
+    if(route==='/'){
+      assert.match(body,/Paste a link\./);assert.match(body,/Claude can read it\./);assert.match(body,/Interactive demo · Claude-first beta/);assert.match(body,/Run comparison/);assert.match(body,/src="\/home\.js\?v=20260917-r14" defer/);assert.match(body,/Same AI\. Same link\./);assert.match(body,/What do you want Claude to read\?/);assert.match(body,/Ask the question you already wanted to ask\./);assert.match(body,/Same link\. Real result\./);assert.match(body,/No synthetic testimonials\./);assert.match(body,/500 processing units \/ month/);assert.match(body,/2,000 processing units \/ month/);assert.match(body,/No fixed link-count limit/);assert.match(body,/Try the link Claude just failed to read\./);assert.match(body,/Built by Eason Systems/);assert.doesNotMatch(body,/V2 · public links → readable source context/);
+      assert.doesNotMatch(body,/data-sim-source="reddit"|data-source-key="reddit"|data-usecase="reddit"|Summarize this Reddit thread/,'Reddit must not be advertised when approved OAuth credentials are absent');
+    }
     if(route==='/connect'){assert.match(body,/Open Claude Connectors Directory/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Always available/);assert.doesNotMatch(body,/Add custom connector|Tools already loaded|Register automatically/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }
 
-  const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917-r13`,{headers:{host:'link2ai.example'}});
+  const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917-r14`,{headers:{host:'link2ai.example'}});
   assert.equal(homeJsResponse.status,200,'homepage JS endpoint must return 200');
   assert.match(homeJsResponse.headers.get('content-type')??'',/javascript/);
   const homeJs=await homeJsResponse.text();
+  assert.doesNotMatch(homeJs,/reddit:\{|Reddit · public discussion|Summarize this Reddit thread/,'homepage JS must not ship a usable Reddit simulation when OAuth credentials are absent');
   assert.doesNotThrow(()=>new Function(homeJs),'homepage interaction JS must parse');
 
   class FakeClassList{
@@ -74,9 +81,9 @@ try{
   const ids={};
   for(const id of ['sim-source-name','sim-url','sim-question-text','sim-left-state','sim-right-state','sim-left-answer','sim-right-answer','sim-tool','sim-conclusion','sim-run','sim-reset','source-preview-label','source-preview-title','source-preview-question','source-mini-result','source-open-sim','usecase-user','usecase-result','simulation'])ids[id]=new FakeElement(id);
   ids['sim-conclusion'].hidden=true;
-  const simTabs=['reddit','youtube','github','pdf','web'].map(value=>new FakeElement('',{simSource:value}));
-  const sourceButtons=['reddit','youtube','github','x','web','pdf','instagram','tiktok','hn','bluesky'].map(value=>new FakeElement('',{sourceKey:value}));
-  const usecaseButtons=['reddit','youtube','github','research'].map(value=>new FakeElement('',{usecase:value}));
+  const simTabs=['youtube','github','pdf','web'].map(value=>new FakeElement('',{simSource:value}));
+  const sourceButtons=['youtube','github','x','web','pdf','instagram','tiktok','hn','bluesky'].map(value=>new FakeElement('',{sourceKey:value}));
+  const usecaseButtons=['youtube','github','research'].map(value=>new FakeElement('',{usecase:value}));
   const leftLines=[new FakeElement(),new FakeElement(),new FakeElement()];
   const rightLines=[new FakeElement(),new FakeElement(),new FakeElement()];
   const fakeDocument={
@@ -129,7 +136,7 @@ try{
   // Switching source during a run must invalidate old-source callbacks.
   ids['sim-run'].listeners.click();
   assert.ok(runNextTimer());
-  simTabs[2].listeners.click();
+  simTabs[1].listeners.click();
   runAllTimers();
   assert.match(ids['sim-url'].textContent,/github\.com/,'source tabs must switch simulation content');
   assert.equal(ids['sim-right-state'].textContent,'Source loaded','new source run must complete without stale timers');
