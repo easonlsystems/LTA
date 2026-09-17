@@ -1,0 +1,75 @@
+name: Transparent home nav update
+on:
+  push:
+    branches: [transparent-home-nav]
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: transparent-home-nav
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Remove homepage nav white panel
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count=text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly 1 match, found {count}')
+              return text.replace(old,new,1)
+
+          p=Path('src/api/main.ts')
+          s=p.read_text()
+          s=replace_once(
+              s,
+              '.navlinks{display:flex;gap:24px;align-items:center;font-size:14px;font-weight:650}',
+              '.home-nav{background:transparent;border-bottom-color:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}.navlinks{display:flex;gap:24px;align-items:center;font-size:14px;font-weight:650}',
+              'home nav CSS override'
+          )
+          s=replace_once(
+              s,
+              '<div class="wrap"><nav aria-label="Primary">',
+              '<div class="wrap"><nav class="${path===\'/\'?\'home-nav\':\'\'}" aria-label="Primary">',
+              'home nav class'
+          )
+          p.write_text(s)
+
+          p=Path('test/runtime-smoke.mjs')
+          t=p.read_text()
+          t=replace_once(
+              t,
+              "if(route==='/'){assert.match(body,/Paste a link\\./);",
+              "if(route==='/'){assert.match(body,/<nav class=\\\"home-nav\\\" aria-label=\\\"Primary\\\">/);assert.match(body,/Paste a link\\./);",
+              'homepage transparent nav assertion'
+          )
+          p.write_text(t)
+          PY
+      - name: Verify nav styling contract
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const s=fs.readFileSync('src/api/main.ts','utf8');
+          if(!s.includes('.home-nav{background:transparent;border-bottom-color:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}')) throw new Error('transparent home nav CSS missing');
+          if(!s.includes('<nav class="${path===\'/\'?\'home-nav\':\'\'}" aria-label="Primary">')) throw new Error('home nav class gate missing');
+          NODE
+      - run: npm ci
+      - run: npm test
+      - name: Commit validated update and remove one-time workflow
+        shell: bash
+        run: |
+          git config user.name "Link2AI UI Polish"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/transparent-home-nav.yml
+          git add src/api/main.ts test/runtime-smoke.mjs
+          git commit -m "Remove homepage navigation white panel"
+          git push origin HEAD:transparent-home-nav
