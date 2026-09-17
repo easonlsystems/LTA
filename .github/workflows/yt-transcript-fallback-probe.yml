@@ -11,11 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Probe public transcript endpoint library
-        shell: bash
         run: |
           python -m pip install -q youtube-transcript-api
-          python -c "from youtube_transcript_api import YouTubeTranscriptApi; api=YouTubeTranscriptApi(); vids=['jJiw4CdAanw','aqz-KE-bpKQ','dQw4w9WgXcQ']; [(print('===',v,'==='), (lambda: None)()) for v in []]"
-          for id in jJiw4CdAanw aqz-KE-bpKQ dQw4w9WgXcQ; do
-            echo "=== $id ==="
-            VID="$id" python -c "import os; from youtube_transcript_api import YouTubeTranscriptApi; v=os.environ['VID']; api=YouTubeTranscriptApi(); tracks=api.list(v); print('tracks=',[(t.language_code,t.is_generated) for t in tracks][:8]); t=next(iter(tracks)); rows=t.fetch(); print('rows=',len(rows)); print('sample=',[(r.text,r.start,r.duration) for r in rows[:3]])" || true
-          done
+          python scripts/probe_youtube_transcript.py
