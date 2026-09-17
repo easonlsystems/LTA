@@ -13,7 +13,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install current and newer yt-dlp
+      - name: Install newer yt-dlp
         run: |
           python -m pip install --upgrade pip
           python -m pip install 'yt-dlp[default,curl-cffi]==2026.8.29.232711.dev0'
@@ -32,17 +32,7 @@ jobs:
             echo "rc=$rc"
             sed -n '1,120p' /tmp/yt.err
             if [ "$rc" -eq 0 ]; then
-              python - <<'PY'
-import json
-p='/tmp/yt.json'
-d=json.load(open(p))
-print('id=',d.get('id'))
-print('title=',d.get('title'))
-print('duration=',d.get('duration'))
-print('webpage_url=',d.get('webpage_url'))
-print('subtitles=',list((d.get('subtitles') or {}).keys())[:8])
-print('automatic_captions=',list((d.get('automatic_captions') or {}).keys())[:8])
-PY
+              python -c "import json; d=json.load(open('/tmp/yt.json')); print('id=',d.get('id')); print('title=',d.get('title')); print('duration=',d.get('duration')); print('webpage_url=',d.get('webpage_url')); print('subtitles=',list((d.get('subtitles') or {}).keys())[:8]); print('automatic_captions=',list((d.get('automatic_captions') or {}).keys())[:8])"
             fi
           }
           probe default
