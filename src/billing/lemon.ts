@@ -22,7 +22,12 @@ function topupPackFromVariant(variantIdRaw:unknown):TopupPack|null{
   return null;
 }
 
+export function topupConfigured():boolean{
+  return Boolean(env().LEMONSQUEEZY_API_KEY&&env().LEMONSQUEEZY_STORE_ID&&env().LEMONSQUEEZY_TOPUP_500_VARIANT_ID&&env().LEMONSQUEEZY_TOPUP_1500_VARIANT_ID);
+}
+
 export async function canPurchaseTopup(userId:string):Promise<boolean>{
+  if(!topupConfigured())return false;
   const r=await pool.query(`SELECT 1 FROM subscriptions WHERE user_id=$1 AND provider='lemonsqueezy' AND status IN ('active','trialing') LIMIT 1`,[userId]);
   return Boolean(r.rowCount);
 }

@@ -8,6 +8,7 @@ const backup=await readFile('.github/workflows/offsite-db-backup.yml','utf8');
 assert.match(env,/LEMONSQUEEZY_TOPUP_500_VARIANT_ID/);
 assert.match(env,/LEMONSQUEEZY_TOPUP_1500_VARIANT_ID/);
 assert.match(lemon,/purpose:'topup'/);
+assert.match(lemon,/function topupConfigured/,'top-up UI must stay hidden until both paid variants are configured');
 assert.match(lemon,/ON CONFLICT\(source_key\) DO NOTHING/,'top-up webhook must be idempotent');
 assert.match(lemon,/GREATEST\(0,paid_rollover_seconds-\$2\)/,'refunds must never create a negative paid wallet');
 assert.match(lemon,/status IN \('active','trialing'\)/,'only active paid subscribers may start top-up checkout');
