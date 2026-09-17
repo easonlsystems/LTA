@@ -1,0 +1,82 @@
+name: Tighten home hero spacing
+on:
+  push:
+    branches: [tighten-home-hero]
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tighten-home-hero
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Tighten homepage hero composition
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count=text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly 1 match, found {count}')
+              return text.replace(old,new,1)
+
+          p=Path('src/api/main.ts')
+          s=p.read_text()
+          s=replace_once(s,
+              '.experience-hero{position:relative;margin-top:0;padding:154px 0 70px',
+              '.experience-hero{position:relative;margin-top:0;padding:112px 0 58px',
+              'desktop hero spacing')
+          s=replace_once(s,
+              '.experience-copy{text-align:center;max-width:900px;margin:0 auto 34px}',
+              '.experience-copy{text-align:center;max-width:900px;margin:0 auto 28px}',
+              'desktop hero copy spacing')
+          s=replace_once(s,
+              '.sim-shell{position:relative;margin:38px auto 0;',
+              '.sim-shell{position:relative;margin:30px auto 0;',
+              'desktop simulator spacing')
+          s=replace_once(s,
+              '.experience-hero{margin-top:0;padding:106px 0 42px}',
+              '.experience-hero{margin-top:0;padding:92px 0 38px}',
+              'mobile hero spacing')
+          s=replace_once(s,
+              '.experience-copy{text-align:left;margin:0 0 22px}',
+              '.experience-copy{text-align:left;margin:0 0 18px}',
+              'mobile copy spacing')
+          p.write_text(s)
+
+          p=Path('test/mobile-homepage-css.mjs')
+          t=p.read_text()
+          t=t.replace('padding:154px 0 70px','padding:112px 0 58px')
+          t=t.replace('padding:106px 0 42px','padding:92px 0 38px')
+          p.write_text(t)
+          PY
+      - name: Verify spacing contract
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const s=fs.readFileSync('src/api/main.ts','utf8');
+          if(!s.includes('.experience-hero{position:relative;margin-top:0;padding:112px 0 58px')) throw new Error('desktop hero spacing missing');
+          if(!s.includes('.experience-copy{text-align:center;max-width:900px;margin:0 auto 28px}')) throw new Error('desktop copy spacing missing');
+          if(!s.includes('.sim-shell{position:relative;margin:30px auto 0;')) throw new Error('desktop sim spacing missing');
+          if(!s.includes('.experience-hero{margin-top:0;padding:92px 0 38px}')) throw new Error('mobile hero spacing missing');
+          if(!s.includes('.experience-copy{text-align:left;margin:0 0 18px}')) throw new Error('mobile copy spacing missing');
+          NODE
+      - run: npm ci
+      - run: npm test
+      - name: Commit validated update and remove one-time workflow
+        shell: bash
+        run: |
+          git config user.name "Link2AI UI Polish"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/tighten-home-hero.yml
+          git add src/api/main.ts test/mobile-homepage-css.mjs
+          git commit -m "Tighten homepage hero spacing"
+          git push origin HEAD:tighten-home-hero
