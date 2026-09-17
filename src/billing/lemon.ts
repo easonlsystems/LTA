@@ -3,8 +3,10 @@ import { env } from '../config/env.js';
 import { pool } from '../db/pool.js';
 import { hmacSha256, timingSafeEqualHex } from '../util/crypto.js';
 import { Link2AIError } from '../util/errors.js';
+import { PLAN_LIMITS } from '../quota/plans.js';
 import { canonicalLemonStatus, lemonBillingPeriod, shouldApplySubscriptionLifecycleEvent } from './order.js';
 import { reconcileFoundingOffer, releaseFoundingSlotForInitialRefund } from './founding.js';
+import { foundingBonusUnits, type FoundingPlan } from './foundingPolicy.js';
 
 export type PaidPlan = 'basic' | 'pro';
 
@@ -132,6 +134,54 @@ function planFromObject(obj:any):PaidPlan|null{
   return custom==='basic'||custom==='pro'?custom:null;
 }
 
+interface RolloverUserRow{
+  admin_bonus_seconds:number;
+  paid_rollover_seconds:number;
+  paid_rollover_settled_period_start:Date|null;
+  founding_plan:FoundingPlan|null;
+  founding_claimed_at:Date|null;
+  founding_cycles_used:number;
+  founding_period_start:Date|null;
+  founding_ended_at:Date|null;
+  founding_slot_released_at:Date|null;
+}
+
+function sameInstant(a:Date|null,b:Date|null):boolean{
+  return Boolean(a&&b&&a.getTime()===b.getTime());
+}
+
+function foundingBonusSecondsForPeriod(row:RolloverUserRow,plan:PaidPlan,periodStart:Date):number{
+  const active=Boolean(row.founding_claimed_at)&&!row.founding_ended_at&&!row.founding_slot_released_at&&row.founding_plan===plan&&row.founding_cycles_used>=1&&row.founding_cycles_used<=3&&sameInstant(row.founding_period_start,periodStart);
+  return active?foundingBonusUnits(plan)*60:0;
+}
+
+async function settlePaidRolloverPeriod(client:PoolClient,input:{userId:string;plan:PaidPlan;periodStart:Date|null;periodEnd:Date|null}):Promise<void>{
+  if(!input.periodStart)return;
+  const user=await client.query<RolloverUserRow>(
+    `SELECT admin_bonus_seconds,paid_rollover_seconds,paid_rollover_settled_period_start,founding_plan,founding_claimed_at,founding_cycles_used,founding_period_start,founding_ended_at,founding_slot_released_at
+     FROM users WHERE id=$1 FOR UPDATE`,[input.userId]
+  );
+  if(!user.rowCount)return;
+  const row=user.rows[0];
+  if(sameInstant(row.paid_rollover_settled_period_start,input.periodStart))return;
+  const end=input.periodEnd??new Date();
+  const usage=await client.query<{seconds:string}>(
+    `SELECT COALESCE(SUM(seconds),0)::text seconds FROM usage_ledger
+     WHERE user_id=$1 AND created_at >= $2 AND created_at < $3`,[input.userId,input.periodStart,end]
+  );
+  const usedSeconds=Math.max(0,Number(usage.rows[0]?.seconds??0)||0);
+  const expiringBonusSeconds=Math.max(0,Number(row.admin_bonus_seconds??0)||0)+foundingBonusSecondsForPeriod(row,input.plan,input.periodStart);
+  // Expiring promotional/admin bonus is consumed first. Only paid base units and older
+  // rollover balance survive into the wallet.
+  const persistentUsed=Math.max(0,usedSeconds-expiringBonusSeconds);
+  const persistentAvailable=Math.max(0,Number(row.paid_rollover_seconds??0)||0)+PLAN_LIMITS[input.plan].secondsPerPeriod;
+  const nextRollover=Math.max(0,persistentAvailable-persistentUsed);
+  await client.query(
+    `UPDATE users SET paid_rollover_seconds=$2,paid_rollover_settled_period_start=$3,updated_at=now() WHERE id=$1`,
+    [input.userId,nextRollover,input.periodStart]
+  );
+}
+
 async function reconcileUserEntitlement(client:PoolClient,userId:string):Promise<{plan:'trial'|PaidPlan;accountStatus:'active'|'past_due'|'canceled'}>{
   const active=await client.query<{plan:PaidPlan;status:string}>(
     `SELECT plan,status FROM subscriptions
@@ -154,19 +204,13 @@ async function reconcileUserEntitlement(client:PoolClient,userId:string):Promise
 
 async function resumePendingJobs(client:PoolClient,userId:string,plan:PaidPlan,explicitJobId?:string):Promise<void>{
   const priority=plan==='pro'?20:10;
-  const maxSeconds=plan==='pro'?120*60:30*60;
+  // Paid plans are unit-limited rather than plan-specific video-length-limited. Requeue
+  // waiting work and let the quota reservation decide whether the wallet can cover it.
   await client.query(
-    `UPDATE transcript_jobs SET status='queued',priority=$3,next_attempt_at=now(),error_code=NULL,error_message=NULL,checkout_url=NULL,updated_at=now()
-     WHERE user_id=$1 AND status='awaiting_payment'
-       AND (duration_seconds IS NULL AND id=$4 OR duration_seconds IS NOT NULL AND duration_seconds <= $2)`,
-    [userId,maxSeconds,priority,explicitJobId??null]
+    `UPDATE transcript_jobs SET status='queued',priority=$2,next_attempt_at=now(),error_code=NULL,error_message=NULL,checkout_url=NULL,updated_at=now()
+     WHERE user_id=$1 AND status='awaiting_payment'`,[userId,priority]
   );
-  if(plan==='pro'){
-    await client.query(`UPDATE transcript_jobs SET status='queued',priority=$2,next_attempt_at=now(),error_code=NULL,error_message=NULL,checkout_url=NULL,updated_at=now() WHERE user_id=$1 AND status='awaiting_payment'`,[userId,priority]);
-    await client.query('DELETE FROM billing_resume_intents WHERE user_id=$1',[userId]);
-  }else{
-    await client.query(`DELETE FROM billing_resume_intents WHERE user_id=$1 AND target_plan='basic'`,[userId]);
-  }
+  await client.query('DELETE FROM billing_resume_intents WHERE user_id=$1',[userId]);
 }
 
 export async function processLemonEvent(event:any):Promise<void>{
@@ -187,8 +231,8 @@ export async function processLemonEvent(event:any):Promise<void>{
     // A row-level lock cannot serialize concurrent first events because the row
     // does not exist yet. Lock the provider id before reading/inserting it.
     await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 510214))`,[subscriptionId]);
-    const existing=await client.query<{user_id:string;plan:PaidPlan;status:string;provider_event_at:Date|null}>(
-      `SELECT user_id,plan,status,provider_event_at FROM subscriptions WHERE provider_subscription_id=$1 FOR UPDATE`,[subscriptionId]
+    const existing=await client.query<{user_id:string;plan:PaidPlan;status:string;provider_event_at:Date|null;current_period_start:Date|null;current_period_end:Date|null}>(
+      `SELECT user_id,plan,status,provider_event_at,current_period_start,current_period_end FROM subscriptions WHERE provider_subscription_id=$1 FOR UPDATE`,[subscriptionId]
     );
     const custom=event?.meta?.custom_data??{};
     // A provider subscription is permanently owned by the first local user that
@@ -210,6 +254,14 @@ export async function processLemonEvent(event:any):Promise<void>{
       )){await client.query('COMMIT');return;}
     }
     const period=lemonBillingPeriod(attrs);
+    const previous=existing.rows[0];
+    if(previous?.current_period_start){
+      const advanced=Boolean(period.start&&period.start.getTime()>previous.current_period_start.getTime());
+      const ended=status==='canceled';
+      if(advanced||ended){
+        await settlePaidRolloverPeriod(client,{userId,plan:previous.plan,periodStart:previous.current_period_start,periodEnd:previous.current_period_end});
+      }
+    }
     const priorSubscriptions=await client.query('SELECT 1 FROM subscriptions WHERE user_id=$1 LIMIT 1',[userId]);
     const firstSubscription=priorSubscriptions.rowCount===0;
     await client.query(
