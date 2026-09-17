@@ -27,5 +27,11 @@ assert.match(sql,/CREATE TABLE IF NOT EXISTS founder_recovery_codes/);
 assert.match(sql,/block_founder_email_stepup_after_passkey/);
 assert.match(sql,/Founder audit history is append-only/);
 assert.match(sql,/chain_founder_admin_event/);
+assert.match(sql,/IF r\.event_hash IS NOT NULL THEN/,'Repeated migrations must not rewrite already-chained audit rows');
+const backfillAt=sql.indexOf('DO $$');
+const dropGuardAt=sql.indexOf('DROP TRIGGER IF EXISTS founder_admin_events_append_only');
+const recreateGuardAt=sql.lastIndexOf('CREATE TRIGGER founder_admin_events_append_only');
+assert.ok(dropGuardAt>=0&&dropGuardAt<backfillAt,'Append-only guard must be temporarily removed before the one-time hash backfill');
+assert.ok(recreateGuardAt>backfillAt,'Append-only guard must be recreated before migration commit');
 
 console.log('admin passkey schema: ok');
