@@ -137,8 +137,6 @@ const siteCss=`:root{color-scheme:light;--ink:#17151f;--muted:#6f6a78;--line:rgb
   .sim-url{font-size:10px}
   .sim-actions{grid-template-columns:minmax(0,1fr) auto;gap:7px}
   .sim-run,.sim-reset{min-height:42px}
-  .sim-question{margin:0 14px 12px;padding:12px 13px;border-radius:14px}
-  .sim-question p{font-size:13px}
   .sim-grid{padding:0 14px 14px;gap:9px}
   .sim-panel{min-height:0;padding:14px;border-radius:17px}
   .sim-panel-head{padding-bottom:11px}
@@ -232,7 +230,7 @@ app.get('/',async(req,reply)=>{
     <section class="experience-hero" id="simulation">
       <div class="home-inner">
         <div class="experience-copy reveal">
-          <span class="experience-kicker">Interactive demo · Claude-first beta</span>
+          <span class="experience-kicker">Interactive comparison · Claude-first</span>
           <h1>Paste a link.<br><span>Claude can read it.</span></h1>
           <p class="experience-lede">Run the same public URL and the same question side by side. The only difference is whether Link2AI is connected.</p>
         </div>
