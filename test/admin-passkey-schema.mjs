@@ -5,6 +5,8 @@ const admin=await readFile('src/admin/routes.ts','utf8');
 const wrapper=await readFile('src/auth/routes.ts','utf8');
 const sql=await readFile('sql/003_admin_passkeys.sql','utf8');
 const pkg=JSON.parse(await readFile('package.json','utf8'));
+const authService=await readFile('src/auth/service.ts','utf8');
+const api=await readFile('src/api/main.ts','utf8');
 
 assert.equal(pkg.dependencies['@simplewebauthn/server'],'14.0.2');
 assert.equal(pkg.dependencies['@simplewebauthn/browser'],'14.0.0');
@@ -20,6 +22,8 @@ assert.match(admin,/SameSite=Strict/);
 assert.match(admin,/Passkey protected/);
 assert.match(admin,/founder_recovery_codes/);
 assert.match(admin,/The final passkey cannot be removed/);
+assert.match(authService,/FOUNDER_STEPUP_COOKIE}.*Path=\/; HttpOnly/s,'Founder step-up must be visible to both /founder and /admin');
+assert.match(api,/value==='\/admin'\|\|value\.startsWith\('\/admin\/'\)/,'Founder bootstrap return path must allow /admin');
 assert.match(admin,/cache:'no-store'/);
 assert.match(sql,/CREATE TABLE IF NOT EXISTS founder_passkeys/);
 assert.match(sql,/CREATE TABLE IF NOT EXISTS founder_webauthn_challenges/);
