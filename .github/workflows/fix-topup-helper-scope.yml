@@ -1,0 +1,49 @@
+name: Fix top-up helper scope
+on:
+  push:
+    branches: [topup-backup-hardening-20260917]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: topup-backup-hardening-20260917
+      - name: Fix helper scope
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('src/billing/routes.ts'); s=p.read_text()
+          anchor="""function csrfField(cookieHeader:string|undefined):string{
+  const csrf=csrfTokenFromSessionCookie(cookieHeader);
+  return csrf?`<input type=\"hidden\" name=\"csrf\" value=\"${esc(csrf)}\">`:''
+}
+"""
+          helper="""function csrfField(cookieHeader:string|undefined):string{
+  const csrf=csrfTokenFromSessionCookie(cookieHeader);
+  return csrf?`<input type=\"hidden\" name=\"csrf\" value=\"${esc(csrf)}\">`:''
+}
+
+function topupSection(cookieHeader:string|undefined):string{
+  return `<section class=\"card topup-card\"><h2>Need more units?</h2><p class=\"muted\">Active Basic and Pro subscribers can add extra units anytime. Purchased units do not expire; if you cancel, they stay on the account and unlock again when you resubscribe.</p><div class=\"topup-grid\"><div class=\"topup-option\"><strong>+500 units</strong><span>US$3.99 · one-time</span><form method=\"post\" action=\"/billing/topup\">${csrfField(cookieHeader)}<input type=\"hidden\" name=\"pack\" value=\"500\"><button class=\"primary\">Add 500 units</button></form></div><div class=\"topup-option\"><strong>+1,500 units</strong><span>US$8.99 · one-time</span><form method=\"post\" action=\"/billing/topup\">${csrfField(cookieHeader)}<input type=\"hidden\" name=\"pack\" value=\"1500\"><button>Add 1,500 units</button></form></div></div><p class=\"fine\"><strong>No automatic overage charges.</strong> Expiring Founding bonus is consumed before your persistent paid balance.</p></section>`;
+}
+"""
+          if anchor not in s: raise SystemExit('csrf helper anchor missing')
+          s=s.replace(anchor,helper,1)
+          local="""    const topupSection=(cookieHeader:string|undefined)=>`<section class=\"card topup-card\"><h2>Need more units?</h2><p class=\"muted\">Active Basic and Pro subscribers can add extra units anytime. Purchased units do not expire; if you cancel, they stay on the account and unlock again when you resubscribe.</p><div class=\"topup-grid\"><div class=\"topup-option\"><strong>+500 units</strong><span>US$3.99 · one-time</span><form method=\"post\" action=\"/billing/topup\">${csrfField(cookieHeader)}<input type=\"hidden\" name=\"pack\" value=\"500\"><button class=\"primary\">Add 500 units</button></form></div><div class=\"topup-option\"><strong>+1,500 units</strong><span>US$8.99 · one-time</span><form method=\"post\" action=\"/billing/topup\">${csrfField(cookieHeader)}<input type=\"hidden\" name=\"pack\" value=\"1500\"><button>Add 1,500 units</button></form></div></div><p class=\"fine\"><strong>No automatic overage charges.</strong> Expiring Founding bonus is consumed before your persistent paid balance.</p></section>`;
+"""
+          if local not in s: raise SystemExit('local topup helper anchor missing')
+          p.write_text(s.replace(local,'',1))
+      - name: Commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/billing/routes.ts
+          git diff --cached --check
+          git commit -m 'Share top-up UI helper across billing routes'
+          git push origin HEAD:topup-backup-hardening-20260917
