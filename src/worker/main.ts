@@ -43,11 +43,19 @@ function wakeSleepers(){
   sleepers.clear();
 }
 async function slot(slotId:number){
+  let claimFailures=0;
   while(!stopping){
     inflightClaims++;
     let job;
-    try{job=await claimNextJob(`${workerId}:${slotId}`);}
+    try{
+      job=await claimNextJob(`${workerId}:${slotId}`);
+      claimFailures=0;
+    }catch(error){
+      claimFailures++;
+      console.error(JSON.stringify({ts:new Date().toISOString(),event:'job_claim_error',slot_id:slotId,error_message:error instanceof Error?error.message:String(error)}));
+    }
     finally{inflightClaims--;}
+    if(!job&&claimFailures>0){await sleep(Math.min(30_000,1000*2**Math.min(claimFailures-1,5)));continue;}
     if(!job){await sleep(env().WORKER_POLL_MS);continue;}
     activeJobs++;
     try{

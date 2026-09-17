@@ -7,6 +7,7 @@ import type { ParsedMediaUrl, Platform } from '../media/url.js';
 import { Link2AIError } from '../util/errors.js';
 import { runProcess } from '../util/process.js';
 import type { MediaResolver, ResolveContext } from './base.js';
+import { validateResolvedMediaIdentity } from './identity.js';
 
 function mapYtDlpError(stderr: string): Link2AIError {
   const s = stderr.toLowerCase();
@@ -142,13 +143,15 @@ export class YtDlpResolver implements MediaResolver {
     // without a top-level duration. Keep the metadata and let the worker derive a
     // definitive duration from captions or the downloaded audio before reserving quota.
     const duration = extractDurationSeconds(raw);
-    const id = clipExternalText(String(raw.id ?? input.canonicalMediaId),METADATA_LIMITS.canonicalId);
+    const id = clipExternalText(String(raw.id ?? ''),METADATA_LIMITS.canonicalId);
     if(!id)throw new Link2AIError('EXTRACTION_FAILED','The platform returned an invalid media id.',502,true);
+    const webpageUrl=clipExternalText(raw.webpage_url,METADATA_LIMITS.subtitleUrl);
+    validateResolvedMediaIdentity(input,id,webpageUrl);
     return {
       platform: this.platform,
       resolver: 'ytdlp',
       canonicalMediaId: id,
-      webpageUrl: input.normalizedUrl,
+      webpageUrl: webpageUrl??input.normalizedUrl,
       originalLanguage: clipExternalText(raw.language,METADATA_LIMITS.language),
       title: clipExternalText(raw.title,METADATA_LIMITS.title),
       creator: clipExternalText(typeof raw.uploader==='string'?raw.uploader:raw.channel,METADATA_LIMITS.creator),

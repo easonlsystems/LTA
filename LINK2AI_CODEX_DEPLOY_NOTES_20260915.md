@@ -42,7 +42,7 @@ The local Railway CLI returned `Unauthorized. Please login with railway login`; 
 
 ## Production smoke matrix
 
-Using a test account with observable quota, process one known public URL for each class: YouTube, Instagram Reel, Instagram post, TikTok video, X post, Reddit standard/redd.it/share form, generic article, Bluesky post, GitHub issue or PR, Hacker News item, and a small text-layer PDF.
+Using a test account with observable quota, process one known public URL for each class: YouTube, Instagram Reel, Instagram post, TikTok video, X post, generic article, Bluesky post, GitHub issue or PR, Hacker News item, and a small text-layer PDF. Test Reddit standard/redd.it/share forms only when Reddit OAuth credentials are configured; without them Reddit must remain unadvertised and fail cleanly.
 
 For each successful item, verify metadata, readable text, paging, cache reuse, and that a repeat canonical URL does not charge again for that user. Then submit an unsupported profile/feed URL, a localhost/private-network URL, and a failed document response; verify clean model-usable errors and no finalized quota charge.
 

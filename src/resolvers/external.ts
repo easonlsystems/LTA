@@ -6,6 +6,7 @@ import type { ParsedMediaUrl, Platform } from '../media/url.js';
 import { env } from '../config/env.js';
 import { Link2AIError } from '../util/errors.js';
 import type { MediaResolver, ResolveContext } from './base.js';
+import { validateResolvedMediaIdentity } from './identity.js';
 
 async function readLimitedJson(response:Response,maxBytes=2_000_000):Promise<any>{
   if(!response.body)throw new Link2AIError('EXTRACTION_FAILED','External extractor returned an empty response.',502,true);
@@ -64,11 +65,13 @@ export class ExternalProviderResolver implements MediaResolver {
     const duration=Math.round(Number(data.durationSeconds));
     const canonicalMediaId=clipExternalText(data.canonicalMediaId,METADATA_LIMITS.canonicalId)??'';
     if (!Number.isFinite(duration)||duration<=0||!canonicalMediaId) throw new Link2AIError('EXTRACTION_FAILED', 'External extractor returned incomplete metadata.', 502, true);
+    const webpageUrl=clipExternalText(data.webpageUrl,METADATA_LIMITS.subtitleUrl);
+    validateResolvedMediaIdentity(input,canonicalMediaId,webpageUrl);
     return {
       platform: this.platform,
       resolver: 'external',
       canonicalMediaId,
-      webpageUrl: input.normalizedUrl,
+      webpageUrl: webpageUrl??input.normalizedUrl,
       originalLanguage: clipExternalText(data.originalLanguage,METADATA_LIMITS.language),
       title: clipExternalText(data.title,METADATA_LIMITS.title),
       creator: clipExternalText(data.creator,METADATA_LIMITS.creator),

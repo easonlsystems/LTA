@@ -53,10 +53,11 @@ try{
   assert.equal(verifyLemonSignature(raw,'not-hex'),false);
 
   const queries=[];
+  let existingOwner=null;
   const fakeClient={
     async query(sql,params){
       const text=String(sql);queries.push({sql:text,params});
-      if(text.includes('SELECT user_id,plan,status,provider_event_at'))return {rowCount:0,rows:[]};
+      if(text.includes('SELECT user_id,plan,status,provider_event_at'))return existingOwner?{rowCount:1,rows:[{user_id:existingOwner,plan:'basic',status:'active',provider_event_at:new Date('2026-02-01T00:00:00Z')}]}:{rowCount:0,rows:[]};
       if(text.includes('SELECT plan,status FROM subscriptions'))return {rowCount:1,rows:[{plan:'basic',status:'past_due'}]};
       return {rowCount:1,rows:[]};
     },
@@ -75,7 +76,12 @@ try{
   assert.equal(upsert.params[4].toISOString(),'2026-02-28T12:00:00.000Z');
   assert.ok(queries.some(q=>q.sql.includes("SET status='queued'")&&q.sql.includes("status='awaiting_payment'")),'past_due access must resume eligible waiting jobs');
 
-  queries.length=0;
+  queries.length=0;existingOwner='original-user';
+  await processLemonEvent({...event,meta:{...event.meta,custom_data:{...event.meta.custom_data,user_id:'attacker-user'}},data:{...event.data,attributes:{...event.data.attributes,updated_at:'2026-03-02T00:00:00Z'}}});
+  const ownerUpsert=queries.find(q=>q.sql.includes('INSERT INTO subscriptions'));
+  assert.equal(ownerUpsert.params[0],'original-user','signed webhook custom data must not rebind an existing subscription owner');
+
+  queries.length=0;existingOwner=null;
   await processLemonEvent({...event,data:{...event.data,attributes:{...event.data.attributes,test_mode:false}}});
   assert.equal(queries.some(q=>q.sql.includes('INSERT INTO subscriptions')),false,'live/test webhook modes must not cross');
   console.log('billing tests PASS');

@@ -20,6 +20,7 @@
     "check/external.d.ts",
     "src/config/publicUrl.ts",
     "src/resolvers/fallback.ts",
+    "src/resolvers/identity.ts",
     "src/transcription/format.ts",
     "src/auth/clientMetadata.ts",
     "src/billing/order.ts",

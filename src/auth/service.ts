@@ -56,19 +56,29 @@ function passwordAttemptKey(email:string):string{
   return hmacSha256(env().APP_SECRET,`password-auth:${email}`);
 }
 
-async function enforcePasswordAttemptLimit(email:string):Promise<void>{
+async function beginPasswordAttempt(email:string):Promise<string>{
   const key=passwordAttemptKey(email);
-  const [globalRecent,emailFailures]=await Promise.all([
-    pool.query<{count:string}>(`SELECT COUNT(*)::text count FROM password_auth_attempts WHERE created_at > now() - interval '15 minutes'`),
-    pool.query<{count:string}>(`SELECT COUNT(*)::text count FROM password_auth_attempts WHERE email_hash=$1 AND success=false AND created_at > now() - interval '15 minutes'`,[key])
-  ]);
-  if(Number(globalRecent.rows[0]?.count??0)>=2000)throw new Link2AIError('AUTH_REQUIRED','Sign-in is temporarily busy. Try again later.',429);
-  if(Number(emailFailures.rows[0]?.count??0)>=10)throw new Link2AIError('AUTH_REQUIRED','Too many sign-in attempts. Try again in 15 minutes.',429);
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    // All callers acquire the global lock first, then the per-account lock. This makes
+    // count+insert atomic without creating a lock-order deadlock under concurrent abuse.
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext('link2ai:password-auth:global'))`);
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[`link2ai:password-auth:${key}`]);
+    const globalRecent=await client.query<{count:string}>(`SELECT COUNT(*)::text count FROM password_auth_attempts WHERE created_at > now() - interval '15 minutes'`);
+    const emailFailures=await client.query<{count:string}>(`SELECT COUNT(*)::text count FROM password_auth_attempts WHERE email_hash=$1 AND success=false AND created_at > now() - interval '15 minutes'`,[key]);
+    if(Number(globalRecent.rows[0]?.count??0)>=2000)throw new Link2AIError('AUTH_REQUIRED','Sign-in is temporarily busy. Try again later.',429);
+    if(Number(emailFailures.rows[0]?.count??0)>=10)throw new Link2AIError('AUTH_REQUIRED','Too many sign-in attempts. Try again in 15 minutes.',429);
+    const inserted=await client.query<{id:string}>(`INSERT INTO password_auth_attempts(email_hash,success) VALUES($1,false) RETURNING id::text`,[key]);
+    await client.query('COMMIT');
+    if(Math.random()<0.02)void pool.query(`DELETE FROM password_auth_attempts WHERE created_at < now() - interval '7 days'`).catch(()=>{});
+    return inserted.rows[0].id;
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}
+  finally{client.release();}
 }
 
-async function recordPasswordAttempt(email:string,success:boolean):Promise<void>{
-  await pool.query(`INSERT INTO password_auth_attempts(email_hash,success) VALUES($1,$2)`,[passwordAttemptKey(email),success]);
-  if(Math.random()<0.02)void pool.query(`DELETE FROM password_auth_attempts WHERE created_at < now() - interval '7 days'`).catch(()=>{});
+async function markPasswordAttemptSuccessful(id:string):Promise<void>{
+  await pool.query(`UPDATE password_auth_attempts SET success=true WHERE id=$1`,[id]);
 }
 
 export async function registerPasswordAccount(emailRaw:string,password:string,returnTo:string,currentUserId?:string):Promise<{user:AuthUser;sessionToken:string;returnTo:string}>{
@@ -133,7 +143,7 @@ export async function verifyPasswordLogin(emailRaw:string,password:string,return
   const email=normalizeAccountEmail(emailRaw);
   validateReturnTo(returnTo);
   if(password.length>128)throw new Link2AIError('AUTH_REQUIRED','Email or password is incorrect.',401);
-  await enforcePasswordAttemptLimit(email);
+  const attemptId=await beginPasswordAttempt(email);
   const r=await pool.query<AuthUser & {account_status:string;password_hash:string|null;password_salt:string|null}>(
     `SELECT id,email,plan,account_status,password_hash,password_salt FROM users WHERE email=$1`,[email]
   );
@@ -141,9 +151,9 @@ export async function verifyPasswordLogin(emailRaw:string,password:string,return
   const ok=row?.password_hash&&row?.password_salt
     ? await verifyAccountPassword(password,row.password_salt,row.password_hash)
     : await verifyAccountPassword(password,'link2ai-dummy-password-salt','00'.repeat(64));
-  if(!row||!ok){await recordPasswordAttempt(email,false);throw new Link2AIError('AUTH_REQUIRED','Email or password is incorrect.',401);}
+  if(!row||!ok)throw new Link2AIError('AUTH_REQUIRED','Email or password is incorrect.',401);
   if(row.account_status==='disabled')throw new Link2AIError('AUTH_REQUIRED','This account is disabled.',403);
-  await recordPasswordAttempt(email,true);
+  await markPasswordAttemptSuccessful(attemptId);
   const token=randomToken(32);
   await pool.query(`INSERT INTO web_sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '30 days')`,[row.id,sha256(token)]);
   return {user:{id:row.id,email:row.email,plan:row.plan},sessionToken:token,returnTo};
@@ -395,11 +405,13 @@ export async function verifyReviewerLogin(emailRaw:string,password:string,return
   const email=emailRaw.trim().toLowerCase();
   if(!reviewerEmail||!reviewerPassword)throw new Link2AIError('AUTH_REQUIRED','Reviewer access is not configured.',404);
   if(returnTo.length>4096)throw new Link2AIError('AUTH_REQUIRED','Sign-in return path is too long.',400);
+  const attemptId=await beginPasswordAttempt(email||'invalid-reviewer');
   const supplied=sha256(password);
   const expected=sha256(reviewerPassword);
   if(email!==reviewerEmail||!timingSafeEqualHex(supplied,expected)){
     throw new Link2AIError('AUTH_REQUIRED','Reviewer email or password is incorrect.',401);
   }
+  await markPasswordAttemptSuccessful(attemptId);
   const client=await pool.connect();
   try{
     await client.query('BEGIN');

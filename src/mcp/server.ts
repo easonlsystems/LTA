@@ -19,12 +19,21 @@ function kindFor(result:ToolJobResult):'video'|'post'|'page'{
   return 'video';
 }
 
+export function unicodeSafeSlice(text:string,offset:number,size:number):{start:number;end:number;text:string}{
+  let start=Math.max(0,Math.min(offset,text.length));
+  if(start>0&&start<text.length&&/^[\uDC00-\uDFFF]$/.test(text[start]))start--;
+  let end=Math.min(text.length,start+size);
+  if(end>start&&end<text.length&&/^[\uD800-\uDBFF]$/.test(text[end-1]))end--;
+  return {start,end,text:text.slice(start,end)};
+}
+
 function chunkResult(result:ToolJobResult,offset=0,maxChars=MAX_CHARS):Record<string,unknown>{
   if(result.status!=='completed'||!result.transcript)return result as unknown as Record<string,unknown>;
   const safeOffset=Math.max(0,Math.min(offset,result.transcript.length));
   const size=Math.max(1000,Math.min(maxChars,50_000));
-  const contentText=result.transcript.slice(safeOffset,safeOffset+size);
-  const next=safeOffset+size<result.transcript.length?safeOffset+size:null;
+  const chunk=unicodeSafeSlice(result.transcript,safeOffset,size);
+  const contentText=chunk.text;
+  const next=chunk.end<result.transcript.length?chunk.end:null;
   const contentType=kindFor(result);
   const visualNotice=contentType==='video'
     ? 'Visual-only text, layout, gestures, charts, pairings, and other on-screen relationships may be missing. Do not infer them unless supported by transcript/caption text.'
@@ -45,7 +54,7 @@ function chunkResult(result:ToolJobResult,offset=0,maxChars=MAX_CHARS):Record<st
     visual_content_included:false,limitation_notice:result.truncated
       ? `Note: Link2AI processed only part of this source because it exceeded the safe content limit.${result.pages_extracted!==undefined&&result.pages_available!==undefined?` Processed ${result.pages_extracted} of ${result.pages_available} pages.`:''}${result.content_sections_truncated?.length?` Truncated sections: ${result.content_sections_truncated.join(', ')}.`:''}`
       : visualNotice,
-    transcript_offset:safeOffset,next_offset:next,total_characters:result.transcript.length,
+    transcript_offset:chunk.start,next_offset:next,total_characters:result.transcript.length,
     ...(safeOffset===0&&result.transcript.length<=size?{segments:result.segments}: {})
   };
 }

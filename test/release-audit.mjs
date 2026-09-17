@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-const [linkSource,mcpSource,apiSource,authSource,audioSource,safeHttpSource,publicUrlSource]=await Promise.all([
+const [linkSource,mcpSource,apiSource,authSource,authServiceSource,audioSource,safeHttpSource,publicUrlSource,workerSource]=await Promise.all([
   readFile(new URL('../src/content/linkText.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/mcp/server.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/api/main.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/auth/routes.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/auth/service.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/media/audio.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/util/safeHttp.ts',import.meta.url),'utf8'),
-  readFile(new URL('../src/config/publicUrl.ts',import.meta.url),'utf8')
+  readFile(new URL('../src/config/publicUrl.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/worker/main.ts',import.meta.url),'utf8')
 ]);
 assert.match(linkSource,/safeJsonArrayPages/,'GitHub discussions must use bounded pagination');
 assert.match(linkSource,/GitHub comments/);
@@ -22,5 +24,9 @@ assert.match(authSource,/browserSameOriginOk/,'Auth browser POSTs must use the s
 assert.match(publicUrlSource,/expectedOrigins/,'Browser same-origin checks must accept the canonical public origin behind a reverse proxy');
 assert.match(safeHttpSource,/orderPublicAddresses/,'External HTTP must order validated public addresses instead of betting on the first DNS answer');
 assert.match(safeHttpSource,/requestDeadline/,'External HTTP address fallback must stay inside the configured timeout budget');
+assert.match(safeHttpSource,/DNS lookup timed out/,'DNS resolution must share the external request timeout budget');
+assert.match(safeHttpSource,/Remote content response was truncated/,'prematurely closed HTTP responses must not become successful partial content');
+assert.match(authServiceSource,/pg_advisory_xact_lock\(hashtext\('link2ai:password-auth:global'\)\)/,'password admission count+insert must be serialized');
+assert.match(workerSource,/event:'job_claim_error'/,'a transient database claim error must not terminate the worker');
 assert.doesNotMatch(audioSource,/V1 transcription limit/,'User-facing errors must not expose internal V1 naming');
 console.log('release audit tests PASS');

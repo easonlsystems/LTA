@@ -26,7 +26,7 @@ Claude / ChatGPT continues
 - Instagram Reels
 - Public Instagram posts
 - Individual public X posts
-- Individual public Reddit posts + a bounded set of top public comments
+- Individual public Reddit posts + a bounded set of public comments, only when Reddit OAuth credentials are configured
 - Individual public Bluesky posts with bounded directly-attached context
 - Public GitHub issues and pull requests with bounded discussion/reviews
 - Individual Hacker News items with a bounded comment tree
@@ -59,7 +59,7 @@ For supported videos, Link2AI prefers usable publisher/platform captions. Only w
 For supported posts and webpages, Link2AI extracts public text directly rather than forcing the media pipeline:
 
 - X posts use public embed metadata.
-- Reddit posts use Reddit's public post JSON when available and return the post plus a bounded top-comment tree; a public-page fallback is used only when the JSON endpoint is temporarily unavailable.
+- Reddit posts use Reddit's OAuth Data API and are advertised at runtime only when both Reddit OAuth credentials are configured. There is no anonymous scraping fallback.
 - Instagram/TikTok posts first use the dedicated social extractor and fall back to the public page when possible.
 - Generic webpages use the SSRF-safe HTTP client, accept only HTML/text responses, remove common non-content regions and return bounded readable text.
 
@@ -161,4 +161,4 @@ The current expansion keeps the existing job/cache tables and extends cache sour
 
 Public beta onboarding lives at `/connect`. The preferred flow is Claude custom connector → **Sign in now** → **Register automatically (DCR)** → Add → Link2AI account authorization. Users should not need a manually issued OAuth client ID or secret.
 
-The beta can read spoken/caption text from supported videos, public post text (including bounded Reddit discussion context), and readable public webpages. Visual-only information may still be missing unless it is present in readable page metadata/text.
+The beta can read spoken/caption text from supported videos, public post text, and readable public webpages. Reddit discussion context is available only when Reddit OAuth is configured. Visual-only information may still be missing unless it is present in readable page metadata/text.

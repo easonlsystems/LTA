@@ -184,7 +184,10 @@ export async function processLemonEvent(event:any):Promise<void>{
       `SELECT user_id,plan,status,provider_event_at FROM subscriptions WHERE provider_subscription_id=$1 FOR UPDATE`,[subscriptionId]
     );
     const custom=event?.meta?.custom_data??{};
-    const userId=String(custom.user_id??existing.rows[0]?.user_id??'');
+    // A provider subscription is permanently owned by the first local user that
+    // observed it. Later signed events may repeat or omit custom data, but must never
+    // be able to rebind an existing subscription to another account.
+    const userId=String(existing.rows[0]?.user_id??custom.user_id??'');
     const plan=planFromObject({attributes:attrs,meta:event.meta})??existing.rows[0]?.plan??null;
     if(!userId||!plan){await client.query('COMMIT');return;}
     const updatedAtRaw=attrs.updated_at??attrs.created_at;

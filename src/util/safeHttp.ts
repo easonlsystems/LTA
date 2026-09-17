@@ -53,23 +53,31 @@ export function pinnedLookup(address:string,family:4|6){
   };
 }
 
-async function resolvePublic(hostname:string):Promise<Array<{address:string;family:4|6}>>{
+async function resolvePublic(hostname:string,timeoutMs:number):Promise<Array<{address:string;family:4|6}>>{
   let addresses:Array<{address:string;family:number}>;
-  try { addresses=await lookup(hostname,{all:true,verbatim:true}) as Array<{address:string;family:number}>; }
-  catch { throw new Link2AIError('EXTRACTION_FAILED','Remote content host could not be resolved.',502,true); }
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  try { addresses=await Promise.race([
+    lookup(hostname,{all:true,verbatim:true}) as Promise<Array<{address:string;family:number}>>,
+    new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Link2AIError('EXTRACTION_FAILED','Remote content DNS lookup timed out.',504,true)),timeoutMs);})
+  ]); }
+  catch(error) { if(error instanceof Link2AIError)throw error; throw new Link2AIError('EXTRACTION_FAILED','Remote content host could not be resolved.',502,true); }
+  finally{if(timer)clearTimeout(timer);}
   if(!addresses.length||addresses.some((a:{address:string;family:number})=>!isPublicAddress(a.address)))throw new Link2AIError('EXTRACTION_FAILED','Remote content URL resolved to a non-public network.',502);
   return orderPublicAddresses(addresses).slice(0,8);
 }
 
 export async function safeGetBuffer(rawUrl:string,opts:{maxBytes:number;timeoutMs:number;maxRedirects?:number;userAgent?:string;accept?:string}):Promise<{bytes:Buffer;contentType:string|null;finalUrl:string}>{
   let current=rawUrl; const redirects=opts.maxRedirects??5;
+  const overallDeadline=Date.now()+opts.timeoutMs;
   for(let i=0;i<=redirects;i++){
     let url:URL; try{url=new URL(current);}catch{throw new Link2AIError('EXTRACTION_FAILED','Remote content URL is invalid.',502);}
     if(url.protocol!=='https:'||url.username||url.password)throw new Link2AIError('EXTRACTION_FAILED','Remote content URL must use public HTTPS.',502);
-    const resolvedAddresses=await resolvePublic(url.hostname);
+    const dnsRemaining=overallDeadline-Date.now();
+    if(dnsRemaining<=0)throw new Link2AIError('EXTRACTION_FAILED','Remote content request timed out.',504,true);
+    const resolvedAddresses=await resolvePublic(url.hostname,dnsRemaining);
     let result:{status:number;headers:IncomingHttpHeaders;bytes:Buffer}|undefined;
     let lastNetworkError:unknown;
-    const requestDeadline=Date.now()+opts.timeoutMs;
+    const requestDeadline=overallDeadline;
     for(const resolved of resolvedAddresses){
       const remainingMs=requestDeadline-Date.now();
       if(remainingMs<=0)break;
@@ -81,12 +89,21 @@ export async function safeGetBuffer(rawUrl:string,opts:{maxBytes:number;timeoutM
             servername:url.hostname,headers:{'user-agent':opts.userAgent??'Link2AI/1.0','accept':opts.accept??'*/*','accept-encoding':'identity'},
             lookup:pinnedLookup(resolved.address,resolved.family)
           },(res:any)=>{
+            let settled=false;
+            const fail=(error:unknown)=>{if(settled)return;settled=true;reject(error);};
             res.on('data',(chunk:Buffer|string)=>{
               const b=Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk); total+=b.length;
               if(total>opts.maxBytes){req.destroy(new Link2AIError('EXTRACTION_FAILED','Remote content response exceeded safety limit.',502));return;}
               chunks.push(b);
             });
-            res.on('end',()=>resolve({status:res.statusCode??0,headers:res.headers,bytes:Buffer.concat(chunks)}));
+            res.on('aborted',()=>fail(new Link2AIError('EXTRACTION_FAILED','Remote content response was truncated.',502,true)));
+            res.on('error',fail);
+            res.on('end',()=>{
+              if(settled)return;
+              const declared=Number(res.headers['content-length']??0);
+              if(Number.isFinite(declared)&&declared>0&&declared!==total){fail(new Link2AIError('EXTRACTION_FAILED','Remote content response was truncated.',502,true));return;}
+              settled=true;resolve({status:res.statusCode??0,headers:res.headers,bytes:Buffer.concat(chunks)});
+            });
           });
           req.setTimeout(remainingMs,()=>req.destroy(new Link2AIError('EXTRACTION_FAILED','Remote content request timed out.',504,true)));
           req.on('error',reject); req.end();

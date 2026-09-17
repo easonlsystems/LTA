@@ -1,5 +1,7 @@
 # Link2AI cumulative link expansion + Reddit — 2026-09-15
 
+> Historical implementation record, superseded by the current source. Current production supports and advertises Reddit only when Reddit OAuth credentials are configured; it does not use anonymous Reddit JSON or HTML scraping fallbacks.
+
 ## Baseline
 
 Production baseline when this package was prepared:

@@ -48,4 +48,7 @@ assert.deepEqual(
   [{address:'8.8.8.8',family:4},{address:'2001:4860:4860::8888',family:6}],
   'external HTTP should prefer IPv4 while retaining IPv6 fallback'
 );
+const {videoCompleteness}=await import('../dist/src/worker/processor.js');
+assert.equal(videoCompleteness('partial captions',600,[{end:10}]).truncated,true,'short caption timelines must be disclosed as partial');
+assert.equal(videoCompleteness('complete captions',600,[{end:595}]).truncated,false,'near-complete caption timelines must not be marked partial');
 console.log('security tests PASS');

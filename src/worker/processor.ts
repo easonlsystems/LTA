@@ -18,8 +18,10 @@ import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limi
 
 const resolver=new ResolverOrchestrator();
 
-function videoCompleteness(text:string,durationSeconds:number){
-  return {truncated:false,extractedTokenEstimate:estimateTokens(text),usageUnits:videoUsageUnits(durationSeconds)};
+export function videoCompleteness(text:string,durationSeconds:number,segments?:Array<{end:number}>){
+  const coverage=segments?.reduce((max,segment)=>Number.isFinite(segment.end)?Math.max(max,segment.end):max,0)??durationSeconds;
+  const truncated=durationSeconds>0&&coverage>0&&coverage<durationSeconds-30&&coverage/durationSeconds<0.9;
+  return {truncated,extractedTokenEstimate:estimateTokens(text),usageUnits:videoUsageUnits(durationSeconds),...(truncated?{truncationReason:'caption_timeline_incomplete',contentSectionsTruncated:['caption_timeline']}: {})};
 }
 function cachedUsageUnits(cache:{usage_units:number;source:string;transcript:string;duration_seconds:number}):number{
   return cache.usage_units>0?cache.usage_units:(cache.source==='post'||cache.source==='page'?textUsageUnits(estimateTokens(cache.transcript)):videoUsageUnits(cache.duration_seconds));
@@ -184,14 +186,15 @@ export async function processJob(job:JobRow):Promise<void>{
 
     if(caption?.transcript&&metadata.durationSeconds>0){
       if(!reserved){await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);reserved=true;}
+      const completeness=videoCompleteness(caption.transcript,metadata.durationSeconds,caption.segments);
       const cache=await saveCache({
         platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
         title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
-        language:caption.language,transcript:caption.transcript,segments:caption.segments,source:'caption',completeness:videoCompleteness(caption.transcript,metadata.durationSeconds)
+        language:caption.language,transcript:caption.transcript,segments:caption.segments,source:'caption',completeness
       });
       await finalizeQuota(job.user_id,job.id); reserved=false;
       await markCompleted(job.id,cache.id,metadata.durationSeconds);
-      logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'caption',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,extracted_token_estimate:estimateTokens(caption.transcript),usage_units:videoUsageUnits(metadata.durationSeconds),truncated:false,processing_ms:Date.now()-startedAt});
+      logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'caption',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,extracted_token_estimate:estimateTokens(caption.transcript),usage_units:videoUsageUnits(metadata.durationSeconds),truncated:completeness.truncated,processing_ms:Date.now()-startedAt});
       return;
     }
 
@@ -212,14 +215,15 @@ export async function processJob(job:JobRow):Promise<void>{
     // If captions existed but had no usable timing, the audio probe supplied the missing
     // duration. Prefer those captions now instead of spending an ASR request.
     if(caption?.transcript){
+      const completeness=videoCompleteness(caption.transcript,metadata.durationSeconds,caption.segments);
       const cache=await saveCache({
         platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
         title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
-        language:caption.language,transcript:caption.transcript,segments:caption.segments,source:'caption',completeness:videoCompleteness(caption.transcript,metadata.durationSeconds)
+        language:caption.language,transcript:caption.transcript,segments:caption.segments,source:'caption',completeness
       });
       await finalizeQuota(job.user_id,job.id); reserved=false;
       await markCompleted(job.id,cache.id,metadata.durationSeconds);
-      logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'caption_after_duration_probe',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,processing_ms:Date.now()-startedAt});
+      logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'caption_after_duration_probe',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,truncated:completeness.truncated,processing_ms:Date.now()-startedAt});
       return;
     }
 

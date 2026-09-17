@@ -225,6 +225,8 @@ function isoTimestamp(value:unknown):string{
 
 export function parseBlueskyThread(input:ParsedMediaUrl,payload:unknown):LinkTextPayload{
   const root=jsonObject(payload);const thread=jsonObject(root?.thread);const post=jsonObject(thread?.post);
+  const [actor,rkey]=input.canonicalMediaId.split('/');
+  if(jsonString(post?.uri)!==`at://${actor}/app.bsky.feed.post/${rkey}`)throw new Link2AIError('EXTRACTION_FAILED','Bluesky returned a different post than requested.',502,true);
   const record=jsonObject(post?.record);const author=jsonObject(post?.author);
   const text=cleanText(jsonString(record?.text));
   if(!text)throw new Link2AIError('EXTRACTION_FAILED','This Bluesky post did not expose readable public text.',422,false);
@@ -251,6 +253,8 @@ async function fetchBlueskyPost(input:ParsedMediaUrl):Promise<LinkTextPayload>{
 
 export function parseGitHubDiscussion(input:ParsedMediaUrl,itemValue:unknown,commentsValue:unknown,reviewsValue:unknown=[],diff='',sourceTruncated=false):LinkTextPayload{
   const item=jsonObject(itemValue);if(!item)throw new Link2AIError('EXTRACTION_FAILED','GitHub returned invalid issue metadata.',502,true);
+  const expectedNumber=Number(input.canonicalMediaId.split('/')[3]);
+  if(jsonNumber(item.number)!==expectedNumber)throw new Link2AIError('EXTRACTION_FAILED','GitHub returned a different issue or pull request than requested.',502,true);
   const repo=input.canonicalMediaId.split('/').slice(0,2).join('/');const isPr=input.canonicalMediaId.includes('/pull/');
   const user=jsonObject(item.user);const labels=Array.isArray(item.labels)?item.labels.map(v=>jsonString(jsonObject(v)?.name)).filter(Boolean).slice(0,20):[];
   const sections=[`${isPr?'Pull request':'Issue'}: ${repo}#${jsonNumber(item.number)??''}`,`Title: ${jsonString(item.title)}`,`Author: @${jsonString(user?.login)}`,`State: ${jsonString(item.state)}${jsonBoolean(item.merged)===true?' (merged)':''}`,labels.length?`Labels: ${labels.join(', ')}`:'',jsonString(item.created_at)?`Created: ${isoTimestamp(item.created_at)}`:''];
@@ -294,6 +298,7 @@ function renderHnComments(children:unknown,depth:number,out:HnRendered):void{
 
 export function parseHackerNewsItem(input:ParsedMediaUrl,payload:unknown):LinkTextPayload{
   const item=jsonObject(payload);if(!item)throw new Link2AIError('EXTRACTION_FAILED','Hacker News returned malformed item data.',502,true);
+  if(jsonNumber(item.id)!==Number(input.canonicalMediaId))throw new Link2AIError('EXTRACTION_FAILED','Hacker News returned a different item than requested.',502,true);
   const title=cleanText(jsonString(item.title),METADATA_LIMITS.title);const body=stripHtml(jsonString(item.text));
   if(!title&&!body)throw new Link2AIError('EXTRACTION_FAILED','This Hacker News item is deleted or has no readable public content.',422,false);
   const sections=[title?`Title: ${title}`:'',`Submitter: ${jsonString(item.author)||'unknown'}`,jsonNumber(item.points)!==undefined?`Score: ${jsonNumber(item.points)}`:'',isoTimestamp(item.created_at)?`Published: ${isoTimestamp(item.created_at)}`:'',jsonString(item.url)?`Destination: ${jsonString(item.url)}`:'',body?`Story text:\n${body}`:''];
@@ -373,6 +378,7 @@ export function parseRedditJson(input:ParsedMediaUrl,payload:unknown):LinkTextPa
   const postChild=redditChildren(payload[0]).map(jsonObject).find(child=>child?.kind==='t3');
   const post=jsonObject(postChild?.data);
   if(!post)throw new Link2AIError('EXTRACTION_FAILED','Reddit did not expose this public post.',422,false);
+  if(jsonString(post.id).toLowerCase()!==input.canonicalMediaId.toLowerCase())throw new Link2AIError('EXTRACTION_FAILED','Reddit returned a different post than requested.',502,true);
 
   const title=cleanText(jsonString(post.title),METADATA_LIMITS.title);
   const authorRaw=jsonString(post.author).trim();
