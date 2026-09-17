@@ -205,6 +205,29 @@ const siteCss=`:root{color-scheme:light;--ink:#17151f;--muted:#6f6a78;--line:rgb
   .mobile-menu-panel{right:-86px}
 }
 
+/* Simplified comparison interaction · 2026-09-17 */
+.sim-shell{max-width:980px}
+.sim-tabs{justify-content:center;padding:14px 16px 0;border-bottom:0;background:transparent}
+.sim-tab[hidden]{display:none}
+.sim-meta-simple{grid-template-columns:minmax(0,1fr) auto;gap:18px;padding:18px 22px 20px}
+.sim-prompt-card{min-width:0}
+.sim-prompt-card>span{display:block;margin-bottom:7px;font-size:10px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#8a8292}
+.sim-prompt-card>p{margin:0;font-size:16px;line-height:1.45;font-weight:800;color:#2d2734}
+.sim-meta-simple .sim-source-name,.sim-meta-simple .sim-url,.sim-reset{display:none!important}
+.sim-grid{gap:12px;padding:0 22px 18px}
+.sim-panel{min-height:0;padding:15px 16px}
+.sim-panel-head{padding-bottom:0;border-bottom:0}
+.sim-panel-sub,.sim-chat-user{display:none}
+.sim-panel .sim-body{display:none;padding-top:12px}
+.sim-panel:has(.sim-answer.show) .sim-body,.sim-panel:has(.sim-tool.show) .sim-body{display:flex}
+.sim-answer{padding:12px 13px;font-size:13px}
+.sim-answer p{margin:5px 0 0}
+.sim-answer ul{display:none}
+.sim-tool{width:auto;max-width:100%;padding:9px 11px}
+.sim-conclusion{margin:0 22px 18px;padding:0;background:transparent;color:#716a79;font-size:12px}
+.sim-conclusion strong{color:#5e49c4}
+@media(max-width:650px){.sim-tabs{justify-content:flex-start}.sim-meta-simple{grid-template-columns:1fr;gap:12px;padding:14px}.sim-prompt-card>p{font-size:14px}.sim-actions{display:block}.sim-run{width:100%;min-height:44px}.sim-grid{grid-template-columns:1fr;padding:0 14px 14px}.sim-panel{padding:14px}.sim-conclusion{margin:0 14px 14px}.sim-shell{margin-top:20px}}
+
 @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}.sim-line.live:after{animation:none}.sim-answer.show,.sim-tool.show,.sim-conclusion.show{animation:none}}
 
 `;
@@ -233,19 +256,23 @@ app.get('/',async(req,reply)=>{
         <div class="experience-copy reveal">
           <span class="experience-kicker">Interactive comparison · Claude-first</span>
           <h1>Paste a link.<br><span>Claude can read it.</span></h1>
-          <p class="experience-lede">Run the same public URL and the same question side by side. The only difference is whether Link2AI is connected.</p>
+          <p class="experience-lede">Pick a source, ask the same question, and tap once to see what Link2AI changes.</p>
         </div>
         <div class="sim-shell reveal" id="comparison-demo" aria-label="Interactive Link2AI comparison simulation">
           <div class="sim-tabs" role="tablist" aria-label="Choose a source for the comparison">
-            <button class="sim-tab" type="button" data-sim-source="reddit">${redditOAuthReady?'Reddit':'Reddit · paused'}</button>
+            <button class="sim-tab" type="button" data-sim-source="reddit"${redditOAuthReady?'':' hidden'}>${redditOAuthReady?'Reddit':'Reddit · paused'}</button>
             <button class="sim-tab active" type="button" data-sim-source="youtube">YouTube</button>
             <button class="sim-tab" type="button" data-sim-source="github">GitHub</button>
             <button class="sim-tab" type="button" data-sim-source="pdf">PDF</button>
             <button class="sim-tab" type="button" data-sim-source="web">Web</button>
           </div>
-          <div class="sim-meta">
-            <div><span class="sim-source-label">Same link · two conversations</span><strong class="sim-source-name" id="sim-source-name">YouTube video</strong><code class="sim-url" id="sim-url">youtube.com/watch?v=…</code></div>
-            <div class="sim-actions"><button class="sim-run" id="sim-run" type="button">See the difference →</button><button class="sim-reset" id="sim-reset" type="button">Reset</button></div>
+          <div class="sim-meta sim-meta-simple">
+            <div class="sim-prompt-card">
+              <span>Try this question</span>
+              <p class="sim-user-question">What is this YouTube video arguing, and what evidence does it use?</p>
+              <strong class="sim-source-name" id="sim-source-name" hidden>YouTube video</strong><code class="sim-url" id="sim-url" hidden>youtube.com/watch?v=…</code>
+            </div>
+            <div class="sim-actions"><button class="sim-run" id="sim-run" type="button">See the difference →</button><button class="sim-reset" id="sim-reset" type="button" hidden>Reset</button></div>
           </div>
           <div class="sim-grid" aria-live="polite">
             <article class="sim-panel without">
@@ -386,7 +413,7 @@ const homeExperienceJs=`(()=>{
       const setTimer=(fn,ms,runId=state.runId)=>{const id=setTimeout(()=>{state.timers.delete(id);if(runId!==state.runId)return;fn();},ms);state.timers.add(id);return id;};
       const resetDemo=(markInteraction=false)=>{if(markInteraction)state.interacted=true;state.runId++;clearTimers();q('#sim-left-state').textContent='Ready';q('#sim-right-state').textContent='Ready';q('#sim-left-state').className='sim-state';q('#sim-right-state').className='sim-state';q('#sim-left-answer').classList.remove('show');q('#sim-right-answer').classList.remove('show');q('#sim-left-answer').innerHTML='';q('#sim-right-answer').innerHTML='';q('#sim-tool').classList.remove('show');q('#sim-tool').innerHTML='Link2AI · Reading source… <i>connected</i>';q('#sim-conclusion').classList.remove('show');q('#sim-conclusion').hidden=true;qa('#sim-left-thinking .sim-line,#sim-right-thinking .sim-line').forEach(el=>el.classList.remove('live'));};
       const renderDemoSource=(key)=>{const d=demos[key];if(!d)return;state.source=key;q('#sim-source-name').textContent=d.name;q('#sim-url').textContent=d.url;qa('.sim-user-question').forEach(el=>{el.textContent=d.question;});qa('.sim-tab').forEach(b=>b.classList.toggle('active',b.dataset.simSource===key));resetDemo();};
-      const renderAnswer=(el,lead,points)=>{el.innerHTML='<span class="sim-chat-speaker">Claude</span><strong>'+lead+'</strong><ul>'+points.map(x=>'<li>'+x+'</li>').join('')+'</ul>';};
+      const renderAnswer=(el,lead,points)=>{el.innerHTML='<span class=\"sim-chat-speaker\">Claude</span><strong>'+lead+'</strong><p>'+points[0]+'</p>';};
       const renderRedditPaused=()=>{q('#sim-left-state').textContent='Ready';q('#sim-left-state').className='sim-state';q('#sim-right-state').textContent='Temporarily paused';q('#sim-right-state').className='sim-state failed';qa('#sim-left-thinking .sim-line,#sim-right-thinking .sim-line').forEach(el=>el.classList.remove('live'));q('#sim-tool').classList.add('show');q('#sim-tool').innerHTML='Reddit · Approved OAuth access required <i>0 units</i>';q('#sim-right-answer').innerHTML='<span class="sim-chat-speaker">Claude</span><p>Reddit reads are paused on this deployment rather than bypassing Reddit’s hosted-service access controls.</p>';q('#sim-right-answer').classList.add('show');q('#sim-conclusion').classList.remove('show');q('#sim-conclusion').hidden=true;};
       const runDemo=(markInteraction=false)=>{if(markInteraction)state.interacted=true;resetDemo();if(state.source==='reddit'&&!redditAvailable){renderRedditPaused();return;}const runId=state.runId;const d=demos[state.source];const reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;const t=reduced?0:1;q('#sim-left-state').textContent='Trying source';q('#sim-right-state').textContent='Starting';q('#sim-left-state').className='sim-state reading';q('#sim-right-state').className='sim-state reading';qa('#sim-left-thinking .sim-line,#sim-right-thinking .sim-line').forEach(el=>el.classList.add('live'));setTimer(()=>{q('#sim-tool').classList.add('show');q('#sim-right-state').textContent='Reading';},350*t,runId);setTimer(()=>{q('#sim-left-state').textContent='Blocked';q('#sim-left-state').className='sim-state failed';qa('#sim-left-thinking .sim-line').forEach(el=>el.classList.remove('live'));q('#sim-left-answer').innerHTML='<span class="sim-chat-speaker">Claude</span><p>'+d.fail+'</p>';q('#sim-left-answer').classList.add('show');},900*t,runId);setTimer(()=>{q('#sim-tool').innerHTML='Link2AI · Source loaded <i>ready</i>';q('#sim-right-state').textContent='Source loaded';q('#sim-right-state').className='sim-state loaded';},1300*t,runId);setTimer(()=>{qa('#sim-right-thinking .sim-line').forEach(el=>el.classList.remove('live'));renderAnswer(q('#sim-right-answer'),d.lead,d.points);q('#sim-right-answer').classList.add('show');},1750*t,runId);setTimer(()=>{q('#sim-conclusion').hidden=false;q('#sim-conclusion').classList.add('show');},2150*t,runId);};
       qa('.sim-tab').forEach(btn=>btn.addEventListener('click',()=>{state.interacted=true;renderDemoSource(btn.dataset.simSource);if(btn.dataset.simSource==='reddit'&&!redditAvailable)renderRedditPaused();}));q('#sim-run').addEventListener('click',()=>runDemo(true));q('#sim-reset').addEventListener('click',()=>resetDemo(true));
