@@ -48,12 +48,12 @@ try{
     assert.equal(page.status,200,`${route} should return 200`);
     const body=await page.text();
     assert.match(body,/LaunchBrand/);
-    if(route==='/'){assert.match(body,/Paste a link\./);assert.match(body,/Claude can read it\./);assert.match(body,/Interactive demo · Claude-first beta/);assert.match(body,/Run comparison/);assert.match(body,/src="\/home\.js\?v=20260917-r14" defer/);assert.match(body,/Same AI\. Same link\./);assert.match(body,/What do you want Claude to read\?/);assert.match(body,/Ask the question you already wanted to ask\./);assert.match(body,/Same link\. Real result\./);assert.match(body,/No synthetic testimonials\./);assert.match(body,/500 processing units \/ month/);assert.match(body,/2,000 processing units \/ month/);assert.match(body,/No fixed link-count limit/);assert.match(body,/Try the link Claude just failed to read\./);assert.match(body,/Built by Eason Systems/);assert.match(body,/Reddit · paused/);assert.match(body,/Reddit · temporarily paused\./);assert.doesNotMatch(body,/Summarize this Reddit thread\./);assert.doesNotMatch(body,/V2 · public links → readable source context/);}
+    if(route==='/'){assert.match(body,/Paste a link\./);assert.match(body,/Claude can read it\./);assert.match(body,/Interactive demo · Claude-first beta/);assert.match(body,/Play conversations/);assert.match(body,/Simulated Claude conversation/);assert.doesNotMatch(body,/Same user question/);assert.match(body,/src="\/home\.js\?v=20260917-chat1" defer/);assert.match(body,/Same AI\. Same link\./);assert.match(body,/What do you want Claude to read\?/);assert.match(body,/Ask the question you already wanted to ask\./);assert.match(body,/Same link\. Real result\./);assert.match(body,/No synthetic testimonials\./);assert.match(body,/500 processing units \/ month/);assert.match(body,/2,000 processing units \/ month/);assert.match(body,/No fixed link-count limit/);assert.match(body,/Try the link Claude just failed to read\./);assert.match(body,/Built by Eason Systems/);assert.match(body,/Reddit · paused/);assert.match(body,/Reddit · temporarily paused\./);assert.doesNotMatch(body,/Summarize this Reddit thread\./);assert.doesNotMatch(body,/V2 · public links → readable source context/);}
     if(route==='/connect'){assert.match(body,/Open Claude Connectors Directory/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Always available/);assert.doesNotMatch(body,/Add custom connector|Tools already loaded|Register automatically/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }
 
-  const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917-r14`,{headers:{host:'link2ai.example'}});
+  const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917-chat1`,{headers:{host:'link2ai.example'}});
   assert.equal(homeJsResponse.status,200,'homepage JS endpoint must return 200');
   assert.match(homeJsResponse.headers.get('content-type')??'',/javascript/);
   const homeJs=await homeJsResponse.text();
@@ -72,7 +72,7 @@ try{
     scrollIntoView(){}
   }
   const ids={};
-  for(const id of ['sim-source-name','sim-url','sim-question-text','sim-left-state','sim-right-state','sim-left-answer','sim-right-answer','sim-tool','sim-conclusion','sim-run','sim-reset','source-preview-label','source-preview-title','source-preview-question','source-mini-result','source-open-sim','usecase-user','usecase-result','simulation'])ids[id]=new FakeElement(id);
+  for(const id of ['sim-source-name','sim-url','sim-left-state','sim-right-state','sim-left-answer','sim-right-answer','sim-tool','sim-conclusion','sim-run','sim-reset','source-preview-label','source-preview-title','source-preview-question','source-mini-result','source-open-sim','usecase-user','usecase-result','simulation'])ids[id]=new FakeElement(id);
   ids['sim-conclusion'].hidden=true;
   const simTabs=['reddit','youtube','github','pdf','web'].map(value=>new FakeElement('',{simSource:value}));
   const sourceButtons=['reddit','youtube','github','x','web','pdf','instagram','tiktok','hn','bluesky'].map(value=>new FakeElement('',{sourceKey:value}));
@@ -83,6 +83,7 @@ try{
     querySelector(selector){if(selector.startsWith('#'))return ids[selector.slice(1)]??null;return null;},
     querySelectorAll(selector){
       if(selector==='.sim-tab')return simTabs;
+      if(selector==='.sim-user-question')return [new FakeElement(),new FakeElement()];
       if(selector==='.source-button')return sourceButtons;
       if(selector==='.usecase-option')return usecaseButtons;
       if(selector==='.reveal')return [];
