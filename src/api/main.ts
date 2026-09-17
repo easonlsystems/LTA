@@ -280,13 +280,17 @@ nav.scrolled:not(.home-nav){background:rgba(248,247,252,.88)!important;backdrop-
   body[data-path]:not([data-path="/"]) .source-grid,body[data-path]:not([data-path="/"]) .use-grid{gap:20px}
   body[data-path]:not([data-path="/"]) .source-card,body[data-path]:not([data-path="/"]) .use-card{padding:28px 30px}
 
-  .home-only .experience-hero{min-height:100svh;padding:88px 0 46px;display:flex;align-items:center}
+  .home-only .experience-hero{min-height:100svh;padding:132px 0 48px;display:flex;align-items:flex-start}
   .home-only .home-inner{width:min(100%,1460px);max-width:1460px;padding-left:48px;padding-right:48px}
   .home-only .experience-copy{max-width:1380px;margin-bottom:20px}
   .home-only .experience-hero h1{font-size:clamp(70px,5.5vw,92px);line-height:.93}
   .home-only .experience-lede{font-size:18px;max-width:900px}
-  .home-only .sim-shell{max-width:1280px;margin-top:22px}
-  .home-only .experience-hero-cta{margin-top:18px}
+  .home-only .sim-shell{max-width:1340px;margin-top:18px}
+  .home-only .experience-hero-cta{margin-top:16px}
+  .home-only .sim-tabs{padding-top:18px}
+  .home-only .sim-meta-simple{padding:20px 24px 24px}
+  .home-only .sim-grid{padding-left:24px;padding-right:24px;padding-bottom:22px}
+  .home-only .sim-panel{min-height:78px;padding:18px 18px}
 
   body[data-path="/support"] #main-content{padding-bottom:24px}
   body[data-path="/support"] .connect-hero{max-width:none;margin:0;padding:64px 0 28px!important;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(380px,.92fr);grid-template-rows:auto auto auto;column-gap:72px;row-gap:10px;text-align:left!important}
