@@ -275,6 +275,21 @@ CREATE TABLE IF NOT EXISTS transcript_jobs (
 );
 ALTER TABLE transcript_jobs ADD COLUMN IF NOT EXISTS preferred_region text;
 ALTER TABLE transcript_jobs ADD COLUMN IF NOT EXISTS attempted_regions text[] NOT NULL DEFAULT ARRAY[]::text[];
+UPDATE transcript_jobs SET preferred_region=CASE preferred_region
+  WHEN 'europe-west4-drams3a' THEN 'ams'
+  WHEN 'asia-southeast1-eqsg3a' THEN 'sin'
+  WHEN 'us-west2' THEN 'sfo'
+  ELSE preferred_region END
+WHERE preferred_region IN ('europe-west4-drams3a','asia-southeast1-eqsg3a','us-west2');
+UPDATE transcript_jobs SET attempted_regions=ARRAY(
+  SELECT DISTINCT CASE region
+    WHEN 'europe-west4-drams3a' THEN 'ams'
+    WHEN 'asia-southeast1-eqsg3a' THEN 'sin'
+    WHEN 'us-west2' THEN 'sfo'
+    ELSE region END
+  FROM unnest(attempted_regions) AS region
+)
+WHERE attempted_regions && ARRAY['europe-west4-drams3a','asia-southeast1-eqsg3a','us-west2']::text[];
 CREATE INDEX IF NOT EXISTS transcript_jobs_queue_idx ON transcript_jobs(status, next_attempt_at, priority DESC, created_at);
 CREATE INDEX IF NOT EXISTS transcript_jobs_region_queue_idx ON transcript_jobs(status, preferred_region, next_attempt_at, priority DESC, created_at);
 CREATE INDEX IF NOT EXISTS transcript_jobs_user_idx ON transcript_jobs(user_id, created_at DESC);

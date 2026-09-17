@@ -3,6 +3,7 @@ import type { Plan } from '../quota/plans.js';
 import { PLAN_LIMITS } from '../quota/plans.js';
 import { heartbeatMediaClaim } from './mediaClaims.js';
 import { env } from '../config/env.js';
+import { normalizeWorkerRegion } from './regions.js';
 
 export interface JobRow {
   id: string;
@@ -24,6 +25,8 @@ export interface JobRow {
 }
 
 export async function claimNextJob(workerId: string, workerRegion='local', primaryRegion=workerRegion): Promise<JobRow | null> {
+  const normalizedWorkerRegion=normalizeWorkerRegion(workerRegion)||'local';
+  const normalizedPrimaryRegion=normalizeWorkerRegion(primaryRegion)||normalizedWorkerRegion;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -45,7 +48,7 @@ export async function claimNextJob(workerId: string, workerRegion='local', prima
        ORDER BY j.priority DESC, j.created_at ASC
        FOR UPDATE OF j SKIP LOCKED
        LIMIT 1`,
-      [workerRegion,primaryRegion]
+      [normalizedWorkerRegion,normalizedPrimaryRegion]
     );
     if (!result.rowCount) { await client.query('COMMIT'); return null; }
     const job = result.rows[0];
@@ -66,11 +69,11 @@ export async function claimNextJob(workerId: string, workerRegion='local', prima
       `UPDATE transcript_jobs SET status='processing', locked_at=now(), locked_by=$2, attempts=attempts+1,
          attempted_regions=CASE WHEN $3::text=ANY(attempted_regions) THEN attempted_regions ELSE array_append(attempted_regions,$3::text) END,
          updated_at=now() WHERE id=$1`,
-      [job.id, workerId, workerRegion]
+      [job.id, workerId, normalizedWorkerRegion]
     );
     await client.query('COMMIT');
-    const attempted=job.attempted_regions?.includes(workerRegion)?job.attempted_regions:[...(job.attempted_regions??[]),workerRegion];
-    return { ...job, status: 'processing', attempts: job.attempts + 1, attempted_regions: attempted };
+    const attempted=Array.from(new Set([...(job.attempted_regions??[]),normalizedWorkerRegion].map(normalizeWorkerRegion).filter(Boolean)));
+    return { ...job, preferred_region: job.preferred_region?normalizeWorkerRegion(job.preferred_region):null, status: 'processing', attempts: job.attempts + 1, attempted_regions: attempted };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -94,10 +97,12 @@ export async function deferJob(jobId:string,seconds=3):Promise<void>{
 }
 
 export async function deferJobToRegion(jobId:string,region:string,errorCode:string,message:string):Promise<void>{
+  const normalizedRegion=normalizeWorkerRegion(region);
+  if(!normalizedRegion)throw new Error('Cannot defer a job to an empty worker region.');
   await pool.query(
     `UPDATE transcript_jobs SET status='queued',attempts=GREATEST(attempts-1,0),preferred_region=$2,error_code=$3,error_message=$4,retryable=true,
       locked_at=NULL,locked_by=NULL,next_attempt_at=now(),updated_at=now() WHERE id=$1`,
-    [jobId,region,errorCode,message]
+    [jobId,normalizedRegion,errorCode,message]
   );
 }
 

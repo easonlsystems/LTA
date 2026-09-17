@@ -7,7 +7,10 @@ const REGION_ALIASES:Record<string,string>={
   'us-west2':'sfo'
 };
 
-export const DEFAULT_PRODUCTION_REGION_ORDER=['ams','sin','sfo'] as const;
+// Production is intentionally single-region by default. Additional regions are
+// eligible only when operators explicitly configure WORKER_REGION_ORDER and
+// actually run workers there.
+export const DEFAULT_PRODUCTION_REGION_ORDER=['ams'] as const;
 
 export function normalizeWorkerRegion(value:string|undefined):string{
   const raw=(value??'').trim();
@@ -18,7 +21,7 @@ export function normalizeWorkerRegion(value:string|undefined):string{
 export function workerRegionRuntime(source:Record<string,string|undefined>=process.env):{currentRegion:string;regionOrder:string[];primaryRegion:string}{
   const currentRegion=normalizeWorkerRegion(source.RAILWAY_REPLICA_REGION)||'local';
   const configured=(source.WORKER_REGION_ORDER??'').split(',').map(normalizeWorkerRegion).filter(Boolean);
-  const productionDefault=DEFAULT_PRODUCTION_REGION_ORDER.includes(currentRegion as any)?[...DEFAULT_PRODUCTION_REGION_ORDER]:[currentRegion];
+  const productionDefault=currentRegion==='ams'?[...DEFAULT_PRODUCTION_REGION_ORDER]:[currentRegion];
   const regionOrder=configured.length?Array.from(new Set(configured)):productionDefault;
   if(!regionOrder.includes(currentRegion)&&configured.length)regionOrder.push(currentRegion);
   return {currentRegion,regionOrder,primaryRegion:regionOrder[0]??currentRegion};
