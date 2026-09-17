@@ -161,6 +161,9 @@ try{
   assert.equal(ids['sim-right-state'].textContent,'Source loaded','rerun after Reset must reach loaded state');
   assert.equal(ids['sim-conclusion'].hidden,false,'rerun after Reset must reveal conclusion');
   assert.ok(ids['sim-right-answer'].classList.contains('show'),'rerun after Reset must reveal the answer');
+  assert.equal(ids['sim-run'].textContent,'Run again ↻','completed comparison should offer a rerun');
+  assert.doesNotMatch(ids['sim-tool'].innerHTML,/\bready\b/i,'loaded tool state should not repeat ready');
+  assert.match(ids['sim-right-answer'].innerHTML,/AI agents are becoming capable faster/,'YouTube proof should read as source-specific');
   // Switching source during a run must invalidate old-source callbacks.
   ids['sim-run'].listeners.click();
   assert.ok(runNextTimer());
@@ -177,6 +180,7 @@ try{
   assert.equal(ids['sim-left-state'].textContent,'Ready','final Reset must restore left state');
   assert.equal(ids['sim-right-state'].textContent,'Ready','final Reset must restore right state');
   assert.match(ids['sim-tool'].innerHTML,/Reading source/,'Reset must restore the tool card before another run');
+  assert.equal(ids['sim-run'].textContent,'See the difference →','Reset should restore the initial comparison CTA');
 
   const start=await fetch(`http://127.0.0.1:${port}/start?from=hero`,{headers:{host:'link2ai.example'},redirect:'manual'});
   assert.equal(start.status,302);

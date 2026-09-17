@@ -15,6 +15,29 @@ function page(body:string,title=`${env().PUBLIC_BRAND_NAME}`){return `<!doctype 
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0}.stat{border:1px solid var(--line);border-radius:18px;padding:17px;background:#fff}.stat strong{display:block;font-size:25px;letter-spacing:-.035em}.stat span{display:block;margin-top:3px;color:var(--muted);font-size:12px;font-weight:700}.progress{height:9px;background:#efedf2;border-radius:999px;overflow:hidden;margin:12px 0 8px}.progress>span{display:block;height:100%;background:linear-gradient(90deg,var(--purple),var(--purple2));border-radius:999px}
 .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}a.btn,button{appearance:none;border:0;border-radius:13px;padding:12px 15px;font:inherit;font-weight:820;cursor:pointer;text-decoration:none}a:focus-visible,button:focus-visible{outline:3px solid rgba(111,84,232,.28);outline-offset:3px}.primary{background:linear-gradient(135deg,var(--purple),var(--purple2));color:#fff;box-shadow:0 8px 20px rgba(111,84,232,.18)}.secondary,button.secondary{background:#f3f1f5;color:var(--ink)}button{background:#17151f;color:#fff}.fine{font-size:12px;color:#8b8491;line-height:1.55;margin:17px 0 0}.legacy{margin:16px 0}.card{border:1px solid var(--line);border-radius:18px;padding:18px;margin:16px 0;background:#fff}a{color:inherit}@media(max-width:760px){.plan-grid,.usage-rule{grid-template-columns:1fr}.toplinks{display:none}}@media(max-width:620px){html,body{max-width:100%;overflow-x:hidden}body{padding:18px 13px 32px}.shell{width:100%}.topbar{align-items:flex-start;flex-direction:column;gap:10px;margin-bottom:16px}.brand{font-size:20px}.brand img{width:34px;height:34px}.email{max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.35}.hero{padding:20px 17px;border-radius:22px}.planrow{flex-direction:column;margin:14px 0 18px}.stats{grid-template-columns:1fr;gap:9px;margin:15px 0}.stat{padding:15px;border-radius:16px}.stat strong{font-size:24px}h1{font-size:30px}.actions{display:grid;grid-template-columns:1fr;gap:9px}.actions>a.btn,.actions form,.actions form button{width:100%}a.btn,button{min-height:48px;text-align:center}.card{padding:16px;border-radius:16px}.fine{overflow-wrap:anywhere}}
 @media(max-width:360px){body{padding-left:10px;padding-right:10px}.hero{padding:18px 14px}h1{font-size:28px}}
+/* Open desktop pricing canvas · 2026-09-17 */
+@media(min-width:761px){
+  body{min-height:100svh;padding:28px 48px 52px;background:radial-gradient(circle at 78% -10%,rgba(106,120,255,.18),transparent 40%),radial-gradient(circle at 3% 8%,rgba(179,123,255,.11),transparent 31%),linear-gradient(180deg,#fbfaff 0%,#f8f7fc 54%,#f5f3fa 100%);background-attachment:fixed;background-size:cover}
+  .shell:has(.plan-grid){width:min(1480px,100%)}
+  .shell:has(.plan-grid) .topbar{min-height:64px;margin-bottom:22px}
+  .hero:has(.plan-grid){background:transparent;border:0;border-radius:0;padding:24px 0 0;box-shadow:none;backdrop-filter:none}
+  .hero:has(.plan-grid)>.eyebrow{margin-bottom:14px}
+  .hero:has(.plan-grid) .pricing-intro{max-width:none;display:grid;grid-template-columns:minmax(0,1.12fr) minmax(360px,.88fr);gap:64px;align-items:end;margin-bottom:26px}
+  .hero:has(.plan-grid) .pricing-intro h1{font-size:clamp(50px,4.1vw,70px);line-height:.98;letter-spacing:-.055em;max-width:900px;margin-bottom:0}
+  .hero:has(.plan-grid) .pricing-intro p{font-size:18px;line-height:1.55;max-width:620px;margin:0;justify-self:end}
+  .hero:has(.plan-grid) .plan-grid{gap:18px;margin:20px 0 18px}
+  .hero:has(.plan-grid) .plan-card{padding:26px 28px;border-radius:24px;min-height:0;background:rgba(255,255,255,.82);box-shadow:0 10px 34px rgba(44,34,78,.04)}
+  .hero:has(.plan-grid) .plan-card.featured{box-shadow:0 20px 52px rgba(111,84,232,.10)}
+  .hero:has(.plan-grid) .plan-name{font-size:15px}
+  .hero:has(.plan-grid) .plan-fit{font-size:12px;margin-top:8px}
+  .hero:has(.plan-grid) .plan-price{font-size:44px;margin:12px 0}
+  .hero:has(.plan-grid) .plan-list{font-size:14px;gap:9px;line-height:1.42}
+  .hero:has(.plan-grid) .plan-card form{margin-top:18px}
+  .hero:has(.plan-grid) .usage-rule{gap:14px;margin-top:18px}
+  .hero:has(.plan-grid) .usage-rule div{padding:15px 17px;border-radius:16px;background:rgba(255,255,255,.62);font-size:12px;line-height:1.5}
+  .hero:has(.plan-grid) .plan-note{max-width:1120px;font-size:12px;line-height:1.55;margin-top:16px}
+}
+
 </style></head><body><main class="shell">${body}${env().SUPPORT_EMAIL?`<p class="fine" style="text-align:center;margin-top:18px">Need help? <a href="mailto:${esc(env().SUPPORT_EMAIL)}"><strong>${esc(env().SUPPORT_EMAIL)}</strong></a></p>`:''}<p class="fine" style="text-align:center;margin-top:12px">${esc(env().PUBLIC_BRAND_NAME)} is a product by Eason Systems.</p></main></body></html>`;}
 
 async function requireWebUser(req:any, reply:FastifyReply, returnTo?:string){
