@@ -1,0 +1,16 @@
+name: Final UI inspection
+
+on:
+  push:
+    branches: [ui-full-canvas]
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui-full-canvas
+      - name: Inspect target markup
+        run: |
+          grep -n -C 4 -E "Pick based on processing|Choose Basic|Choose Pro|app.get\('/pricing'|Something got in the way|class=\"support-grid\"" src/api/main.ts || true
