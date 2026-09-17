@@ -1,0 +1,133 @@
+name: Home app shell
+
+on:
+  push:
+    branches: [home-app-shell]
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: home-app-shell
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Convert homepage to full-screen app shell
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/api/main.ts')
+          s=p.read_text()
+
+          # Navigation becomes real pages instead of same-page anchors.
+          replacements={
+              'href=\"/#simulation\"':'href=\"/examples\"',
+              'href=\"/#use-cases\"':'href=\"/use-cases\"',
+              'href=\"/#sources\"':'href=\"/sources\"',
+              'href=\"/#pricing\"':'href=\"/pricing\"',
+              'href=\"/#examples\"':'href=\"/examples\"',
+              '<a href=\"/#proof\">Proof</a>':'',
+          }
+          for old,new in replacements.items():
+              s=s.replace(old,new)
+
+          # Add the new public pages to the sitemap.
+          sitemap_anchor='  <url><loc>${baseUrl}/connect</loc><priority>0.9</priority></url>\n'
+          sitemap_insert=(
+              sitemap_anchor+
+              '  <url><loc>${baseUrl}/examples</loc><priority>0.8</priority></url>\n'
+              '  <url><loc>${baseUrl}/use-cases</loc><priority>0.8</priority></url>\n'
+              '  <url><loc>${baseUrl}/sources</loc><priority>0.8</priority></url>\n'
+          )
+          if sitemap_anchor not in s:
+              raise SystemExit('sitemap anchor not found')
+          s=s.replace(sitemap_anchor,sitemap_insert,1)
+
+          # Full viewport hero and no homepage footer below it.
+          hero_css='.experience-hero{position:relative;margin-top:0;padding:'
+          if hero_css not in s:
+              raise SystemExit('experience hero css target not found')
+          s=s.replace(hero_css,'.experience-hero{min-height:100svh;position:relative;margin-top:0;padding:',1)
+          css_anchor='.experience-home{width:100vw;position:relative;left:50%;margin-left:-50vw;overflow:hidden}'
+          if css_anchor not in s:
+              raise SystemExit('experience home css target not found')
+          s=s.replace(css_anchor,css_anchor+'.home-only+footer{display:none}',1)
+
+          # Keep only the existing interactive hero on the homepage.
+          root_start=s.index("app.get('/',async(req,reply)=>{")
+          root_end=s.index('const homeExperienceJs=',root_start)
+          root=s[root_start:root_end]
+          main_marker='<main id=\\"main-content\\" class=\\"experience-home\\">'
+          main_at=root.index(main_marker)+len(main_marker)
+          hero_start=root.index('    <section class=\\"experience-hero\\"',main_at)
+          hero_end=root.index('    </section>',hero_start)+len('    </section>')
+          hero=root[hero_start:hero_end]
+          script_start=root.rfind('    <script src=\\"/home.js')
+          script_end=root.index('</script>',script_start)+len('</script>')
+          script=root[script_start:script_end].replace('20260917-chat2','20260917-homeonly1')
+          main_close=root.rindex('  </main>')
+          new_root=root[:main_at]+'\n'+hero+'\n\n'+script+'\n'+root[main_close:]
+          new_root=new_root.replace('class=\\"experience-home\\"','class=\\"experience-home home-only\\"',1)
+          s=s[:root_start]+new_root+s[root_end:]
+
+          # Dedicated, focused pages for the former one-page navigation.
+          routes=r'''
+app.get('/examples',async(req,reply)=>{
+  await trackWebsiteVisit(req,reply,'/examples');
+  return reply.type('text/html').send(siteShell(`<main id=\"main-content\"><section class=\"section\" style=\"padding-top:72px\"><div class=\"section-head\"><div><span class=\"section-index\">Examples</span><h2>See what changes when the source actually reaches Claude.</h2></div><p class=\"sub\">Representative workflows for the same kinds of public links Link2AI is built to read.</p></div><div class=\"use-grid\"><div class=\"use-card\"><h3>YouTube / Shorts</h3><p>Ask for the video's main claim, evidence, examples, or a concise summary without copying a transcript by hand.</p><div class=\"example-prompt\">“What is this video arguing, and what evidence does it use?”</div></div><div class=\"use-card\"><h3>GitHub Issues / PRs</h3><p>Bring the actual developer thread into the conversation so Claude can reason from the issue or review context.</p><div class=\"example-prompt\">“Review this issue and suggest the next fix.”</div></div><div class=\"use-card\"><h3>Readable webpages</h3><p>Use the page itself as source context instead of relying on search snippets or a manually pasted excerpt.</p><div class=\"example-prompt\">“Summarize the argument on this page and list the key evidence.”</div></div><div class=\"use-card\"><h3>Text-layer PDFs</h3><p>Let Claude work from readable PDF text when the document is publicly accessible.</p><div class=\"example-prompt\">“Compare the recommendations in this PDF and flag the tradeoffs.”</div></div></div><div class=\"actions\"><a class=\"btn purple\" href=\"/\">Try the interactive comparison →</a></div></section></main>`, `Examples · ${env().PUBLIC_BRAND_NAME}`, '/examples'));
+});
+
+app.get('/use-cases',async(req,reply)=>{
+  await trackWebsiteVisit(req,reply,'/use-cases');
+  return reply.type('text/html').send(siteShell(`<main id=\"main-content\"><section class=\"section\" style=\"padding-top:72px\"><div class=\"section-head\"><div><span class=\"section-index\">Use cases</span><h2>Use the link normally. Keep the conversation moving.</h2></div><p class=\"sub\">Link2AI is useful when your question depends on a public source Claude cannot reliably read by itself.</p></div><div class=\"feature-grid\"><div class=\"card\"><div class=\"kicker\">Understand</div><h3>Summaries grounded in the source</h3><p>Ask what a video, article, thread or document actually says without manually copying the content first.</p></div><div class=\"card\"><div class=\"kicker\">Analyze</div><h3>Reason from the original context</h3><p>Compare claims, inspect evidence, find tradeoffs, or ask follow-up questions while the source stays available to the conversation.</p></div><div class=\"card\"><div class=\"kicker\">Build</div><h3>Work from developer discussions</h3><p>Use GitHub Issues, pull requests and Hacker News discussions as context for debugging, planning and technical analysis.</p></div></div><div class=\"actions\"><a class=\"btn purple\" href=\"/\">Try it from the homepage →</a><a class=\"btn alt\" href=\"/sources\">See supported sources</a></div></section></main>`, `Use cases · ${env().PUBLIC_BRAND_NAME}`, '/use-cases'));
+});
+
+app.get('/sources',async(req,reply)=>{
+  await trackWebsiteVisit(req,reply,'/sources');
+  return reply.type('text/html').send(siteShell(`<main id=\"main-content\"><section class=\"section\" style=\"padding-top:72px\"><div class=\"section-head\"><div><span class=\"section-index\">Supported sources</span><h2>Public links Link2AI is built to read.</h2></div><p class=\"sub\">Availability can still vary with the source platform. Failed, unsupported or inaccessible reads cost 0 processing units.</p></div><div class=\"source-grid\"><div class=\"source-card\"><div class=\"source-icon\">▶</div><h3>Video & social</h3><p>YouTube / Shorts, TikTok, Instagram, X and Bluesky public links.</p></div><div class=\"source-card\"><div class=\"source-icon\">&lt;/&gt;</div><h3>Developer discussions</h3><p>GitHub Issues / pull requests and Hacker News discussions.</p></div><div class=\"source-card\"><div class=\"source-icon\">W</div><h3>Web pages</h3><p>Readable public webpages and articles that can be fetched safely.</p></div><div class=\"source-card\"><div class=\"source-icon\">PDF</div><h3>Documents</h3><p>Public text-layer PDFs. Image-only or inaccessible documents are not claimed as readable.</p></div><div class=\"source-card\"><div class=\"source-icon\">R</div><h3>Reddit</h3><p>${redditOAuthReady?'Available through configured Reddit OAuth Data API access.':'Paused until approved Reddit OAuth Data API credentials are configured.'}</p></div></div><div class=\"actions\"><a class=\"btn purple\" href=\"/\">Try the interactive comparison →</a><a class=\"btn alt\" href=\"/support\">Need help?</a></div></section></main>`, `Supported sources · ${env().PUBLIC_BRAND_NAME}`, '/sources'));
+});
+
+'''
+          insert_at=s.index('const homeExperienceJs=',s.index("app.get('/',async(req,reply)=>{"))
+          s=s[:insert_at]+routes+s[insert_at:]
+
+          p.write_text(s)
+          PY
+      - name: Verify page architecture
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('src/api/main.ts').read_text()
+          a=s.index("app.get('/',async(req,reply)=>{")
+          b=s.index('const homeExperienceJs=',a)
+          home=s[a:b]
+          assert 'story-bridge' not in home
+          assert 'source-experience' not in home
+          assert 'usecase-experience' not in home
+          assert 'proof-experience' not in home
+          assert 'home-pricing' not in home
+          assert 'home-only' in home
+          assert 'min-height:100svh' in s
+          assert 'href=\"/examples\"' in s
+          assert 'href=\"/use-cases\"' in s
+          assert 'href=\"/sources\"' in s
+          assert "app.get('/examples'" in s
+          assert "app.get('/use-cases'" in s
+          assert "app.get('/sources'" in s
+          PY
+      - run: npm ci
+      - run: npm test
+      - name: Commit validated update and remove one-time workflow
+        run: |
+          rm .github/workflows/home-app-shell.yml
+          git config user.name 'Link2AI UI Polish'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/api/main.ts .github/workflows/home-app-shell.yml
+          git commit -m 'Turn homepage into full-screen app shell'
+          git push origin HEAD:home-app-shell
