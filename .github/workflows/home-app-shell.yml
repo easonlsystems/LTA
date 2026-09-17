@@ -20,7 +20,7 @@ jobs:
           node-version: 22
           cache: npm
       - name: Apply homepage architecture update
-        run: python .github/scripts/home_app_shell.py
+        run: python .github/scripts/home_app_shell2.py
       - name: Verify page architecture
         run: |
           python - <<'PY'
@@ -36,9 +36,9 @@ jobs:
           assert 'home-pricing' not in home
           assert 'home-only' in home
           assert 'min-height:100svh' in s
-          assert 'href=\"/examples\"' in s
-          assert 'href=\"/use-cases\"' in s
-          assert 'href=\"/sources\"' in s
+          assert 'href="/examples"' in s
+          assert 'href="/use-cases"' in s
+          assert 'href="/sources"' in s
           assert "app.get('/examples'" in s
           assert "app.get('/use-cases'" in s
           assert "app.get('/sources'" in s
@@ -49,8 +49,9 @@ jobs:
         run: |
           rm .github/workflows/home-app-shell.yml
           rm .github/scripts/home_app_shell.py
+          rm .github/scripts/home_app_shell2.py
           git config user.name 'Link2AI UI Polish'
           git config user.email 'actions@users.noreply.github.com'
-          git add src/api/main.ts .github/workflows/home-app-shell.yml .github/scripts/home_app_shell.py
+          git add src/api/main.ts .github/workflows/home-app-shell.yml .github/scripts/home_app_shell.py .github/scripts/home_app_shell2.py
           git commit -m 'Turn homepage into full-screen app shell'
           git push origin HEAD:home-app-shell
