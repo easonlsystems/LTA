@@ -26,7 +26,7 @@ jobs:
           old_demo="        github:{name:'GitHub issue',url:'github.com/example/project/issues/…',question:'Review this GitHub issue and suggest the next fix to try.',fail:'I can’t reliably inspect the full Issue thread from the URL alone. Paste the Issue body and comments and I can review it.',lead:'The Issue points to one likely failure path and one missing diagnostic.',points:['The report is reproducible only after reconnecting.','Comments narrow the failure to state carried between requests.','The next useful step is instrumenting the reconnect path before changing behavior.']},\n"
           assert old_demo in s
           s=s.replace(old_demo,'')
-          s=s.replace('/home.js?v=20260917-homeonly1','/home.js?v=20260917-homeonly2')
+          s=s.replace('homeonly1','homeonly2')
           p.write_text(s)
 
           t=Path('test/runtime-smoke.mjs')
@@ -35,7 +35,7 @@ jobs:
           s=s.replace("['reddit','youtube','tiktok','instagram','x','bluesky','github','hn','pdf','web']","['reddit','youtube','tiktok','instagram','x','bluesky','hn','pdf','web']")
           s=s.replace("simTab('github').listeners.click();","simTab('hn').listeners.click();")
           s=s.replace("assert.match(ids['sim-url'].textContent,/github\\.com/,'source tabs must switch simulation content');","assert.match(ids['sim-url'].textContent,/news\\.ycombinator\\.com/,'source tabs must switch simulation content');")
-          s=s.replace('/home.js?v=20260917-homeonly1','/home.js?v=20260917-homeonly2')
+          s=s.replace('homeonly1','homeonly2')
           t.write_text(s)
       - name: Validate
         run: npm ci && npm test
