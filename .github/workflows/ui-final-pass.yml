@@ -13,4 +13,4 @@ jobs:
           ref: ui-full-canvas
       - name: Inspect target markup
         run: |
-          grep -n -C 4 -E "Pick based on processing|Choose Basic|Choose Pro|app.get\('/pricing'|Something got in the way|class=\"support-grid\"" src/api/main.ts || true
+          grep -Rni -C 4 -E "Pick based on processing|Choose Basic|Choose Pro|Something got in the way|support-grid|pricing" src test | head -n 500 || true
