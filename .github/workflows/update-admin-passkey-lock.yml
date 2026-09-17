@@ -1,0 +1,35 @@
+name: Update admin passkey lockfile
+
+on:
+  push:
+    branches: ["admin-passkey-pwa-20260917"]
+    paths: ["package.json"]
+
+permissions:
+  contents: write
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: admin-passkey-pwa-20260917
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Refresh package-lock only
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Commit lockfile
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo "package-lock.json already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "Update package lock for admin passkeys"
+          git push origin HEAD:admin-passkey-pwa-20260917
