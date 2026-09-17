@@ -244,16 +244,16 @@ app.get('/',async(req,reply)=>{
           </div>
           <div class="sim-meta">
             <div><span class="sim-source-label">Same link · two conversations</span><strong class="sim-source-name" id="sim-source-name">YouTube video</strong><code class="sim-url" id="sim-url">youtube.com/watch?v=…</code></div>
-            <div class="sim-actions"><button class="sim-run" id="sim-run" type="button">Play conversations →</button><button class="sim-reset" id="sim-reset" type="button">Reset</button></div>
+            <div class="sim-actions"><button class="sim-run" id="sim-run" type="button">See the difference →</button><button class="sim-reset" id="sim-reset" type="button">Reset</button></div>
           </div>
           <div class="sim-grid" aria-live="polite">
             <article class="sim-panel without">
               <div class="sim-panel-head"><div><div class="sim-panel-title">Without Link2AI</div><span class="sim-panel-sub">Simulated Claude conversation · same public link</span></div><span class="sim-state" id="sim-left-state">Ready</span></div>
-              <div class="sim-body"><div class="sim-chat-user"><span>You</span><p class="sim-user-question">What is this YouTube video arguing, and what evidence does it use?</p></div><div class="sim-thinking" id="sim-left-thinking"><div class="sim-line"></div><div class="sim-line"></div><div class="sim-line"></div></div><div class="sim-answer sim-fail" id="sim-left-answer"></div></div>
+              <div class="sim-body"><div class="sim-chat-user"><span>You</span><p class="sim-user-question">What is this YouTube video arguing, and what evidence does it use?</p></div><div class="sim-answer sim-fail" id="sim-left-answer"></div></div>
             </article>
             <article class="sim-panel with">
               <div class="sim-panel-head"><div><div class="sim-panel-title">With Link2AI</div><span class="sim-panel-sub">Simulated Claude conversation · Link2AI connected</span></div><span class="sim-state" id="sim-right-state">Ready</span></div>
-              <div class="sim-body"><div class="sim-chat-user"><span>You</span><p class="sim-user-question">What is this YouTube video arguing, and what evidence does it use?</p></div><div class="sim-tool" id="sim-tool">Link2AI · Reading source… <i>connected</i></div><div class="sim-thinking" id="sim-right-thinking"><div class="sim-line"></div><div class="sim-line"></div><div class="sim-line"></div></div><div class="sim-answer" id="sim-right-answer"></div></div>
+              <div class="sim-body"><div class="sim-chat-user"><span>You</span><p class="sim-user-question">What is this YouTube video arguing, and what evidence does it use?</p></div><div class="sim-tool" id="sim-tool">Link2AI · Reading source… <i>connected</i></div><div class="sim-answer" id="sim-right-answer"></div></div>
             </article>
           </div>
           <div class="sim-conclusion" id="sim-conclusion" hidden>Same AI. Same link. <strong>Missing context fixed.</strong></div>
@@ -348,7 +348,7 @@ app.get('/',async(req,reply)=>{
       </div>
     </section>
 
-    <script src="/home.js?v=20260917-chat1" defer></script>
+    <script src="/home.js?v=20260917-chat2" defer></script>
   </main>`, `${env().PUBLIC_BRAND_NAME} — Paste a link. Claude can read it.`, `/`));
 });
 
@@ -388,13 +388,13 @@ const homeExperienceJs=`(()=>{
       const renderAnswer=(el,lead,points)=>{el.innerHTML='<span class="sim-chat-speaker">Claude</span><strong>'+lead+'</strong><ul>'+points.map(x=>'<li>'+x+'</li>').join('')+'</ul>';};
       const renderRedditPaused=()=>{q('#sim-left-state').textContent='Ready';q('#sim-left-state').className='sim-state';q('#sim-right-state').textContent='Temporarily paused';q('#sim-right-state').className='sim-state failed';qa('#sim-left-thinking .sim-line,#sim-right-thinking .sim-line').forEach(el=>el.classList.remove('live'));q('#sim-tool').classList.add('show');q('#sim-tool').innerHTML='Reddit · Approved OAuth access required <i>0 units</i>';q('#sim-right-answer').innerHTML='<span class="sim-chat-speaker">Claude</span><p>Reddit reads are paused on this deployment rather than bypassing Reddit’s hosted-service access controls.</p>';q('#sim-right-answer').classList.add('show');q('#sim-conclusion').classList.remove('show');q('#sim-conclusion').hidden=true;};
       const runDemo=(markInteraction=false)=>{if(markInteraction)state.interacted=true;resetDemo();if(state.source==='reddit'&&!redditAvailable){renderRedditPaused();return;}const runId=state.runId;const d=demos[state.source];const reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;const t=reduced?0:1;q('#sim-left-state').textContent='Trying source';q('#sim-right-state').textContent='Starting';q('#sim-left-state').className='sim-state reading';q('#sim-right-state').className='sim-state reading';qa('#sim-left-thinking .sim-line,#sim-right-thinking .sim-line').forEach(el=>el.classList.add('live'));setTimer(()=>{q('#sim-tool').classList.add('show');q('#sim-right-state').textContent='Reading';},350*t,runId);setTimer(()=>{q('#sim-left-state').textContent='Blocked';q('#sim-left-state').className='sim-state failed';qa('#sim-left-thinking .sim-line').forEach(el=>el.classList.remove('live'));q('#sim-left-answer').innerHTML='<span class="sim-chat-speaker">Claude</span><p>'+d.fail+'</p>';q('#sim-left-answer').classList.add('show');},900*t,runId);setTimer(()=>{q('#sim-tool').innerHTML='Link2AI · Source loaded <i>ready</i>';q('#sim-right-state').textContent='Source loaded';q('#sim-right-state').className='sim-state loaded';},1300*t,runId);setTimer(()=>{qa('#sim-right-thinking .sim-line').forEach(el=>el.classList.remove('live'));renderAnswer(q('#sim-right-answer'),d.lead,d.points);q('#sim-right-answer').classList.add('show');},1750*t,runId);setTimer(()=>{q('#sim-conclusion').hidden=false;q('#sim-conclusion').classList.add('show');},2150*t,runId);};
-      qa('.sim-tab').forEach(btn=>btn.addEventListener('click',()=>{state.interacted=true;renderDemoSource(btn.dataset.simSource);if(btn.dataset.simSource==='reddit'&&!redditAvailable){renderRedditPaused();return;}runDemo(false);}));q('#sim-run').addEventListener('click',()=>runDemo(true));q('#sim-reset').addEventListener('click',()=>resetDemo(true));
+      qa('.sim-tab').forEach(btn=>btn.addEventListener('click',()=>{state.interacted=true;renderDemoSource(btn.dataset.simSource);if(btn.dataset.simSource==='reddit'&&!redditAvailable)renderRedditPaused();}));q('#sim-run').addEventListener('click',()=>runDemo(true));q('#sim-reset').addEventListener('click',()=>resetDemo(true));
       const showSource=(key)=>{const d=sourceExplore[key];if(!d)return;qa('.source-button').forEach(b=>b.classList.toggle('active',b.dataset.sourceKey===key));q('#source-preview-label').textContent=d.label;q('#source-preview-title').textContent=d.title;q('#source-preview-question').textContent=d.question;q('#source-mini-result').innerHTML='<strong>What changes</strong>'+d.result;q('#source-open-sim').hidden=!d.sim;q('#source-open-sim').dataset.sim=d.sim||'';};
-      qa('.source-button').forEach(btn=>btn.addEventListener('click',()=>{state.interacted=true;showSource(btn.dataset.sourceKey);}));q('#source-open-sim').addEventListener('click',(e)=>{state.interacted=true;const key=e.currentTarget.dataset.sim;if(!key)return;renderDemoSource(key);document.getElementById('simulation').scrollIntoView({behavior:'smooth'});setTimer(()=>runDemo(false),420,state.runId);});
+      qa('.source-button').forEach(btn=>btn.addEventListener('click',()=>{state.interacted=true;showSource(btn.dataset.sourceKey);}));q('#source-open-sim').addEventListener('click',(e)=>{state.interacted=true;const key=e.currentTarget.dataset.sim;if(!key)return;renderDemoSource(key);document.getElementById('simulation').scrollIntoView({behavior:'smooth'});});
       const showUsecase=(key)=>{const d=usecases[key];if(!d)return;qa('.usecase-option').forEach(b=>b.classList.toggle('active',b.dataset.usecase===key));q('#usecase-user').textContent=d.prompt;q('#usecase-result').innerHTML='<div class="usecase-result-label">Example output · representative</div><strong>'+d.lead+'</strong><ul>'+d.points.map(x=>'<li>'+x+'</li>').join('')+'</ul>';};
       qa('.usecase-option').forEach(btn=>btn.addEventListener('click',()=>{if(btn.dataset.usecase==='reddit'&&!redditAvailable)return;showUsecase(btn.dataset.usecase);}));
       const reveals=qa('.reveal');if('IntersectionObserver' in window&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches){const io=new IntersectionObserver(entries=>{entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('in');io.unobserve(entry.target);}});},{threshold:.13});reveals.forEach(el=>io.observe(el));}else{reveals.forEach(el=>el.classList.add('in'));}
-      setTimer(()=>{if(!state.interacted)runDemo(false);},650,state.runId);
+      resetDemo();
 })();`;
 app.get('/home.js',async(_req,reply)=>reply.header('Cache-Control','no-cache, max-age=0, must-revalidate').type('application/javascript; charset=utf-8').send(homeExperienceJs));
 

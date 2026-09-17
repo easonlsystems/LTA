@@ -48,12 +48,12 @@ try{
     assert.equal(page.status,200,`${route} should return 200`);
     const body=await page.text();
     assert.match(body,/LaunchBrand/);
-    if(route==='/'){assert.match(body,/Paste a link\./);assert.match(body,/Claude can read it\./);assert.match(body,/Interactive comparison · Claude-first/);assert.match(body,/Play conversations/);assert.match(body,/Simulated Claude conversation/);assert.doesNotMatch(body,/Same user question/);assert.match(body,/src="\/home\.js\?v=20260917-chat1" defer/);assert.match(body,/Same AI\. Same link\./);assert.match(body,/What do you want Claude to read\?/);assert.match(body,/Ask the question you already wanted to ask\./);assert.match(body,/Same link\. Real result\./);assert.match(body,/No synthetic testimonials\./);assert.match(body,/500 processing units \/ month/);assert.match(body,/2,000 processing units \/ month/);assert.match(body,/No fixed link-count limit/);assert.match(body,/Try the link Claude just failed to read\./);assert.match(body,/Built by Eason Systems/);assert.match(body,/Reddit · paused/);assert.match(body,/Reddit · temporarily paused\./);assert.doesNotMatch(body,/Summarize this Reddit thread\./);assert.doesNotMatch(body,/V2 · public links → readable source context/);}
+    if(route==='/'){assert.match(body,/Paste a link\./);assert.match(body,/Claude can read it\./);assert.match(body,/Interactive comparison · Claude-first/);assert.match(body,/See the difference/);assert.match(body,/Simulated Claude conversation/);assert.doesNotMatch(body,/Same user question/);assert.doesNotMatch(body,/class="sim-thinking"/);assert.match(body,/src="\/home\.js\?v=20260917-chat2" defer/);assert.match(body,/Same AI\. Same link\./);assert.match(body,/What do you want Claude to read\?/);assert.match(body,/Ask the question you already wanted to ask\./);assert.match(body,/Same link\. Real result\./);assert.match(body,/No synthetic testimonials\./);assert.match(body,/500 processing units \/ month/);assert.match(body,/2,000 processing units \/ month/);assert.match(body,/No fixed link-count limit/);assert.match(body,/Try the link Claude just failed to read\./);assert.match(body,/Built by Eason Systems/);assert.match(body,/Reddit · paused/);assert.match(body,/Reddit · temporarily paused\./);assert.doesNotMatch(body,/Summarize this Reddit thread\./);assert.doesNotMatch(body,/V2 · public links → readable source context/);}
     if(route==='/connect'){assert.match(body,/Open Claude Connectors Directory/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Always available/);assert.doesNotMatch(body,/Add custom connector|Tools already loaded|Register automatically/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }
 
-  const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917-chat1`,{headers:{host:'link2ai.example'}});
+  const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917-chat2`,{headers:{host:'link2ai.example'}});
   assert.equal(homeJsResponse.status,200,'homepage JS endpoint must return 200');
   assert.match(homeJsResponse.headers.get('content-type')??'',/javascript/);
   const homeJs=await homeJsResponse.text();
@@ -102,12 +102,13 @@ try{
   const runNextTimer=()=>{const entry=[...timers.entries()].sort((a,b)=>a[1].ms-b[1].ms||a[0]-b[0])[0];if(!entry)return false;timers.delete(entry[0]);entry[1].fn();return true;};
   const runAllTimers=()=>{let guard=0;while(runNextTimer()){if(++guard>100)throw new Error('timer loop');}};
   assert.doesNotThrow(()=>new Function('document','window','setTimeout','clearTimeout',homeJs)(fakeDocument,fakeWindow,queuedTimer,queuedClear),'homepage interaction JS must execute');
-  // Autoplay is queued, not magically completed. User Reset must cancel it.
-  assert.equal(ids['sim-left-state'].textContent,'','simulation should not jump ahead before timers run');
-  ids['sim-reset'].listeners.click();
+  // The comparison must stay idle until the visitor explicitly presses the button.
+  assert.equal(ids['sim-left-state'].textContent,'Ready','simulation should initialize left side as Ready');
+  assert.equal(ids['sim-right-state'].textContent,'Ready','simulation should initialize right side as Ready');
+  assert.equal(timers.size,0,'simulation must not autoplay');
   runAllTimers();
-  assert.equal(ids['sim-left-state'].textContent,'Ready','Reset must cancel queued autoplay and keep left Ready');
-  assert.equal(ids['sim-right-state'].textContent,'Ready','Reset must cancel queued autoplay and keep right Ready');
+  assert.equal(ids['sim-left-state'].textContent,'Ready','idle comparison must stay Ready');
+  assert.equal(ids['sim-right-state'].textContent,'Ready','idle comparison must stay Ready');
   // Reddit is intentionally unavailable without OAuth credentials. Selecting it and then pressing Run must never turn it into a fake success.
   simTabs[0].listeners.click();
   assert.equal(ids['sim-right-state'].textContent,'Temporarily paused','Reddit tab must show paused when credentials are absent');
@@ -119,8 +120,10 @@ try{
   assert.match(ids['sim-right-answer'].innerHTML,/paused on this deployment/);
   assert.equal(ids['sim-conclusion'].hidden,true,'paused Reddit must not show the success conclusion');
   simTabs[1].listeners.click();
-  ids['sim-reset'].listeners.click();
-  // A real Run should survive the previous Reset and complete every stage.
+  assert.equal(ids['sim-left-state'].textContent,'Ready','selecting a supported source must not start the comparison');
+  assert.equal(ids['sim-right-state'].textContent,'Ready','selecting a supported source must keep the comparison idle');
+  assert.equal(timers.size,0,'source tabs must not enqueue an automatic run');
+  // A real Run starts only after the visitor explicitly presses the comparison button.
   ids['sim-run'].listeners.click();
   assert.equal(ids['sim-left-state'].textContent,'Trying source');
   assert.equal(ids['sim-right-state'].textContent,'Starting');
@@ -145,7 +148,12 @@ try{
   simTabs[2].listeners.click();
   runAllTimers();
   assert.match(ids['sim-url'].textContent,/github\.com/,'source tabs must switch simulation content');
-  assert.equal(ids['sim-right-state'].textContent,'Source loaded','new source run must complete without stale timers');
+  assert.equal(ids['sim-left-state'].textContent,'Ready','switching source must cancel the old run and return left to Ready');
+  assert.equal(ids['sim-right-state'].textContent,'Ready','switching source must not autoplay the new source');
+  assert.equal(timers.size,0,'switching source must leave no stale or automatic timers');
+  ids['sim-run'].listeners.click();
+  runAllTimers();
+  assert.equal(ids['sim-right-state'].textContent,'Source loaded','explicit Run must complete the newly selected source');
   ids['sim-reset'].listeners.click();
   assert.equal(ids['sim-left-state'].textContent,'Ready','final Reset must restore left state');
   assert.equal(ids['sim-right-state'].textContent,'Ready','final Reset must restore right state');
