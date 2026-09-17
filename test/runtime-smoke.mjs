@@ -69,7 +69,7 @@ try{
     if(route==='/examples'){assert.match(body,/YouTube \/ Shorts/);assert.match(body,/GitHub Issues \/ PRs/);assert.match(body,/Try the interactive comparison/);}
     if(route==='/use-cases'){assert.match(body,/Use the link normally/);assert.match(body,/Summaries grounded in the source/);}
     if(route==='/sources'){assert.match(body,/Supported sources/);assert.match(body,/Video & social/);assert.match(body,/Reddit/);assert.match(body,/Paused until approved Reddit OAuth Data API credentials are configured/);}
-    if(route==='/pricing'){assert.match(body,/Founding offer/);assert.match(body,/First 50 paid users get 50% more usage/);assert.match(body,/750 processing units/);assert.match(body,/3,000 processing units/);assert.match(body,/What does 1 processing unit mean/);assert.match(body,/Units depend on content size, not platform/);}
+    if(route==='/pricing'){assert.match(body,/Founding offer/);assert.match(body,/First 50 paid users get 50% more usage/);assert.match(body,/500 paid units \+ 250 founding bonus/);assert.match(body,/2,000 paid units \+ 1,000 founding bonus/);assert.match(body,/Unused paid units roll over while subscribed/);assert.match(body,/founding bonus resets each billing cycle and does not roll over/);assert.match(body,/No plan-specific video length limit/);assert.match(body,/What does 1 processing unit mean/);assert.match(body,/Units depend on content size, not platform/);}
     if(route==='/connect'){assert.match(body,/Open Claude Connectors Directory/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Always available/);assert.doesNotMatch(body,/Add custom connector|Tools already loaded|Register automatically/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }
@@ -261,8 +261,10 @@ try{
   const pricingText=await pricing.text();
   assert.match(pricingText,/Try the link your AI just failed to read\./);
   assert.match(pricingText,/10 processing units/);
-  assert.match(pricingText,/500 processing units \/ month/);
-  assert.match(pricingText,/2,000 processing units \/ month/);
+  assert.match(pricingText,/500 paid units \+ 250 founding bonus/);
+  assert.match(pricingText,/2,000 paid units \+ 1,000 founding bonus/);
+  assert.match(pricingText,/Unused paid units roll over while subscribed/);
+  assert.match(pricingText,/No plan-specific video length limit/);
   assert.match(pricingText,/No fixed link-count limit/);
   assert.doesNotMatch(pricingText,/3 successful links|10 total minutes|content minutes \/ month/);
 
