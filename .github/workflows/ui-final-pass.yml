@@ -1,16 +1,48 @@
-name: Final UI inspection
+name: Final UI pass
 
 on:
   push:
     branches: [ui-full-canvas]
 
+permissions:
+  contents: write
+
 jobs:
-  inspect:
+  update:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ui-full-canvas
-      - name: Inspect target markup
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply final UI pass
+        run: python .github/scripts/final_ui_pass.py
+      - name: Verify visual contracts
         run: |
-          grep -Rni -C 4 -E "Pick based on processing|Choose Basic|Choose Pro|Something got in the way|support-grid|pricing" src test | head -n 500 || true
+          python - <<'PY'
+          from pathlib import Path
+          main=Path('src/api/main.ts').read_text()
+          billing=Path('src/billing/routes.ts').read_text()
+          assert 'Run again ↻' in main
+          assert 'Link2AI · Source loaded <i>ready</i>' not in main
+          assert 'AI agents are becoming capable faster' in main
+          assert 'data-path="${path}"' in main
+          assert 'nav.scrolled:not(.home-nav)' in main
+          assert 'Final canvas + typography pass · 2026-09-17' in main
+          assert 'Open desktop pricing canvas · 2026-09-17' in billing
+          assert '.shell:has(.plan-grid){width:min(1480px,100%)}' in billing
+          PY
+      - run: npm ci
+      - run: npm test
+      - name: Commit validated update
+        run: |
+          rm .github/workflows/ui-final-pass.yml
+          rm .github/scripts/final_ui_pass.py
+          git config user.name 'Link2AI UI Polish'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/api/main.ts src/billing/routes.ts test/runtime-smoke.mjs .github/workflows/ui-final-pass.yml .github/scripts/final_ui_pass.py
+          git commit -m 'Polish final public UI and homepage proof'
+          git push origin HEAD:ui-full-canvas
