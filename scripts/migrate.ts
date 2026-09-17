@@ -4,10 +4,15 @@ import { fileURLToPath } from 'node:url';
 import { pool } from '../src/db/pool.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const candidates=[path.resolve(process.cwd(),'sql/001_init.sql'),path.resolve(here,'../../sql/001_init.sql'),path.resolve(here,'../sql/001_init.sql')];
-let sql:string|undefined;
-for(const candidate of candidates){try{sql=await fs.readFile(candidate,'utf8');break;}catch{}}
-if(!sql)throw new Error('Could not find sql/001_init.sql');
+const candidateDirs=[path.resolve(process.cwd(),'sql'),path.resolve(here,'../../sql'),path.resolve(here,'../sql')];
+let sqlDir:string|undefined;
+for(const candidate of candidateDirs){
+  try{const stat=await fs.stat(candidate);if(stat.isDirectory()){sqlDir=candidate;break;}}catch{}
+}
+if(!sqlDir)throw new Error('Could not find sql migration directory');
+const migrationFiles=(await fs.readdir(sqlDir)).filter(name=>/^\d+.*\.sql$/i.test(name)).sort();
+if(!migrationFiles.length)throw new Error('No SQL migration files found');
+const sql=(await Promise.all(migrationFiles.map(async name=>`-- ${name}\n${await fs.readFile(path.join(sqlDir!,name),'utf8')}`))).join('\n\n');
 const client=await pool.connect();
 try{
   await client.query('BEGIN');
@@ -16,7 +21,7 @@ try{
   await client.query("SELECT pg_advisory_xact_lock(hashtext('link2ai:migrate:v1'))");
   await client.query(sql);
   await client.query('COMMIT');
-  console.log('Link2AI database migration complete.');
+  console.log(`Link2AI database migration complete (${migrationFiles.join(', ')}).`);
 }catch(err){
   await client.query('ROLLBACK').catch(()=>{});
   throw err;
