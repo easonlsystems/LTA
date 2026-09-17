@@ -283,12 +283,12 @@ export function createFounderStepUpCookie(cookieHeader?:string,ttlSeconds=900):s
   const expires=Math.floor(Date.now()/1000)+Math.max(60,Math.min(ttlSeconds,1800));
   const value=`${expires}.${founderStepUpSignature(sessionToken,expires)}`;
   const secure=env().NODE_ENV==='production'?'; Secure':'';
-  return `${FOUNDER_STEPUP_COOKIE}=${encodeURIComponent(value)}; Path=/founder; HttpOnly; SameSite=Strict; Max-Age=${Math.max(60,Math.min(ttlSeconds,1800))}${secure}`;
+  return `${FOUNDER_STEPUP_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.max(60,Math.min(ttlSeconds,1800))}${secure}`;
 }
 
 export function clearFounderStepUpCookie():string{
   const secure=env().NODE_ENV==='production'?'; Secure':'';
-  return `${FOUNDER_STEPUP_COOKIE}=; Path=/founder; HttpOnly; SameSite=Strict; Max-Age=0${secure}`;
+  return `${FOUNDER_STEPUP_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure}`;
 }
 
 export function hasFounderStepUp(cookieHeader?:string):boolean{

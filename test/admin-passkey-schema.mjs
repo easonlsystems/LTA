@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+const admin=await readFile('src/admin/routes.ts','utf8');
+const wrapper=await readFile('src/auth/routes.ts','utf8');
+const sql=await readFile('sql/003_admin_passkeys.sql','utf8');
+const pkg=JSON.parse(await readFile('package.json','utf8'));
+const authService=await readFile('src/auth/service.ts','utf8');
+const api=await readFile('src/api/main.ts','utf8');
+
+assert.equal(pkg.dependencies['@simplewebauthn/server'],'14.0.2');
+assert.equal(pkg.dependencies['@simplewebauthn/browser'],'14.0.0');
+assert.match(wrapper,/registerBaseAuthRoutes/);
+assert.match(wrapper,/registerAdminRoutes/);
+assert.match(admin,/generateAuthenticationOptions/);
+assert.match(admin,/verifyAuthenticationResponse/);
+assert.match(admin,/generateRegistrationOptions/);
+assert.match(admin,/verifyRegistrationResponse/);
+assert.match(admin,/userVerification:'required'/);
+assert.match(admin,/requireUserVerification:true/);
+assert.match(admin,/SameSite=Strict/);
+assert.match(admin,/Passkey protected/);
+assert.match(admin,/founder_recovery_codes/);
+assert.match(admin,/The final passkey cannot be removed/);
+assert.match(authService,/FOUNDER_STEPUP_COOKIE}.*Path=\/; HttpOnly/s,'Founder step-up must be visible to both /founder and /admin');
+assert.match(authService,/FOUNDER_STEPUP_COOKIE}=; Path=\/; HttpOnly/,'Founder step-up clear cookie must use the same root path');
+assert.doesNotMatch(authService,/FOUNDER_STEPUP_COOKIE}.*Path=\/founder/s,'Founder step-up must not be restricted to /founder after admin bootstrap support');
+assert.match(api,/value==='\/admin'\|\|value\.startsWith\('\/admin\/'\)/,'Founder bootstrap return path must allow /admin');
+assert.match(admin,/cache:'no-store'/);
+assert.match(sql,/CREATE TABLE IF NOT EXISTS founder_passkeys/);
+assert.match(sql,/CREATE TABLE IF NOT EXISTS founder_webauthn_challenges/);
+assert.match(sql,/CREATE TABLE IF NOT EXISTS founder_recovery_codes/);
+assert.match(sql,/block_founder_email_stepup_after_passkey/);
+assert.match(sql,/Founder audit history is append-only/);
+assert.match(sql,/chain_founder_admin_event/);
+assert.match(sql,/IF r\.event_hash IS NOT NULL THEN/,'Repeated migrations must not rewrite already-chained audit rows');
+const backfillAt=sql.indexOf('DO $$');
+const dropGuardAt=sql.indexOf('DROP TRIGGER IF EXISTS founder_admin_events_append_only');
+const recreateGuardAt=sql.lastIndexOf('CREATE TRIGGER founder_admin_events_append_only');
+assert.ok(dropGuardAt>=0&&dropGuardAt<backfillAt,'Append-only guard must be temporarily removed before the one-time hash backfill');
+assert.ok(recreateGuardAt>backfillAt,'Append-only guard must be recreated before migration commit');
+
+console.log('admin passkey schema: ok');

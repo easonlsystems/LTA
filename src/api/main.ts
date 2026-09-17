@@ -532,7 +532,7 @@ function founderPrivateHeaders(reply:FastifyReply):void{
 }
 function founderReturnTo(raw:unknown):string{
   const value=String(raw??'/founder');
-  if(value.startsWith('/founder')&&!value.startsWith('//')&&!value.includes('\\')&&value.length<=300)return value;
+  if((value.startsWith('/founder')||value==='/admin'||value.startsWith('/admin/'))&&!value.startsWith('//')&&!value.includes('\\')&&value.length<=300)return value;
   return '/founder';
 }
 async function requireFounder(req:FastifyRequest,reply:FastifyReply,returnTo='/founder',stepUp=true){
