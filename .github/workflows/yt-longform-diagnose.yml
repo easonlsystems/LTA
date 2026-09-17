@@ -10,44 +10,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Install newer yt-dlp
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install 'yt-dlp[default,curl-cffi]==2026.8.29.232711.dev0'
-          yt-dlp --version
-      - name: Probe user video and known long-form control
+      - name: Probe public YouTube endpoints
         shell: bash
         run: |
           set +e
-          probe_url() {
-            label="$1"; url="$2"
-            echo "######## $label :: $url ########"
-            for mode in default impersonate mweb-default web-safari-default android-vr-default; do
-              echo "===== $mode ====="
-              rm -f /tmp/yt.json /tmp/yt.err
-              args=()
-              case "$mode" in
-                impersonate) args=(--impersonate chrome) ;;
-                mweb-default) args=(--extractor-args 'youtube:player_client=mweb,default') ;;
-                web-safari-default) args=(--extractor-args 'youtube:player_client=web_safari,default') ;;
-                android-vr-default) args=(--extractor-args 'youtube:player_client=android_vr,default') ;;
-              esac
-              yt-dlp --js-runtimes node --dump-single-json --skip-download --no-playlist --no-warnings "${args[@]}" "$url" >/tmp/yt.json 2>/tmp/yt.err
-              rc=$?
-              echo "rc=$rc"
-              sed -n '1,80p' /tmp/yt.err
-              if [ "$rc" -eq 0 ]; then
-                python -c "import json; d=json.load(open('/tmp/yt.json')); print('id=',d.get('id')); print('title=',d.get('title')); print('duration=',d.get('duration')); print('webpage_url=',d.get('webpage_url')); print('auto_caps=',list((d.get('automatic_captions') or {}).keys())[:5])"
-                break
-              fi
-            done
-          }
-          probe_url user-link 'https://www.youtube.com/watch?v=jJiw4CdAanw'
-          probe_url public-long-control 'https://www.youtube.com/watch?v=aqz-KE-bpKQ'
-          echo '--- oEmbed user link ---'
-          curl -sS -o /tmp/oembed.out -w 'HTTP %{http_code}\n' 'https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DjJiw4CdAanw&format=json'
-          head -c 800 /tmp/oembed.out; echo
+          ID='jJiw4CdAanw'
+          UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36'
+          echo '--- oEmbed ---'
+          curl -L -A "$UA" -sS -D /tmp/oe.h -o /tmp/oe.json "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D$ID&format=json"
+          head -1 /tmp/oe.h; head -c 600 /tmp/oe.json; echo
+          echo '--- watch page ---'
+          curl -L -A "$UA" -sS -D /tmp/watch.h -o /tmp/watch.html "https://www.youtube.com/watch?v=$ID&hl=en"
+          head -1 /tmp/watch.h
+          wc -c /tmp/watch.html
+          python - <<'PY'
+import re,html,json
+s=open('/tmp/watch.html',encoding='utf-8',errors='ignore').read()
+print('has_id=', 'jJiw4CdAanw' in s)
+print('has_captionTracks=', 'captionTracks' in s)
+print('has_player_response=', 'ytInitialPlayerResponse' in s)
+for key in ['playabilityStatus','captionTracks']:
+    i=s.find(key)
+    print(key,'index=',i)
+    if i>=0: print(s[max(0,i-200):i+1200].replace('\\u0026','&')[:1400])
+PY
+          echo '--- timedtext track list ---'
+          curl -L -A "$UA" -sS -D /tmp/tt.h -o /tmp/tt.xml "https://www.youtube.com/api/timedtext?type=list&v=$ID"
+          head -1 /tmp/tt.h; wc -c /tmp/tt.xml; head -c 1200 /tmp/tt.xml; echo
           exit 0
