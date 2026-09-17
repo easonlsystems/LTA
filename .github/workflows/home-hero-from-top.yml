@@ -1,0 +1,85 @@
+name: Home hero from top
+on:
+  push:
+    branches: [home-hero-from-top]
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: home-hero-from-top
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Put homepage nav over hero
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count=text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly 1 match, found {count}')
+              return text.replace(old,new,1)
+
+          p=Path('src/api/main.ts')
+          s=p.read_text()
+          s=replace_once(
+              s,
+              '.home-nav{background:transparent;border-bottom-color:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}',
+              '.home-nav{position:absolute;top:0;left:50%;transform:translateX(-50%);width:min(calc(100vw - 56px),1224px);background:transparent;border-bottom-color:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}',
+              'desktop home nav overlay'
+          )
+          s=replace_once(
+              s,
+              '.experience-hero{position:relative;margin-top:-78px;padding:154px 0 70px;background:',
+              '.experience-hero{position:relative;margin-top:0;padding:154px 0 70px;background:',
+              'desktop hero starts at top'
+          )
+          s=replace_once(
+              s,
+              '  .experience-hero{margin-top:-68px;padding:106px 0 42px}',
+              '  .home-nav{left:max(14px,env(safe-area-inset-left));right:max(14px,env(safe-area-inset-right));width:auto;transform:none}\n  .experience-hero{margin-top:0;padding:106px 0 42px}',
+              'mobile hero/nav overlay'
+          )
+          p.write_text(s)
+
+          p=Path('test/mobile-homepage-css.mjs')
+          t=p.read_text()
+          t=t.replace(
+              "assert.match(source,/\\.experience-hero\\{position:relative;margin-top:-78px;padding:154px 0 70px/);",
+              "assert.match(source,/\\.home-nav\\{position:absolute;top:0;left:50%;transform:translateX\\(-50%\\);width:min\\(calc\\(100vw - 56px\\),1224px\\)/);\nassert.match(source,/\\.experience-hero\\{position:relative;margin-top:0;padding:154px 0 70px/);"
+          )
+          t=t.replace(
+              "assert.match(source,/\\.experience-hero\\{margin-top:-68px;padding:106px 0 42px\\}/);",
+              "assert.match(source,/\\.home-nav\\{left:max\\(14px,env\\(safe-area-inset-left\\)\\);right:max\\(14px,env\\(safe-area-inset-right\\)\\);width:auto;transform:none\\}/);\nassert.match(source,/\\.experience-hero\\{margin-top:0;padding:106px 0 42px\\}/);"
+          )
+          p.write_text(t)
+          PY
+      - name: Verify homepage top integration
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const s=fs.readFileSync('src/api/main.ts','utf8');
+          if(!s.includes('.home-nav{position:absolute;top:0;left:50%;transform:translateX(-50%);width:min(calc(100vw - 56px),1224px)')) throw new Error('desktop home nav is not overlaid on hero');
+          if(!s.includes('.experience-hero{position:relative;margin-top:0;padding:154px 0 70px')) throw new Error('desktop hero does not start at viewport top');
+          if(!s.includes('.home-nav{left:max(14px,env(safe-area-inset-left));right:max(14px,env(safe-area-inset-right));width:auto;transform:none}')) throw new Error('mobile home nav overlay missing');
+          if(!s.includes('.experience-hero{margin-top:0;padding:106px 0 42px}')) throw new Error('mobile hero does not start at top');
+          NODE
+      - run: npm ci
+      - run: npm test
+      - name: Commit validated update and remove one-time workflow
+        shell: bash
+        run: |
+          git config user.name "Link2AI UI Polish"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/home-hero-from-top.yml
+          git add src/api/main.ts test/mobile-homepage-css.mjs
+          git commit -m "Start homepage hero at viewport top"
+          git push origin HEAD:home-hero-from-top
