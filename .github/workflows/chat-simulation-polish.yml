@@ -1,0 +1,71 @@
+name: Chat simulation polish
+
+on:
+  push:
+    branches: ["chat-simulation-polish"]
+
+permissions:
+  contents: write
+
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply chat-style comparison simulation
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          p=Path('src/api/main.ts')
+          s=p.read_text(encoding='utf-8')
+
+          css_anchor='.sim-question{position:relative;margin:0 22px 20px;padding:16px 18px;border-radius:18px;background:#201b27;color:#fff;box-shadow:0 10px 28px rgba(32,27,39,.12)}.sim-question span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.13em;font-weight:900;color:#bfb7c9;margin-bottom:6px}.sim-question p{margin:0;font-size:14px;line-height:1.5}.sim-grid{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:0 22px 22px}'
+          css_new='.sim-grid{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:0 22px 22px}.sim-chat-user{align-self:flex-end;max-width:88%;margin-left:auto;border-radius:18px 18px 6px 18px;background:#201b27;color:#fff;padding:12px 14px;box-shadow:0 8px 22px rgba(32,27,39,.09)}.sim-chat-user span,.sim-chat-speaker{display:block;margin-bottom:5px;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.sim-chat-user span{color:#c9c1d2}.sim-chat-user p{margin:0;font-size:12px;line-height:1.5}.sim-chat-speaker{color:#756d7d}.sim-panel-head .sim-state{display:none}.sim-panel-sub{font-weight:650}.sim-tool{align-self:flex-start;width:min(92%,420px);box-shadow:0 6px 18px rgba(91,72,209,.06)}'
+          if s.count(css_anchor)!=1: raise SystemExit('CSS anchor mismatch')
+          s=s.replace(css_anchor,css_new,1)
+
+          old='''          <div class="sim-question"><span>Same user question</span><p id="sim-question-text">What is this YouTube video arguing, and what evidence does it use?</p></div>\n          <div class="sim-grid" aria-live="polite">\n            <article class="sim-panel without">\n              <div class="sim-panel-head"><div><div class="sim-panel-title">Without Link2AI</div><span class="sim-panel-sub">Claude · same URL</span></div><span class="sim-state" id="sim-left-state">Ready</span></div>\n              <div class="sim-body"><div class="sim-thinking" id="sim-left-thinking"><div class="sim-line"></div><div class="sim-line"></div><div class="sim-line"></div></div><div class="sim-answer sim-fail" id="sim-left-answer"></div></div>\n            </article>\n            <article class="sim-panel with">\n              <div class="sim-panel-head"><div><div class="sim-panel-title">With Link2AI</div><span class="sim-panel-sub">Claude · same URL · Link2AI connected</span></div><span class="sim-state" id="sim-right-state">Ready</span></div>\n              <div class="sim-body"><div class="sim-tool" id="sim-tool">Link2AI · Reading source… <i>connected</i></div><div class="sim-thinking" id="sim-right-thinking"><div class="sim-line"></div><div class="sim-line"></div><div class="sim-line"></div></div><div class="sim-answer" id="sim-right-answer"></div></div>\n            </article>\n          </div>'''
+          new='''          <div class="sim-grid" aria-live="polite">\n            <article class="sim-panel without">\n              <div class="sim-panel-head"><div><div class="sim-panel-title">Without Link2AI</div><span class="sim-panel-sub">Simulated Claude conversation · same public link</span></div><span class="sim-state" id="sim-left-state">Ready</span></div>\n              <div class="sim-body"><div class="sim-chat-user"><span>You</span><p class="sim-user-question">What is this YouTube video arguing, and what evidence does it use?</p></div><div class="sim-thinking" id="sim-left-thinking"><div class="sim-line"></div><div class="sim-line"></div><div class="sim-line"></div></div><div class="sim-answer sim-fail" id="sim-left-answer"></div></div>\n            </article>\n            <article class="sim-panel with">\n              <div class="sim-panel-head"><div><div class="sim-panel-title">With Link2AI</div><span class="sim-panel-sub">Simulated Claude conversation · Link2AI connected</span></div><span class="sim-state" id="sim-right-state">Ready</span></div>\n              <div class="sim-body"><div class="sim-chat-user"><span>You</span><p class="sim-user-question">What is this YouTube video arguing, and what evidence does it use?</p></div><div class="sim-tool" id="sim-tool">Link2AI · Reading source… <i>connected</i></div><div class="sim-thinking" id="sim-right-thinking"><div class="sim-line"></div><div class="sim-line"></div><div class="sim-line"></div></div><div class="sim-answer" id="sim-right-answer"></div></div>\n            </article>\n          </div>'''
+          if s.count(old)!=1: raise SystemExit('HTML anchor mismatch')
+          s=s.replace(old,new,1)
+          s=s.replace('Run comparison →','Play conversations →',1)
+          s=s.replace('Same source on both sides','Same link · two conversations',1)
+          s=s.replace("q('#sim-question-text').textContent=d.question;","qa('.sim-user-question').forEach(el=>{el.textContent=d.question;});",1)
+          s=s.replace("const renderAnswer=(el,lead,points)=>{el.innerHTML='<span class=\"sim-example-tag\">Example output · representative</span><strong>'+lead+'</strong><ul>'+points.map(x=>'<li>'+x+'</li>').join('')+'</ul>';};","const renderAnswer=(el,lead,points)=>{el.innerHTML='<span class=\"sim-chat-speaker\">Claude</span><strong>'+lead+'</strong><ul>'+points.map(x=>'<li>'+x+'</li>').join('')+'</ul>';};",1)
+          s=s.replace("q('#sim-left-answer').innerHTML='<span class=\"sim-example-tag\">Claude</span>'+d.fail;","q('#sim-left-answer').innerHTML='<span class=\"sim-chat-speaker\">Claude</span><p>'+d.fail+'</p>';",1)
+          s=s.replace("q('#sim-right-answer').innerHTML='<span class=\"sim-example-tag\">Current availability</span>Reddit reads are paused on this deployment rather than bypassing Reddit’s hosted-service access controls.';","q('#sim-right-answer').innerHTML='<span class=\"sim-chat-speaker\">Claude</span><p>Reddit reads are paused on this deployment rather than bypassing Reddit’s hosted-service access controls.</p>';",1)
+          s=s.replace('/home.js?v=20260917-r14','/home.js?v=20260917-chat1',1)
+
+          mobile_anchor='  .sim-panel-head{padding-bottom:11px}\n  .sim-body{padding-top:12px;gap:10px}'
+          mobile_new='  .sim-panel-head{padding-bottom:11px}\n  .sim-chat-user{max-width:94%;padding:10px 11px;border-radius:15px 15px 5px 15px}\n  .sim-chat-user p{font-size:11px}\n  .sim-body{padding-top:12px;gap:10px}'
+          if s.count(mobile_anchor)!=1: raise SystemExit('mobile anchor mismatch')
+          s=s.replace(mobile_anchor,mobile_new,1)
+          p.write_text(s,encoding='utf-8')
+
+          t=Path('test/runtime-smoke.mjs')
+          x=t.read_text(encoding='utf-8')
+          x=x.replace("assert.match(body,/Run comparison/);assert.match(body,/src=\"\\/home\\.js\\?v=20260917-r14\" defer/);","assert.match(body,/Play conversations/);assert.match(body,/Simulated Claude conversation/);assert.doesNotMatch(body,/Same user question/);assert.match(body,/src=\"\\/home\\.js\\?v=20260917-chat1\" defer/);",1)
+          x=x.replace("const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917-r14`","const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917-chat1`",1)
+          x=x.replace("for(const id of ['sim-source-name','sim-url','sim-question-text','sim-left-state'","for(const id of ['sim-source-name','sim-url','sim-left-state'",1)
+          x=x.replace("if(selector==='.sim-tab')return simTabs;","if(selector==='.sim-tab')return simTabs;\n      if(selector==='.sim-user-question')return [new FakeElement(),new FakeElement()];",1)
+          t.write_text(x,encoding='utf-8')
+          PY
+      - run: npm ci
+      - run: npm test
+      - name: Commit validated change
+        shell: bash
+        run: |
+          git config user.name "Link2AI UI Polish"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/api/main.ts test/runtime-smoke.mjs
+          git diff --cached --check
+          git commit -m "Make homepage comparison a chat simulation"
+          git push origin HEAD:chat-simulation-polish
