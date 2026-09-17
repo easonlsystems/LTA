@@ -59,10 +59,14 @@ CREATE TRIGGER founder_stepup_block_email_after_passkey
 BEFORE INSERT ON founder_stepup_codes
 FOR EACH ROW EXECUTE FUNCTION block_founder_email_stepup_after_passkey();
 
--- Add a SHA-256 hash chain to Founder account-change events. Existing rows are
--- backfilled in ID order before UPDATE/DELETE are blocked.
+-- Add a SHA-256 hash chain to Founder account-change events. The migration runner
+-- deliberately replays ordered SQL files on every deploy, so temporarily remove the
+-- append-only guards inside this transaction before any one-time backfill. They are
+-- recreated below before commit; a failed migration rolls this DDL back atomically.
 ALTER TABLE founder_admin_events ADD COLUMN IF NOT EXISTS prev_hash text;
 ALTER TABLE founder_admin_events ADD COLUMN IF NOT EXISTS event_hash text;
+DROP TRIGGER IF EXISTS founder_admin_events_append_only ON founder_admin_events;
+DROP TRIGGER IF EXISTS founder_security_events_append_only ON founder_security_events;
 
 DO $$
 DECLARE
@@ -70,13 +74,20 @@ DECLARE
   prior text := repeat('0',64);
   h text;
 BEGIN
-  FOR r IN SELECT id,founder_user_id,target_user_id,action,before_state,after_state,created_at FROM founder_admin_events ORDER BY id LOOP
-    h := encode(digest(
-      concat_ws('|',prior,r.id::text,r.founder_user_id::text,r.target_user_id::text,r.action,coalesce(r.before_state::text,''),coalesce(r.after_state::text,''),r.created_at::text),
-      'sha256'
-    ),'hex');
-    UPDATE founder_admin_events SET prev_hash=prior,event_hash=h WHERE id=r.id;
-    prior := h;
+  FOR r IN
+    SELECT id,founder_user_id,target_user_id,action,before_state,after_state,created_at,event_hash
+    FROM founder_admin_events ORDER BY id
+  LOOP
+    IF r.event_hash IS NOT NULL THEN
+      prior := r.event_hash;
+    ELSE
+      h := encode(digest(
+        concat_ws('|',prior,r.id::text,r.founder_user_id::text,r.target_user_id::text,r.action,coalesce(r.before_state::text,''),coalesce(r.after_state::text,''),r.created_at::text),
+        'sha256'
+      ),'hex');
+      UPDATE founder_admin_events SET prev_hash=prior,event_hash=h WHERE id=r.id;
+      prior := h;
+    END IF;
   END LOOP;
 END;
 $$;
@@ -110,11 +121,9 @@ BEGIN
   RAISE EXCEPTION 'Founder audit history is append-only' USING ERRCODE='42501';
 END;
 $$;
-DROP TRIGGER IF EXISTS founder_admin_events_append_only ON founder_admin_events;
 CREATE TRIGGER founder_admin_events_append_only
 BEFORE UPDATE OR DELETE ON founder_admin_events
 FOR EACH ROW EXECUTE FUNCTION reject_founder_audit_mutation();
-DROP TRIGGER IF EXISTS founder_security_events_append_only ON founder_security_events;
 CREATE TRIGGER founder_security_events_append_only
 BEFORE UPDATE OR DELETE ON founder_security_events
 FOR EACH ROW EXECUTE FUNCTION reject_founder_audit_mutation();
