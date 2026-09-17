@@ -10,5 +10,6 @@ assert.match(source,/\.source-buttons\{display:flex;overflow-x:auto/);
 assert.match(source,/\.usecase-menu\{display:flex;overflow-x:auto/);
 assert.match(source,/\.proof-grid\{display:flex;overflow-x:auto/);
 assert.match(source,/\.sim-panel\{min-height:0;padding:14px/);
+assert.match(source,/\.sim-chat-user\{max-width:94%;padding:10px 11px/);
 assert.match(source,/@media\(max-width:380px\)\{/);
 console.log('mobile homepage CSS schema tests passed');
