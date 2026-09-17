@@ -55,6 +55,7 @@ try{
       assert.match(body,/Claude can read it\./);
       assert.match(body,/Interactive comparison · Claude-first/);
       assert.match(body,/See the difference/);
+      for(const source of ['youtube','tiktok','instagram','x','bluesky','github','hn','pdf','web'])assert.match(body,new RegExp(`data-sim-source=\"${source}\"`),`homepage should expose ${source} simulation`);
       assert.match(body,/href="\/examples"/);
       assert.match(body,/href="\/use-cases"/);
       assert.match(body,/href="\/sources"/);
@@ -93,7 +94,8 @@ try{
   const ids={};
   for(const id of ['sim-source-name','sim-url','sim-left-state','sim-right-state','sim-left-answer','sim-right-answer','sim-tool','sim-conclusion','sim-run','sim-reset','source-preview-label','source-preview-title','source-preview-question','source-mini-result','source-open-sim','usecase-user','usecase-result','simulation'])ids[id]=new FakeElement(id);
   ids['sim-conclusion'].hidden=true;
-  const simTabs=['reddit','youtube','github','pdf','web'].map(value=>new FakeElement('',{simSource:value}));
+  const simTabs=['reddit','youtube','tiktok','instagram','x','bluesky','github','hn','pdf','web'].map(value=>new FakeElement('',{simSource:value}));
+  const simTab=(key)=>{const tab=simTabs.find(el=>el.dataset.simSource===key);assert.ok(tab,`missing simulation tab ${key}`);return tab;};
   const sourceButtons=['reddit','youtube','github','x','web','pdf','instagram','tiktok','hn','bluesky'].map(value=>new FakeElement('',{sourceKey:value}));
   const usecaseButtons=['reddit','youtube','github','research'].map(value=>new FakeElement('',{usecase:value}));
   const leftLines=[new FakeElement(),new FakeElement(),new FakeElement()];
@@ -129,7 +131,7 @@ try{
   assert.equal(ids['sim-left-state'].textContent,'Ready','idle comparison must stay Ready');
   assert.equal(ids['sim-right-state'].textContent,'Ready','idle comparison must stay Ready');
   // Reddit is intentionally unavailable without OAuth credentials. Selecting it and then pressing Run must never turn it into a fake success.
-  simTabs[0].listeners.click();
+  simTab('reddit').listeners.click();
   assert.equal(ids['sim-right-state'].textContent,'Temporarily paused','Reddit tab must show paused when credentials are absent');
   assert.match(ids['sim-tool'].innerHTML,/Approved OAuth access required/);
   ids['sim-run'].listeners.click();
@@ -138,7 +140,7 @@ try{
   assert.doesNotMatch(ids['sim-tool'].innerHTML,/Source loaded/);
   assert.match(ids['sim-right-answer'].innerHTML,/paused on this deployment/);
   assert.equal(ids['sim-conclusion'].hidden,true,'paused Reddit must not show the success conclusion');
-  simTabs[1].listeners.click();
+  simTab('youtube').listeners.click();
   assert.equal(ids['sim-left-state'].textContent,'Ready','selecting a supported source must not start the comparison');
   assert.equal(ids['sim-right-state'].textContent,'Ready','selecting a supported source must keep the comparison idle');
   assert.equal(timers.size,0,'source tabs must not enqueue an automatic run');
@@ -167,7 +169,7 @@ try{
   // Switching source during a run must invalidate old-source callbacks.
   ids['sim-run'].listeners.click();
   assert.ok(runNextTimer());
-  simTabs[2].listeners.click();
+  simTab('github').listeners.click();
   runAllTimers();
   assert.match(ids['sim-url'].textContent,/github\.com/,'source tabs must switch simulation content');
   assert.equal(ids['sim-left-state'].textContent,'Ready','switching source must cancel the old run and return left to Ready');
@@ -181,6 +183,17 @@ try{
   assert.equal(ids['sim-right-state'].textContent,'Ready','final Reset must restore right state');
   assert.match(ids['sim-tool'].innerHTML,/Reading source/,'Reset must restore the tool card before another run');
   assert.equal(ids['sim-run'].textContent,'See the difference →','Reset should restore the initial comparison CTA');
+  // Every advertised supported source must have a runnable comparison, not a dead tab.
+  for(const source of ['tiktok','instagram','x','bluesky','hn','pdf','web']){
+    simTab(source).listeners.click();
+    assert.equal(ids['sim-left-state'].textContent,'Ready',source+' should initialize left side as Ready');
+    assert.equal(ids['sim-right-state'].textContent,'Ready',source+' should initialize right side as Ready');
+    ids['sim-run'].listeners.click();
+    runAllTimers();
+    assert.equal(ids['sim-right-state'].textContent,'Source loaded',source+' comparison should load the Link2AI side');
+    assert.ok(ids['sim-right-answer'].classList.contains('show'),source+' comparison should reveal an answer');
+    ids['sim-reset'].listeners.click();
+  }
 
   const start=await fetch(`http://127.0.0.1:${port}/start?from=hero`,{headers:{host:'link2ai.example'},redirect:'manual'});
   assert.equal(start.status,302);

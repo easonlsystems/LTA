@@ -6,6 +6,8 @@ import { extractTextLink, resolveRedditSharePost } from '../content/linkText.js'
 import { fetchBestCaption } from '../media/captions.js';
 import { normalizeAudioForAsr, probeMediaDurationSeconds } from '../media/audio.js';
 import { ResolverOrchestrator } from '../resolvers/orchestrator.js';
+import { resolveYouTubeTranscriptFallback } from '../resolvers/youtubeTranscript.js';
+import type { MediaMetadata, TranscriptSegment } from '../media/types.js';
 import { transcribeAudio } from '../transcription/router.js';
 import { reserveQuota, finalizeQuota, releaseQuota } from '../quota/service.js';
 import { saveCache, findCache, findUserCompletedCache } from './cache.js';
@@ -109,7 +111,28 @@ export async function processJob(job:JobRow):Promise<void>{
       return;
     }
 
-    let metadata=await resolver.metadata(parsed);
+    let directCaption:{language:string;transcript:string;segments:TranscriptSegment[]}|null=null;
+    let metadata:MediaMetadata;
+    try{
+      metadata=await resolver.metadata(parsed);
+    }catch(metadataError){
+      if(parsed.platform!=='youtube')throw metadataError;
+      try{
+        const fallback=await resolveYouTubeTranscriptFallback(parsed,job.language,45_000);
+        metadata=fallback.metadata;
+        directCaption=fallback.caption;
+        logEvent('youtube_transcript_fallback_success',{
+          job_id:job.id,platform:'youtube',canonical_media_id:metadata.canonicalMediaId,
+          duration_seconds:metadata.durationSeconds,language:fallback.caption.language,transport:'youtube_transcript'
+        });
+      }catch(fallbackError){
+        const mapped=asLink2AIError(fallbackError);
+        // The fallback can distinguish regional restrictions and cloud-IP blocks that
+        // yt-dlp sometimes reports only as the ambiguous "Video unavailable".
+        if(['GEO_BLOCKED','PLATFORM_BLOCKED','LOGIN_REQUIRED','MEDIA_NOT_FOUND'].includes(mapped.code))throw mapped;
+        throw metadataError;
+      }
+    }
 
     const applyDuration=async(seconds:number):Promise<void>=>{
       const duration=Math.max(1,Math.ceil(seconds));
@@ -178,7 +201,7 @@ export async function processJob(job:JobRow):Promise<void>{
       return;
     }
 
-    const caption=await fetchBestCaption(metadata.subtitles,metadata.automaticCaptions,job.language,metadata.originalLanguage);
+    const caption=directCaption??await fetchBestCaption(metadata.subtitles,metadata.automaticCaptions,job.language,metadata.originalLanguage);
     if(caption?.transcript&&metadata.durationSeconds<=0){
       const captionDuration=captionDurationSeconds(caption.segments);
       if(captionDuration>0)await applyDuration(captionDuration);
