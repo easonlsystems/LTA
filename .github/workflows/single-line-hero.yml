@@ -29,7 +29,7 @@ jobs:
           if old not in s:
               raise SystemExit('hero markup target not found')
           s=s.replace(old,new,1)
-          old_css='.experience-copy{text-align:left;max-width:900px;margin:0 0 28px}.experience-kicker'
+          old_css='.experience-copy{text-align:left;max-width:980px;margin:0 0 28px}.experience-kicker'
           new_css='.experience-copy{text-align:left;max-width:1180px;margin:0 0 28px}.experience-kicker'
           if old_css not in s:
               raise SystemExit('experience-copy target not found')
@@ -48,7 +48,7 @@ jobs:
       - name: Verify hero contract
         run: |
           grep -F '<h1>Paste a link. <span>Claude can read it.</span></h1>' src/api/main.ts
-          grep -F 'white-space:nowrap' src/api/main.ts
+          grep -F 'max-width:none;white-space:nowrap' src/api/main.ts
           grep -F '.experience-hero h1{white-space:normal}' src/api/main.ts
       - run: npm ci
       - run: npm test
