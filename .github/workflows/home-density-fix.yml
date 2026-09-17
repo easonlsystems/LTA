@@ -1,0 +1,62 @@
+name: Homepage density fix
+
+on:
+  push:
+    branches: [home-density-fix]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: home-density-fix
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Tighten desktop homepage composition
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/api/main.ts')
+          s=p.read_text()
+          old='  .home-only .experience-hero{min-height:100svh;padding:88px 0 46px;display:flex;align-items:center}'
+          new='  .home-only .experience-hero{min-height:100svh;padding:132px 0 48px;display:flex;align-items:flex-start}'
+          if s.count(old)!=1:
+              raise SystemExit(f'hero rule match count={s.count(old)}')
+          s=s.replace(old,new,1)
+          old2='  .home-only .sim-shell{max-width:1280px;margin-top:22px}'
+          new2='  .home-only .sim-shell{max-width:1340px;margin-top:18px}'
+          if s.count(old2)!=1:
+              raise SystemExit(f'sim-shell rule match count={s.count(old2)}')
+          s=s.replace(old2,new2,1)
+          anchor='  .home-only .experience-hero-cta{margin-top:18px}'
+          extra='''  .home-only .experience-hero-cta{margin-top:16px}\n  .home-only .sim-tabs{padding-top:18px}\n  .home-only .sim-meta-simple{padding:20px 24px 24px}\n  .home-only .sim-grid{padding-left:24px;padding-right:24px;padding-bottom:22px}\n  .home-only .sim-panel{min-height:78px;padding:18px 18px}'''
+          if s.count(anchor)!=1:
+              raise SystemExit(f'cta rule match count={s.count(anchor)}')
+          s=s.replace(anchor,extra,1)
+          p.write_text(s)
+          PY
+      - name: Verify composition contracts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('src/api/main.ts').read_text()
+          assert 'padding:132px 0 48px;display:flex;align-items:flex-start' in s
+          assert '.home-only .sim-shell{max-width:1340px;margin-top:18px}' in s
+          assert '.home-only .sim-panel{min-height:78px;padding:18px 18px}' in s
+          PY
+      - run: npm ci
+      - run: npm test
+      - name: Commit validated homepage density fix
+        run: |
+          rm .github/workflows/home-density-fix.yml
+          git config user.name 'Link2AI UI Polish'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/api/main.ts .github/workflows/home-density-fix.yml
+          git commit -m 'Tighten homepage hero density'
+          git push origin HEAD:home-density-fix
