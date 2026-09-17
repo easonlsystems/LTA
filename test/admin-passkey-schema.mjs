@@ -23,6 +23,8 @@ assert.match(admin,/Passkey protected/);
 assert.match(admin,/founder_recovery_codes/);
 assert.match(admin,/The final passkey cannot be removed/);
 assert.match(authService,/FOUNDER_STEPUP_COOKIE}.*Path=\/; HttpOnly/s,'Founder step-up must be visible to both /founder and /admin');
+assert.match(authService,/FOUNDER_STEPUP_COOKIE}=; Path=\/; HttpOnly/,'Founder step-up clear cookie must use the same root path');
+assert.doesNotMatch(authService,/FOUNDER_STEPUP_COOKIE}.*Path=\/founder/s,'Founder step-up must not be restricted to /founder after admin bootstrap support');
 assert.match(api,/value==='\/admin'\|\|value\.startsWith\('\/admin\/'\)/,'Founder bootstrap return path must allow /admin');
 assert.match(admin,/cache:'no-store'/);
 assert.match(sql,/CREATE TABLE IF NOT EXISTS founder_passkeys/);
