@@ -1,0 +1,57 @@
+name: Left align homepage
+
+on:
+  push:
+    branches: ["left-align-home"]
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: left-align-home
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Left align homepage hero and comparison
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/api/main.ts')
+          s=p.read_text()
+          replacements={
+            '.experience-copy{text-align:center;max-width:900px;margin:0 auto 28px}':'.experience-copy{text-align:left;max-width:980px;margin:0 0 28px}',
+            '.experience-hero h1{margin:20px auto 18px;':'.experience-hero h1{margin:20px 0 18px;',
+            '.experience-lede{font-size:18px;line-height:1.55;color:#6e6877;max-width:720px;margin:0 auto}':'.experience-lede{font-size:18px;line-height:1.55;color:#6e6877;max-width:720px;margin:0}',
+            '.sim-shell{position:relative;margin:30px auto 0;':'.sim-shell{position:relative;margin:30px 0 0;',
+            '.sim-tabs{justify-content:center;padding:14px 16px 0;border-bottom:0;background:transparent}':'.sim-tabs{justify-content:flex-start;padding:14px 16px 0;border-bottom:0;background:transparent}',
+            '.experience-hero-cta{display:flex;align-items:center;justify-content:center;gap:12px;':'.experience-hero-cta{display:flex;align-items:center;justify-content:flex-start;gap:12px;'
+          }
+          for old,new in replacements.items():
+            if old not in s:
+              raise SystemExit(f'missing expected CSS fragment: {old}')
+            s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+      - name: Verify alignment contract
+        run: |
+          grep -F '.experience-copy{text-align:left;max-width:980px;margin:0 0 28px}' src/api/main.ts
+          grep -F '.sim-tabs{justify-content:flex-start;padding:14px 16px 0' src/api/main.ts
+          grep -F '.sim-shell{position:relative;margin:30px 0 0;' src/api/main.ts
+          ! grep -F '.experience-copy{text-align:center;max-width:900px;margin:0 auto 28px}' src/api/main.ts
+      - run: npm ci
+      - run: npm test
+      - name: Commit validated update and remove one-time workflow
+        run: |
+          rm .github/workflows/left-align-home.yml
+          git config user.name 'Link2AI UI Polish'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/api/main.ts .github/workflows/left-align-home.yml
+          git commit -m 'Left align homepage experience'
+          git push origin HEAD:left-align-home
