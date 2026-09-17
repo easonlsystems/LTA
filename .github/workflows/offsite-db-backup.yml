@@ -1,0 +1,89 @@
+name: Offsite DB backup
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backup:
+    if: ${{ vars.OFFSITE_BACKUP_ENABLED == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+      BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+      BACKUP_S3_REGION: ${{ secrets.BACKUP_S3_REGION }}
+      BACKUP_S3_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+      BACKUP_S3_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+      BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+      BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+      BACKUP_HMAC_KEY: ${{ secrets.BACKUP_HMAC_KEY }}
+    steps:
+      - name: Validate backup configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for k in BACKUP_DATABASE_URL BACKUP_S3_BUCKET BACKUP_S3_REGION BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY BACKUP_ENCRYPTION_PASSPHRASE BACKUP_HMAC_KEY; do
+            test -n "${!k:-}" || { echo "Missing required backup secret: $k"; exit 1; }
+          done
+      - name: Install backup clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client python3-venv
+          python3 -m venv "$RUNNER_TEMP/awsvenv"
+          "$RUNNER_TEMP/awsvenv/bin/pip" install -q awscli
+      - name: Dump, encrypt and sign
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          TS="$(date -u +%Y%m%dT%H%M%SZ)"
+          DIR="$RUNNER_TEMP/link2ai-backup-$TS"
+          mkdir -p "$DIR"
+          pg_dump --format=custom --compress=9 --no-owner --no-acl "$BACKUP_DATABASE_URL" -f "$DIR/link2ai.dump"
+          PLAIN_SHA="$(sha256sum "$DIR/link2ai.dump" | awk '{print $1}')"
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:BACKUP_ENCRYPTION_PASSPHRASE -in "$DIR/link2ai.dump" -out "$DIR/link2ai.dump.enc"
+          ENC_SHA="$(sha256sum "$DIR/link2ai.dump.enc" | awk '{print $1}')"
+          python3 - "$DIR/manifest.json" "$TS" "$PLAIN_SHA" "$ENC_SHA" <<'PY'
+          import json,os,sys
+          path,ts,plain,enc=sys.argv[1:]
+          with open(path,'w') as f:
+              json.dump({'timestamp_utc':ts,'format':'pg_dump-custom','encryption':'aes-256-cbc-pbkdf2-200000','plaintext_sha256':plain,'encrypted_sha256':enc,'repository':os.environ.get('GITHUB_REPOSITORY'),'git_sha':os.environ.get('GITHUB_SHA')},f,separators=(',',':'),sort_keys=True)
+          PY
+          python3 - "$DIR/manifest.json" "$DIR/manifest.hmac" <<'PY'
+          import hashlib,hmac,os,sys
+          data=open(sys.argv[1],'rb').read(); key=os.environ['BACKUP_HMAC_KEY'].encode()
+          open(sys.argv[2],'w').write(hmac.new(key,data,hashlib.sha256).hexdigest()+'\n')
+          PY
+          rm -f "$DIR/link2ai.dump"
+          echo "BACKUP_DIR=$DIR" >> "$GITHUB_ENV"
+          echo "BACKUP_TS=$TS" >> "$GITHUB_ENV"
+      - name: Upload with immutable retention and verify lock
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.BACKUP_S3_REGION }}
+        run: |
+          set -euo pipefail
+          AWS="$RUNNER_TEMP/awsvenv/bin/aws"
+          EXTRA=()
+          if [ -n "${BACKUP_S3_ENDPOINT:-}" ]; then EXTRA+=(--endpoint-url "$BACKUP_S3_ENDPOINT"); fi
+          RETAIN="$(date -u -d '+90 days' +%Y-%m-%dT%H:%M:%SZ)"
+          PREFIX="daily/${BACKUP_TS}"
+          for f in link2ai.dump.enc manifest.json manifest.hmac; do
+            "$AWS" "${EXTRA[@]}" s3api put-object --bucket "$BACKUP_S3_BUCKET" --key "$PREFIX/$f" --body "$BACKUP_DIR/$f" --object-lock-mode COMPLIANCE --object-lock-retain-until-date "$RETAIN" >/dev/null
+            MODE="$("$AWS" "${EXTRA[@]}" s3api head-object --bucket "$BACKUP_S3_BUCKET" --key "$PREFIX/$f" --query ObjectLockMode --output text)"
+            test "$MODE" = COMPLIANCE || { echo "Object lock verification failed for $f"; exit 1; }
+          done
+          if [ "$(date -u +%d)" = "01" ]; then
+            LONG_RETAIN="$(date -u -d '+400 days' +%Y-%m-%dT%H:%M:%SZ)"
+            MPREFIX="monthly/$(date -u +%Y-%m)/${BACKUP_TS}"
+            for f in link2ai.dump.enc manifest.json manifest.hmac; do
+              "$AWS" "${EXTRA[@]}" s3api put-object --bucket "$BACKUP_S3_BUCKET" --key "$MPREFIX/$f" --body "$BACKUP_DIR/$f" --object-lock-mode COMPLIANCE --object-lock-retain-until-date "$LONG_RETAIN" >/dev/null
+            done
+          fi
+          echo "Encrypted logical backup uploaded and COMPLIANCE lock verified."

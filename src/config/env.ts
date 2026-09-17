@@ -44,6 +44,8 @@ const schema = z.object({
   LEMONSQUEEZY_STORE_ID: z.string().optional(),
   LEMONSQUEEZY_BASIC_VARIANT_ID: z.string().optional(),
   LEMONSQUEEZY_PRO_VARIANT_ID: z.string().optional(),
+  LEMONSQUEEZY_TOPUP_500_VARIANT_ID: z.string().optional(),
+  LEMONSQUEEZY_TOPUP_1500_VARIANT_ID: z.string().optional(),
   LEMONSQUEEZY_TEST_MODE: boolish,
   WORKER_POLL_MS: z.coerce.number().int().positive().default(1000),
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(4),
