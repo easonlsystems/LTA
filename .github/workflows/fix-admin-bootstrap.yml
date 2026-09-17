@@ -1,0 +1,62 @@
+name: Fix admin bootstrap cookie
+
+on:
+  push:
+    branches: ["admin-passkey-pwa-20260917"]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: admin-passkey-pwa-20260917
+      - name: Patch bootstrap flow
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          service = Path('src/auth/service.ts')
+          s = service.read_text()
+          old_create = "return `${FOUNDER_STEPUP_COOKIE}=${encodeURIComponent(value)}; Path=/founder; HttpOnly; SameSite=Strict; Max-Age=${Math.max(60,Math.min(ttlSeconds,1800))}${secure}`;"
+          new_create = "return `${FOUNDER_STEPUP_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.max(60,Math.min(ttlSeconds,1800))}${secure}`;"
+          old_clear = "return `${FOUNDER_STEPUP_COOKIE}=; Path=/founder; HttpOnly; SameSite=Strict; Max-Age=0${secure}`;"
+          new_clear = "return `${FOUNDER_STEPUP_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure}`;"
+          if old_create not in s or old_clear not in s:
+              raise SystemExit('Founder step-up cookie patterns not found')
+          s = s.replace(old_create, new_create, 1).replace(old_clear, new_clear, 1)
+          service.write_text(s)
+
+          api = Path('src/api/main.ts')
+          a = api.read_text()
+          old_return = "if(value.startsWith('/founder')&&!value.startsWith('//')&&!value.includes('\\\\')&&value.length<=300)return value;"
+          new_return = "if((value.startsWith('/founder')||value==='/admin'||value.startsWith('/admin/'))&&!value.startsWith('//')&&!value.includes('\\\\')&&value.length<=300)return value;"
+          if old_return not in a:
+              raise SystemExit('founderReturnTo pattern not found')
+          a = a.replace(old_return, new_return, 1)
+          api.write_text(a)
+
+          test = Path('test/admin-passkey-schema.mjs')
+          t = test.read_text()
+          marker = "const pkg=JSON.parse(await readFile('package.json','utf8'));\n"
+          if marker not in t:
+              raise SystemExit('admin passkey test marker not found')
+          t = t.replace(marker, marker + "const authService=await readFile('src/auth/service.ts','utf8');\nconst api=await readFile('src/api/main.ts','utf8');\n", 1)
+          anchor = "assert.match(admin,/The final passkey cannot be removed/);\n"
+          if anchor not in t:
+              raise SystemExit('admin passkey test anchor not found')
+          t = t.replace(anchor, anchor + "assert.match(authService,/FOUNDER_STEPUP_COOKIE}.*Path=\\/; HttpOnly/s,'Founder step-up must be visible to both /founder and /admin');\nassert.match(api,/value==='\\/admin'\\|\\|value\\.startsWith\\('\\/admin\\/'\\)/,'Founder bootstrap return path must allow /admin');\n", 1)
+          test.write_text(t)
+          PY
+      - name: Commit fix and remove temporary workflow
+        run: |
+          rm .github/workflows/fix-admin-bootstrap.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/auth/service.ts src/api/main.ts test/admin-passkey-schema.mjs .github/workflows/fix-admin-bootstrap.yml
+          git commit -m "Fix admin bootstrap authorization cookie scope"
+          git push origin HEAD:admin-passkey-pwa-20260917
