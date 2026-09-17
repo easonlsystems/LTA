@@ -1,0 +1,97 @@
+name: Simplify comparison demo
+on:
+  push:
+    branches: [simplify-comparison-demo]
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: simplify-comparison-demo
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Simplify homepage comparison interaction
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p=Path('src/api/main.ts')
+          s=p.read_text()
+
+          def replace_once(old,new,label):
+              global s
+              count=s.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly 1 match, found {count}')
+              s=s.replace(old,new,1)
+
+          replace_once(
+              'Run the same public URL and the same question side by side. The only difference is whether Link2AI is connected.',
+              'Pick a source, ask the same question, and tap once to see what Link2AI changes.',
+              'hero comparison lede'
+          )
+
+          replace_once(
+              '<button class="sim-tab" type="button" data-sim-source="reddit">${redditOAuthReady?\'Reddit\':\'Reddit · paused\'}</button>',
+              '<button class="sim-tab" type="button" data-sim-source="reddit"${redditOAuthReady?\'\':\' hidden\'}>${redditOAuthReady?\'Reddit\':\'Reddit · paused\'}</button>',
+              'reddit comparison tab gating'
+          )
+
+          replace_once(
+              '''          <div class="sim-meta">\n            <div><span class="sim-source-label">Same link · two conversations</span><strong class="sim-source-name" id="sim-source-name">YouTube video</strong><code class="sim-url" id="sim-url">youtube.com/watch?v=…</code></div>\n            <div class="sim-actions"><button class="sim-run" id="sim-run" type="button">See the difference →</button><button class="sim-reset" id="sim-reset" type="button">Reset</button></div>\n          </div>''',
+              '''          <div class="sim-meta sim-meta-simple">\n            <div class="sim-prompt-card">\n              <span>Try this question</span>\n              <p class="sim-user-question">What is this YouTube video arguing, and what evidence does it use?</p>\n              <strong class="sim-source-name" id="sim-source-name" hidden>YouTube video</strong><code class="sim-url" id="sim-url" hidden>youtube.com/watch?v=…</code>\n            </div>\n            <div class="sim-actions"><button class="sim-run" id="sim-run" type="button">See the difference →</button><button class="sim-reset" id="sim-reset" type="button" hidden>Reset</button></div>\n          </div>''',
+              'simplified comparison prompt'
+          )
+
+          s,n=re.subn(
+              r"^      const renderAnswer=.*;$",
+              "      const renderAnswer=(el,lead,points)=>{el.innerHTML='<span class=\\\"sim-chat-speaker\\\">Claude</span><strong>'+lead+'</strong><p>'+points[0]+'</p>';};",
+              s,
+              count=1,
+              flags=re.M
+          )
+          if n != 1:
+              raise SystemExit(f'renderAnswer simplification: expected 1 match, found {n}')
+
+          marker='@media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}.sim-line.live:after{animation:none}.sim-answer.show,.sim-tool.show,.sim-conclusion.show{animation:none}}'
+          if s.count(marker) != 1:
+              raise SystemExit('comparison CSS insertion marker missing or duplicated')
+          css='''/* Simplified comparison interaction · 2026-09-17 */\n.sim-shell{max-width:980px}\n.sim-tabs{justify-content:center;padding:14px 16px 0;border-bottom:0;background:transparent}\n.sim-tab[hidden]{display:none}\n.sim-meta-simple{grid-template-columns:minmax(0,1fr) auto;gap:18px;padding:18px 22px 20px}\n.sim-prompt-card{min-width:0}\n.sim-prompt-card>span{display:block;margin-bottom:7px;font-size:10px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#8a8292}\n.sim-prompt-card>p{margin:0;font-size:16px;line-height:1.45;font-weight:800;color:#2d2734}\n.sim-meta-simple .sim-source-name,.sim-meta-simple .sim-url,.sim-reset{display:none!important}\n.sim-grid{gap:12px;padding:0 22px 18px}\n.sim-panel{min-height:0;padding:15px 16px}\n.sim-panel-head{padding-bottom:0;border-bottom:0}\n.sim-panel-sub,.sim-chat-user{display:none}\n.sim-panel .sim-body{display:none;padding-top:12px}\n.sim-panel:has(.sim-answer.show) .sim-body,.sim-panel:has(.sim-tool.show) .sim-body{display:flex}\n.sim-answer{padding:12px 13px;font-size:13px}\n.sim-answer p{margin:5px 0 0}\n.sim-answer ul{display:none}\n.sim-tool{width:auto;max-width:100%;padding:9px 11px}\n.sim-conclusion{margin:0 22px 18px;padding:0;background:transparent;color:#716a79;font-size:12px}\n.sim-conclusion strong{color:#5e49c4}\n@media(max-width:650px){.sim-tabs{justify-content:flex-start}.sim-meta-simple{grid-template-columns:1fr;gap:12px;padding:14px}.sim-prompt-card>p{font-size:14px}.sim-actions{display:block}.sim-run{width:100%;min-height:44px}.sim-grid{grid-template-columns:1fr;padding:0 14px 14px}.sim-panel{padding:14px}.sim-conclusion{margin:0 14px 14px}.sim-shell{margin-top:20px}}\n\n'''
+          s=s.replace(marker,css+marker,1)
+          p.write_text(s)
+          PY
+      - name: Verify simplified interaction contract
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const s=fs.readFileSync('src/api/main.ts','utf8');
+          for(const needle of [
+            'Pick a source, ask the same question, and tap once to see what Link2AI changes.',
+            'class="sim-meta sim-meta-simple"',
+            '<span>Try this question</span>',
+            '.sim-panel:has(.sim-answer.show) .sim-body',
+            '.sim-panel-sub,.sim-chat-user{display:none}',
+            '.sim-answer ul{display:none}',
+            'data-sim-source="reddit"${redditOAuthReady?\'\':\' hidden\'}'
+          ]) if(!s.includes(needle)) throw new Error('missing simplified comparison contract: '+needle);
+          NODE
+      - run: npm ci
+      - run: npm test
+      - name: Commit validated update and remove one-time workflow
+        shell: bash
+        run: |
+          git config user.name "Link2AI UI Polish"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/simplify-comparison-demo.yml
+          git add src/api/main.ts
+          git commit -m "Simplify homepage comparison experience"
+          git push origin HEAD:simplify-comparison-demo
