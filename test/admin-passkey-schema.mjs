@@ -7,7 +7,7 @@ const sql=await readFile('sql/003_admin_passkeys.sql','utf8');
 const pkg=JSON.parse(await readFile('package.json','utf8'));
 
 assert.equal(pkg.dependencies['@simplewebauthn/server'],'14.0.2');
-assert.equal(pkg.dependencies['@simplewebauthn/browser'],'14.0.2');
+assert.equal(pkg.dependencies['@simplewebauthn/browser'],'14.0.0');
 assert.match(wrapper,/registerBaseAuthRoutes/);
 assert.match(wrapper,/registerAdminRoutes/);
 assert.match(admin,/generateAuthenticationOptions/);
