@@ -357,7 +357,6 @@ app.get('/',async(req,reply)=>{
             <button class="sim-tab" type="button" data-sim-source="instagram">Instagram</button>
             <button class="sim-tab" type="button" data-sim-source="x">X</button>
             <button class="sim-tab" type="button" data-sim-source="bluesky">Bluesky</button>
-            <button class="sim-tab" type="button" data-sim-source="github">GitHub</button>
             <button class="sim-tab" type="button" data-sim-source="hn">Hacker News</button>
             <button class="sim-tab" type="button" data-sim-source="pdf">PDF</button>
             <button class="sim-tab" type="button" data-sim-source="web">Web</button>
@@ -386,7 +385,7 @@ app.get('/',async(req,reply)=>{
       </div>
     </section>
 
-    <script src="/home.js?v=20260917-homeonly1" defer></script>
+    <script src="/home.js?v=20260917-homeonly2" defer></script>
   </main>`, `${env().PUBLIC_BRAND_NAME} — Paste a link. Claude can read it.`, `/`));
 });
 
@@ -415,7 +414,6 @@ const homeExperienceJs=`(()=>{
         instagram:{name:'Instagram post',url:'instagram.com/reel/…',question:'What is this Instagram post claiming, and what details support it?',fail:'I can see the Instagram URL, but the exact post content is not available to me reliably from the link alone.',lead:'The post makes a specific claim and supports it with details from the caption and clip.',points:['The caption gives the central claim.','The media adds one concrete example.','The strongest conclusion goes slightly beyond what is directly shown.']},
         x:{name:'X post',url:'x.com/creator/status/…',question:'What exactly is this post claiming, and what context matters?',fail:'I can see the X URL, but I do not have enough of the exact post content to answer confidently.',lead:'The post makes one direct claim, with context that changes how strongly it should be read.',points:['The wording is narrower than the headline interpretation.','One linked detail supports the factual part of the claim.','The broader conclusion is still the author’s interpretation.']},
         bluesky:{name:'Bluesky post',url:'bsky.app/profile/…/post/…',question:'Summarize this Bluesky post and the context around its claim.',fail:'I can see the Bluesky URL, but I do not have enough exact post content to summarize it reliably.',lead:'The post states a clear position and gives enough surrounding context to explain what it is reacting to.',points:['The main claim is explicit in the post text.','The surrounding context explains what prompted it.','The useful distinction is between the factual event and the author’s judgment.']},
-        github:{name:'GitHub issue',url:'github.com/example/project/issues/…',question:'Review this GitHub issue and suggest the next fix to try.',fail:'I can’t reliably inspect the full Issue thread from the URL alone. Paste the Issue body and comments and I can review it.',lead:'The Issue points to one likely failure path and one missing diagnostic.',points:['The report is reproducible only after reconnecting.','Comments narrow the failure to state carried between requests.','The next useful step is instrumenting the reconnect path before changing behavior.']},
         hn:{name:'Hacker News discussion',url:'news.ycombinator.com/item?id=…',question:'Where do commenters in this Hacker News discussion actually disagree?',fail:'I can open the story, but I do not have enough of the discussion thread to summarize the disagreement reliably.',lead:'The discussion splits into a few recurring arguments rather than one consensus.',points:['One group accepts the article’s central premise.','Another challenges whether the evidence supports that conclusion.','A third group focuses on practical consequences instead of the original claim.']},
         pdf:{name:'Public PDF',url:'example.org/research-paper.pdf',question:'What are the paper’s main findings and biggest limitation?',fail:'This fetch did not expose enough of the PDF text to answer from the document itself.',lead:'The paper reports a clear result, but the strongest limitation is in how broadly it can be generalized.',points:['The central finding is consistent across the reported experiments.','The evidence is strongest inside the study’s measured setting.','The paper itself leaves external validity as the main caution.']},
         web:{name:'Public webpage',url:'example.org/article',question:'Summarize this article and separate evidence from opinion.',fail:'This fetch did not expose enough of the exact page content to separate its evidence from opinion reliably.',lead:'The article mixes reported facts with the author’s interpretation.',points:['The factual section relies on named events and published figures.','The analysis section makes a broader causal claim.','The conclusion is more confident than the evidence shown earlier.']}

@@ -55,12 +55,12 @@ try{
       assert.match(body,/Claude can read it\./);
       assert.match(body,/Interactive comparison · Claude-first/);
       assert.match(body,/See the difference/);
-      for(const source of ['youtube','tiktok','instagram','x','bluesky','github','hn','pdf','web'])assert.match(body,new RegExp(`data-sim-source=\"${source}\"`),`homepage should expose ${source} simulation`);
+      for(const source of ['youtube','tiktok','instagram','x','bluesky','hn','pdf','web'])assert.match(body,new RegExp(`data-sim-source=\"${source}\"`),`homepage should expose ${source} simulation`);
       assert.match(body,/href="\/examples"/);
       assert.match(body,/href="\/use-cases"/);
       assert.match(body,/href="\/sources"/);
       assert.match(body,/href="\/pricing"/);
-      assert.match(body,/src="\/home\.js\?v=20260917-homeonly1" defer/);
+      assert.match(body,/src="\/home\.js\?v=20260917-homeonly2" defer/);
       assert.doesNotMatch(body,/One missing layer/i);
       assert.doesNotMatch(body,/What do you want Claude to read\?/);
       assert.doesNotMatch(body,/Try the link Claude just failed to read\./);
@@ -73,7 +73,7 @@ try{
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }
 
-  const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917-homeonly1`,{headers:{host:'link2ai.example'}});
+  const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917-homeonly2`,{headers:{host:'link2ai.example'}});
   assert.equal(homeJsResponse.status,200,'homepage JS endpoint must return 200');
   assert.match(homeJsResponse.headers.get('content-type')??'',/javascript/);
   const homeJs=await homeJsResponse.text();
@@ -94,7 +94,7 @@ try{
   const ids={};
   for(const id of ['sim-source-name','sim-url','sim-left-state','sim-right-state','sim-left-answer','sim-right-answer','sim-tool','sim-conclusion','sim-run','sim-reset','source-preview-label','source-preview-title','source-preview-question','source-mini-result','source-open-sim','usecase-user','usecase-result','simulation'])ids[id]=new FakeElement(id);
   ids['sim-conclusion'].hidden=true;
-  const simTabs=['reddit','youtube','tiktok','instagram','x','bluesky','github','hn','pdf','web'].map(value=>new FakeElement('',{simSource:value}));
+  const simTabs=['reddit','youtube','tiktok','instagram','x','bluesky','hn','pdf','web'].map(value=>new FakeElement('',{simSource:value}));
   const simTab=(key)=>{const tab=simTabs.find(el=>el.dataset.simSource===key);assert.ok(tab,`missing simulation tab ${key}`);return tab;};
   const sourceButtons=['reddit','youtube','github','x','web','pdf','instagram','tiktok','hn','bluesky'].map(value=>new FakeElement('',{sourceKey:value}));
   const usecaseButtons=['reddit','youtube','github','research'].map(value=>new FakeElement('',{usecase:value}));
@@ -169,9 +169,9 @@ try{
   // Switching source during a run must invalidate old-source callbacks.
   ids['sim-run'].listeners.click();
   assert.ok(runNextTimer());
-  simTab('github').listeners.click();
+  simTab('hn').listeners.click();
   runAllTimers();
-  assert.match(ids['sim-url'].textContent,/github\.com/,'source tabs must switch simulation content');
+  assert.match(ids['sim-url'].textContent,/news\.ycombinator\.com/,'source tabs must switch simulation content');
   assert.equal(ids['sim-left-state'].textContent,'Ready','switching source must cancel the old run and return left to Ready');
   assert.equal(ids['sim-right-state'].textContent,'Ready','switching source must not autoplay the new source');
   assert.equal(timers.size,0,'switching source must leave no stale or automatic timers');
