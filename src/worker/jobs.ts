@@ -19,9 +19,11 @@ export interface JobRow {
   error_code: string | null;
   error_message: string | null;
   checkout_url: string | null;
+  preferred_region: string | null;
+  attempted_regions: string[];
 }
 
-export async function claimNextJob(workerId: string): Promise<JobRow | null> {
+export async function claimNextJob(workerId: string, workerRegion='local', primaryRegion=workerRegion): Promise<JobRow | null> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -35,13 +37,15 @@ export async function claimNextJob(workerId: string): Promise<JobRow | null> {
        WHERE j.status='queued'
          AND u.account_status <> 'disabled'
          AND j.next_attempt_at <= now()
+         AND ((j.preferred_region IS NULL AND $1::text=$2::text) OR j.preferred_region=$1::text)
          AND (
            SELECT COUNT(*) FROM transcript_jobs p
            WHERE p.user_id=j.user_id AND p.status='processing'
          ) < CASE u.plan WHEN 'pro' THEN 4 WHEN 'basic' THEN 2 ELSE 1 END
        ORDER BY j.priority DESC, j.created_at ASC
        FOR UPDATE OF j SKIP LOCKED
-       LIMIT 1`
+       LIMIT 1`,
+      [workerRegion,primaryRegion]
     );
     if (!result.rowCount) { await client.query('COMMIT'); return null; }
     const job = result.rows[0];
@@ -59,11 +63,14 @@ export async function claimNextJob(workerId: string): Promise<JobRow | null> {
       return null;
     }
     await client.query(
-      `UPDATE transcript_jobs SET status='processing', locked_at=now(), locked_by=$2, attempts=attempts+1, updated_at=now() WHERE id=$1`,
-      [job.id, workerId]
+      `UPDATE transcript_jobs SET status='processing', locked_at=now(), locked_by=$2, attempts=attempts+1,
+         attempted_regions=CASE WHEN $3::text=ANY(attempted_regions) THEN attempted_regions ELSE array_append(attempted_regions,$3::text) END,
+         updated_at=now() WHERE id=$1`,
+      [job.id, workerId, workerRegion]
     );
     await client.query('COMMIT');
-    return { ...job, status: 'processing', attempts: job.attempts + 1 };
+    const attempted=job.attempted_regions?.includes(workerRegion)?job.attempted_regions:[...(job.attempted_regions??[]),workerRegion];
+    return { ...job, status: 'processing', attempts: job.attempts + 1, attempted_regions: attempted };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -83,6 +90,14 @@ export async function deferJob(jobId:string,seconds=3):Promise<void>{
     `UPDATE transcript_jobs SET status='queued',attempts=GREATEST(attempts-1,0),locked_at=NULL,locked_by=NULL,
       next_attempt_at=now()+($2 || ' seconds')::interval,updated_at=now() WHERE id=$1`,
     [jobId,seconds]
+  );
+}
+
+export async function deferJobToRegion(jobId:string,region:string,errorCode:string,message:string):Promise<void>{
+  await pool.query(
+    `UPDATE transcript_jobs SET status='queued',attempts=GREATEST(attempts-1,0),preferred_region=$2,error_code=$3,error_message=$4,retryable=true,
+      locked_at=NULL,locked_by=NULL,next_attempt_at=now(),updated_at=now() WHERE id=$1`,
+    [jobId,region,errorCode,message]
   );
 }
 

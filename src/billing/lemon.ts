@@ -4,6 +4,7 @@ import { pool } from '../db/pool.js';
 import { hmacSha256, timingSafeEqualHex } from '../util/crypto.js';
 import { Link2AIError } from '../util/errors.js';
 import { canonicalLemonStatus, lemonBillingPeriod, shouldApplySubscriptionLifecycleEvent } from './order.js';
+import { reconcileFoundingOffer, releaseFoundingSlotForInitialRefund } from './founding.js';
 
 export type PaidPlan = 'basic' | 'pro';
 
@@ -171,7 +172,13 @@ async function resumePendingJobs(client:PoolClient,userId:string,plan:PaidPlan,e
 export async function processLemonEvent(event:any):Promise<void>{
   const eventName=String(event?.meta?.event_name??'');
   const obj=event?.data;
-  if(!eventName||obj?.type!=='subscriptions'||!obj?.id)return;
+  if(!eventName||!obj?.id)return;
+  if(eventName==='order_refunded'&&obj?.type==='orders'){
+    const refundedUserId=String(event?.meta?.custom_data?.user_id??'');
+    if(refundedUserId)await releaseFoundingSlotForInitialRefund(refundedUserId);
+    return;
+  }
+  if(obj?.type!=='subscriptions')return;
   const attrs=obj.attributes??{};
   const subscriptionId=String(obj.id);
   const client=await pool.connect();
@@ -203,6 +210,8 @@ export async function processLemonEvent(event:any):Promise<void>{
       )){await client.query('COMMIT');return;}
     }
     const period=lemonBillingPeriod(attrs);
+    const priorSubscriptions=await client.query('SELECT 1 FROM subscriptions WHERE user_id=$1 LIMIT 1',[userId]);
+    const firstSubscription=priorSubscriptions.rowCount===0;
     await client.query(
       `INSERT INTO subscriptions(user_id,provider,provider_subscription_id,plan,status,current_period_start,current_period_end,provider_event_at)
        VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$6,$7)
@@ -212,6 +221,7 @@ export async function processLemonEvent(event:any):Promise<void>{
          provider_event_at=EXCLUDED.provider_event_at,updated_at=now()`,
       [userId,subscriptionId,plan,status,period.start,period.end,updatedAt]
     );
+    await reconcileFoundingOffer(client,{userId,plan,status,periodStart:period.start,firstSubscription});
     const entitlement=await reconcileUserEntitlement(client,userId);
     const resumeJobId=custom.resume_job_id?String(custom.resume_job_id):undefined;
     if(entitlement.plan!=='trial'&&entitlement.accountStatus!=='canceled')await resumePendingJobs(client,userId,entitlement.plan,resumeJobId);

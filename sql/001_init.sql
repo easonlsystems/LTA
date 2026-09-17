@@ -16,6 +16,17 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_set_at timestamptz;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_bonus_seconds integer NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_bonus_videos integer NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS analytics_excluded boolean NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS founding_plan text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS founding_claimed_at timestamptz;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS founding_cycles_used integer NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS founding_period_start timestamptz;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS founding_ended_at timestamptz;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS founding_slot_released_at timestamptz;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_founding_plan_check;
+ALTER TABLE users ADD CONSTRAINT users_founding_plan_check CHECK (founding_plan IS NULL OR founding_plan IN ('basic','pro'));
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_founding_cycles_used_check;
+ALTER TABLE users ADD CONSTRAINT users_founding_cycles_used_check CHECK (founding_cycles_used >= 0 AND founding_cycles_used <= 3);
+CREATE INDEX IF NOT EXISTS users_founding_claim_idx ON users(founding_claimed_at) WHERE founding_claimed_at IS NOT NULL AND founding_slot_released_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS password_auth_attempts (
   id bigserial PRIMARY KEY,
@@ -262,7 +273,10 @@ CREATE TABLE IF NOT EXISTS transcript_jobs (
   updated_at timestamptz NOT NULL DEFAULT now(),
   completed_at timestamptz
 );
+ALTER TABLE transcript_jobs ADD COLUMN IF NOT EXISTS preferred_region text;
+ALTER TABLE transcript_jobs ADD COLUMN IF NOT EXISTS attempted_regions text[] NOT NULL DEFAULT ARRAY[]::text[];
 CREATE INDEX IF NOT EXISTS transcript_jobs_queue_idx ON transcript_jobs(status, next_attempt_at, priority DESC, created_at);
+CREATE INDEX IF NOT EXISTS transcript_jobs_region_queue_idx ON transcript_jobs(status, preferred_region, next_attempt_at, priority DESC, created_at);
 CREATE INDEX IF NOT EXISTS transcript_jobs_user_idx ON transcript_jobs(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS transcript_jobs_media_idx ON transcript_jobs(platform, canonical_media_id, status);
 -- Prevent duplicate in-flight MCP calls for the exact same normalized URL from charging twice.

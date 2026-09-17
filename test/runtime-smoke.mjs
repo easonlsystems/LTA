@@ -43,7 +43,7 @@ try{
   assert.equal((await health.json()).ok,true);
 
   // Public routes should include /status (may return 503 if db unavailable)
-  for(const route of ['/','/examples','/use-cases','/sources','/connect','/support','/privacy','/terms']){
+  for(const route of ['/','/examples','/use-cases','/sources','/pricing','/connect','/support','/privacy','/terms']){
     const page=await fetch(`http://127.0.0.1:${port}${route}`,{headers:{host:'link2ai.example'}});
     assert.equal(page.status,200,`${route} should return 200`);
     const body=await page.text();
@@ -69,6 +69,7 @@ try{
     if(route==='/examples'){assert.match(body,/YouTube \/ Shorts/);assert.match(body,/GitHub Issues \/ PRs/);assert.match(body,/Try the interactive comparison/);}
     if(route==='/use-cases'){assert.match(body,/Use the link normally/);assert.match(body,/Summaries grounded in the source/);}
     if(route==='/sources'){assert.match(body,/Supported sources/);assert.match(body,/Video & social/);assert.match(body,/Reddit/);assert.match(body,/Paused until approved Reddit OAuth Data API credentials are configured/);}
+    if(route==='/pricing'){assert.match(body,/Founding offer/);assert.match(body,/First 50 paid users get 50% more usage/);assert.match(body,/750 processing units/);assert.match(body,/3,000 processing units/);assert.match(body,/What does 1 processing unit mean/);assert.match(body,/Units depend on content size, not platform/);}
     if(route==='/connect'){assert.match(body,/Open Claude Connectors Directory/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Always available/);assert.doesNotMatch(body,/Add custom connector|Tools already loaded|Register automatically/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
   }

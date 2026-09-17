@@ -3,12 +3,14 @@ import http from 'node:http';
 import { env } from '../config/env.js';
 import { pool } from '../db/pool.js';
 import { claimNextJob, deferJob, recoverStaleJobs } from './jobs.js';
+import { workerRegionRuntime } from './regions.js';
 import { processJob } from './processor.js';
 import { readinessIssues } from '../config/readiness.js';
 import { assertWorkerRuntime } from './preflight.js';
 import { cleanupStaleTempDirs } from './tempCleanup.js';
 
-const workerId=`${os.hostname()}:${process.pid}`;
+const regionRuntime=workerRegionRuntime();
+const workerId=`${os.hostname()}:${process.pid}:${regionRuntime.currentRegion}`;
 let stopping=false;
 let activeJobs=0;
 let inflightClaims=0;
@@ -19,7 +21,7 @@ const health=http.createServer(async(req,res)=>{
   res.setHeader('content-type','application/json');
   if(req.url==='/healthz'){
     res.statusCode=200;
-    res.end(JSON.stringify({ok:true,service:'link2ai-worker',worker_id:workerId,active_jobs:activeJobs,worker_concurrency:env().WORKER_CONCURRENCY,last_job_at:lastJobAt}));
+    res.end(JSON.stringify({ok:true,service:'link2ai-worker',worker_id:workerId,region:regionRuntime.currentRegion,primary_region:regionRuntime.primaryRegion,regional_fallback_order:regionRuntime.regionOrder,active_jobs:activeJobs,worker_concurrency:env().WORKER_CONCURRENCY,last_job_at:lastJobAt}));
     return;
   }
   try{
@@ -48,7 +50,7 @@ async function slot(slotId:number){
     inflightClaims++;
     let job;
     try{
-      job=await claimNextJob(`${workerId}:${slotId}`);
+      job=await claimNextJob(`${workerId}:${slotId}`,regionRuntime.currentRegion,regionRuntime.primaryRegion);
       claimFailures=0;
     }catch(error){
       claimFailures++;
@@ -60,7 +62,7 @@ async function slot(slotId:number){
     activeJobs++;
     try{
       if(stopping){await deferJob(job.id,0);continue;}
-      await processJob(job);lastJobAt=new Date().toISOString();
+      await processJob(job,{workerRegion:regionRuntime.currentRegion,regionOrder:regionRuntime.regionOrder});lastJobAt=new Date().toISOString();
     }finally{activeJobs--;}
   }
 }
@@ -76,7 +78,7 @@ async function main(){
   await assertWorkerRuntime();
   await cleanupStaleTempDirs();
   await recoverStaleJobs();
-  console.log(`[worker] Link2AI worker ${workerId} started with ${env().WORKER_CONCURRENCY} slots`);
+  console.log(`[worker] Link2AI worker ${workerId} started with ${env().WORKER_CONCURRENCY} slots; primary=${regionRuntime.primaryRegion}; fallback=${regionRuntime.regionOrder.join(' -> ')}`);
   await Promise.all([...Array.from({length:env().WORKER_CONCURRENCY},(_,i)=>slot(i+1)),maintenance()]);
 }
 async function shutdown(){

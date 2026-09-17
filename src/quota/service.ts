@@ -3,15 +3,20 @@ import { pool } from '../db/pool.js';
 import { Link2AIError } from '../util/errors.js';
 import { PLAN_LIMITS, type Plan } from './plans.js';
 import { usageUnitsToLegacySeconds } from '../content/limits.js';
+import { foundingBonusUnits, type FoundingPlan } from '../billing/foundingPolicy.js';
 
 interface Period { start: Date | null; end: Date | null; }
 
 async function getUserAndPeriod(client: PoolClient, userId: string): Promise<{plan:Plan; period:Period; trialEligible:boolean; bonusSeconds:number; bonusVideos:number}> {
-  const user = await client.query<{plan:Plan;trial_eligible:boolean;admin_bonus_seconds:number;admin_bonus_videos:number}>('SELECT plan,trial_eligible,admin_bonus_seconds,admin_bonus_videos FROM users WHERE id=$1 FOR UPDATE', [userId]);
+  const user = await client.query<{plan:Plan;trial_eligible:boolean;admin_bonus_seconds:number;admin_bonus_videos:number;founding_plan:FoundingPlan|null;founding_claimed_at:Date|null;founding_cycles_used:number;founding_ended_at:Date|null;founding_slot_released_at:Date|null}>(
+    'SELECT plan,trial_eligible,admin_bonus_seconds,admin_bonus_videos,founding_plan,founding_claimed_at,founding_cycles_used,founding_ended_at,founding_slot_released_at FROM users WHERE id=$1 FOR UPDATE', [userId]
+  );
   if (!user.rowCount) throw new Link2AIError('AUTH_REQUIRED', 'User account not found.', 401);
   const plan = user.rows[0].plan;
   const trialEligible=Boolean(user.rows[0].trial_eligible);
-  const bonusSeconds=Math.max(0,Number(user.rows[0].admin_bonus_seconds??0)||0);
+  const foundingActive=plan!=='trial'&&Boolean(user.rows[0].founding_claimed_at)&&!user.rows[0].founding_ended_at&&!user.rows[0].founding_slot_released_at&&user.rows[0].founding_plan===plan&&user.rows[0].founding_cycles_used>=1&&user.rows[0].founding_cycles_used<=3;
+  const foundingBonusSeconds=foundingActive?foundingBonusUnits(plan as FoundingPlan)*60:0;
+  const bonusSeconds=Math.max(0,Number(user.rows[0].admin_bonus_seconds??0)||0)+foundingBonusSeconds;
   const bonusVideos=Math.max(0,Number(user.rows[0].admin_bonus_videos??0)||0);
   if (plan === 'trial') return { plan, period: { start: null, end: null }, trialEligible, bonusSeconds, bonusVideos };
   const sub = await client.query<{current_period_start:Date|null; current_period_end:Date|null}>(

@@ -14,9 +14,10 @@ import { saveCache, findCache, findUserCompletedCache } from './cache.js';
 import { asLink2AIError } from '../util/errors.js';
 import { createCheckoutSession } from '../billing/lemon.js';
 import { logEvent, logErrorEvent } from '../util/log.js';
-import { deferJob, heartbeatJob, markAwaitingPayment, markCompleted, markFailed, markRetry, planForUser, setJobMetadata, type JobRow } from './jobs.js';
+import { deferJob, deferJobToRegion, heartbeatJob, markAwaitingPayment, markCompleted, markFailed, markRetry, planForUser, setJobMetadata, type JobRow } from './jobs.js';
 import { acquireMediaClaim, releaseMediaClaim } from './mediaClaims.js';
 import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limits.js';
+import { regionalFallbackTarget } from './regions.js';
 
 const resolver=new ResolverOrchestrator();
 
@@ -44,11 +45,13 @@ function captionDurationSeconds(segments:Array<{start:number;end:number;text:str
   return maxEnd>0?Math.ceil(maxEnd):0;
 }
 
-export async function processJob(job:JobRow):Promise<void>{
+export async function processJob(job:JobRow,runtime?:{workerRegion:string;regionOrder:string[]}):Promise<void>{
   let reserved=false;
   let tmp:string|undefined;
   let mediaClaim=false;
   const startedAt=Date.now();
+  const workerRegion=runtime?.workerRegion??'local';
+  const regionOrder=runtime?.regionOrder??[workerRegion];
   const heartbeat=setInterval(()=>void heartbeatJob(job.id).catch(()=>{}),60_000);
   try{
     let parsed=parseMediaUrl(job.normalized_url);
@@ -261,8 +264,15 @@ export async function processJob(job:JobRow):Promise<void>{
     await markCompleted(job.id,cache.id,metadata.durationSeconds);
     logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'asr',resolver:metadata.resolver??'unknown',transcription_provider:asr.provider,duration_seconds:metadata.durationSeconds,extracted_token_estimate:estimateTokens(asr.transcript),usage_units:videoUsageUnits(metadata.durationSeconds),truncated:false,processing_ms:Date.now()-startedAt});
   }catch(e){
-    if(reserved)await releaseQuota(job.id).catch(()=>{});
     const err=asLink2AIError(e);
+    if(reserved){await releaseQuota(job.id).catch(()=>{});reserved=false;}
+    const nextRegion=regionalFallbackTarget({platform:job.platform,errorCode:err.code,regionOrder,attemptedRegions:job.attempted_regions??[],currentRegion:workerRegion});
+    if(nextRegion){
+      if(mediaClaim){await releaseMediaClaim(job.id).catch(()=>{});mediaClaim=false;}
+      await deferJobToRegion(job.id,nextRegion,err.code,err.message);
+      logEvent('job_regional_fallback',{job_id:job.id,platform:job.platform,from_region:workerRegion,to_region:nextRegion,error_code:err.code,attempted_regions:job.attempted_regions??[],processing_ms:Date.now()-startedAt});
+      return;
+    }
     const causeCode=typeof err.details?.cause_code==='string'?err.details.cause_code.slice(0,80):undefined;
     const transport=typeof err.details?.transport==='string'?err.details.transport.slice(0,40):undefined;
     logErrorEvent('job_error',e,{job_id:job.id,platform:job.platform,error_code:err.code,retryable:err.retryable,attempt:job.attempts,processing_ms:Date.now()-startedAt,...(causeCode?{cause_code:causeCode}:{}),...(transport?{transport}:{} )});

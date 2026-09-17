@@ -24,6 +24,8 @@
     "src/transcription/format.ts",
     "src/auth/clientMetadata.ts",
     "src/billing/order.ts",
+    "src/billing/foundingPolicy.ts",
+    "src/worker/regions.ts",
     "src/content/linkText.ts",
     "src/content/limits.ts",
     "src/util/process.ts",

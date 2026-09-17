@@ -1,0 +1,15 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "deploy": {
+    "startCommand": "npm run start:worker",
+    "preDeployCommand": ["npm run db:migrate:prod"],
+    "healthcheckPath": "/healthz",
+    "healthcheckTimeout": 120,
+    "restartPolicyType": "ON_FAILURE",
+    "multiRegionConfig": {
+      "europe-west4-drams3a": {"numReplicas": 1},
+      "asia-southeast1-eqsg3a": {"numReplicas": 1},
+      "us-west2": {"numReplicas": 1}
+    }
+  }
+}
