@@ -223,6 +223,22 @@ function isoTimestamp(value:unknown):string{
   const time=Date.parse(value);return Number.isFinite(time)?new Date(time).toISOString():'';
 }
 
+type BlueskyRendered={lines:string[];count:number};
+function collectBlueskyReplies(replies:unknown,out:BlueskyRendered,depth=0):void{
+  if(!Array.isArray(replies)||depth>EXTRACTION_LIMITS.discussion.maxDepth||out.count>=EXTRACTION_LIMITS.social.hardItems)return;
+  for(const raw of replies){
+    if(out.count>=EXTRACTION_LIMITS.social.hardItems)return;
+    const node=jsonObject(raw);const post=jsonObject(node?.post);const record=jsonObject(post?.record);const author=jsonObject(post?.author);
+    const text=cleanText(jsonString(record?.text),6000);
+    if(text){
+      const handle=jsonString(author?.handle)||jsonString(author?.displayName)||'unknown';
+      out.lines.push(`${depth?`${'↳'.repeat(depth)} `:''}'}- @${handle}: ${text}`);
+      out.count++;
+    }
+    collectBlueskyReplies(node?.replies,out,depth+1);
+  }
+}
+
 export function parseBlueskyThread(input:ParsedMediaUrl,payload:unknown):LinkTextPayload{
   const root=jsonObject(payload);const thread=jsonObject(root?.thread);const post=jsonObject(thread?.post);
   const [actor,rkey]=input.canonicalMediaId.split('/');
@@ -241,13 +257,18 @@ export function parseBlueskyThread(input:ParsedMediaUrl,payload:unknown):LinkTex
   if(quotedValue&&jsonString(quotedValue.text))sections.push(`Quoted post${jsonString(quotedAuthor?.handle)?` by @${jsonString(quotedAuthor?.handle)}`:''}:\n${cleanText(jsonString(quotedValue.text),5000)}`);
   const parent=jsonObject(thread?.parent);const parentPost=jsonObject(parent?.post);const parentRecord=jsonObject(parentPost?.record);
   if(parentRecord&&jsonString(parentRecord.text))sections.push(`Direct parent/replied-to post:\n${cleanText(jsonString(parentRecord.text),5000)}`);
-  return complete({platform:'bluesky',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title:clipExternalText(`Bluesky post by ${display||handle}`,METADATA_LIMITS.title),creator:clipExternalText(handle?`@${handle}`:display,METADATA_LIMITS.creator),caption:clipExternalText(text,METADATA_LIMITS.description),language:jsonString(record?.langs instanceof Array?record.langs[0]:undefined)||'und',text:cleanText(sections.filter(Boolean).join('\n\n')),source:'post'},'social');
+  const replies:BlueskyRendered={lines:[],count:0};collectBlueskyReplies(thread?.replies,replies,0);
+  let usedChars=sections.join('\n\n').length;const includedReplies:string[]=[];const replyBudget=EXTRACTION_LIMITS.social.tokens*4;
+  for(const line of replies.lines){if(usedChars+line.length+1>replyBudget)break;includedReplies.push(line);usedChars+=line.length+1;}
+  if(includedReplies.length)sections.push(`Public replies (${includedReplies.length} entries):\n${includedReplies.join('\n')}`);
+  const repliesAvailable=jsonNumber(post?.replyCount);const repliesTruncated=includedReplies.length<replies.count||(repliesAvailable!==undefined&&includedReplies.length<repliesAvailable);
+  return complete({platform:'bluesky',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title:clipExternalText(`Bluesky post by ${display||handle}`,METADATA_LIMITS.title),creator:clipExternalText(handle?`@${handle}`:display,METADATA_LIMITS.creator),caption:clipExternalText(text,METADATA_LIMITS.description),language:jsonString(record?.langs instanceof Array?record.langs[0]:undefined)||'und',text:cleanText(sections.filter(Boolean).join('\n\n')),source:'post'},'social',{itemsAvailable:repliesAvailable,itemsExtracted:includedReplies.length,truncated:repliesTruncated,contentSectionsTruncated:repliesTruncated?['replies']:undefined});
 }
 
 async function fetchBlueskyPost(input:ParsedMediaUrl):Promise<LinkTextPayload>{
   const [actor,rkey]=input.canonicalMediaId.split('/');
   const uri=`at://${actor}/app.bsky.feed.post/${rkey}`;
-  const data=await safeJson(`https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=0&parentHeight=1`,'Bluesky');
+  const data=await safeJson(`https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=${EXTRACTION_LIMITS.discussion.maxDepth}&parentHeight=1`,'Bluesky');
   return parseBlueskyThread(input,data);
 }
 
