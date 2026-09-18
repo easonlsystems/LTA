@@ -45,7 +45,8 @@ async function checkoutForError(userId:string,jobId:string,duration:number|undef
     return await createTopupCheckoutSession(userId,deficit>500?'1500':'500');
   }
   if(plan==='pro')return null;
-  const target=plan==='trial' && (duration??0)<=30*60 ? 'basic' : 'pro';
+  const requiredUnits=Math.max(1,Number(details?.required_usage_units??details?.required_usage_units_at_least??0)||1);
+  const target=plan==='trial'&&requiredUnits<=500?'basic':'pro';
   return await createCheckoutSession(userId,target,jobId);
 }
 
@@ -103,7 +104,7 @@ export async function startTranscriptJob(userId:string,url:string):Promise<ToolJ
       return await getJobResult(userId,jobId);
     }catch(e){
       const err=asLink2AIError(e);
-      if(err.code==='QUOTA_EXCEEDED'||err.code==='DURATION_LIMIT_EXCEEDED'){
+      if(err.code==='QUOTA_EXCEEDED'){
         const checkout=await checkoutForError(userId,jobId,cached.duration_seconds,err.details as Record<string,unknown>|undefined);
         await markAwaitingPayment(jobId,err.code,err.message,checkout);
         return await getJobResult(userId,jobId);
