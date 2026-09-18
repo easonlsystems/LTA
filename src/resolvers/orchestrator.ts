@@ -1,10 +1,17 @@
 import type { MediaMetadata } from '../media/types.js';
 import type { ParsedMediaUrl } from '../media/url.js';
 import { env } from '../config/env.js';
+import { asLink2AIError } from '../util/errors.js';
 import { ExternalProviderResolver } from './external.js';
 import { YtDlpResolver } from './ytdlp.js';
 import { runProviderChain, type ProviderAttempt } from './providerChain.js';
+import { shouldTryExternalFallback } from './fallback.js';
 import { XSyndicationResolver } from './xSyndication.js';
+
+function shouldFailoverFromXSyndicationAudio(error:unknown):boolean{
+  const code=asLink2AIError(error).code;
+  return shouldTryExternalFallback(error)||code==='DOWNLOAD_TOO_LARGE'||code==='MEDIA_NOT_FOUND';
+}
 
 export class ResolverOrchestrator {
   private readonly xSyndication=new XSyndicationResolver();
@@ -64,7 +71,8 @@ export class ResolverOrchestrator {
       ?[
           {
             name:'x_syndication',
-            run:()=>this.xSyndication.downloadAudio(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS})
+            run:()=>this.xSyndication.downloadAudio(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS}),
+            shouldFailover:shouldFailoverFromXSyndicationAudio
           },
           {
             name:'ytdlp',
