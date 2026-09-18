@@ -207,7 +207,7 @@ try{
   assert.equal(claudeInstall.origin,'https://claude.ai');
   assert.equal(claudeInstall.pathname,'/customize/connectors');
   assert.equal(claudeInstall.searchParams.get('modal'),'add-custom-connector');
-  assert.equal(claudeInstall.searchParams.get('connectorName'),'Link2AI');
+  assert.equal(claudeInstall.searchParams.get('connectorName'),'LaunchBrand');
   assert.equal(claudeInstall.searchParams.get('connectorUrl'),'https://link2ai.example/mcp');
 
   const analyticsWrite=await fetch(`http://127.0.0.1:${port}/api/analytics/event`,{
