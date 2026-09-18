@@ -179,6 +179,10 @@ try{
   assert.ok(listed.result.tools[0].outputSchema.properties.source_completeness,'read_public_link output schema must expose completeness');
   assert.ok(listed.result.tools[0].outputSchema.properties.continuation_required,'read_public_link output schema must expose pagination state');
   assert.ok(listed.result.tools[7].outputSchema.properties.remaining_usage_units,'get_usage output schema must expose remaining units');
+  assert.match(listed.result.tools[7].description,/authoritative processing-unit balance/i,'get_usage must tell the host which quota fields are authoritative');
+  assert.match(JSON.stringify(listed.result.tools[7].outputSchema.properties.limit_links),/null/,'Legacy link limit must allow null when there is no link-count cap');
+  assert.match(JSON.stringify(listed.result.tools[7].outputSchema.properties.remaining_links),/null/,'Legacy remaining-link limit must allow null when there is no link-count cap');
+  assert.match(listed.result.tools[7].outputSchema.properties.remaining_usage_units.description??'',/Authoritative processing units remaining/i);
   assert.ok(listed.result.tools[1].outputSchema.properties.results,'read_public_links must preserve per-source results');
   assert.ok(listed.result.tools[4].outputSchema.properties.timed_text,'get_video_time_range must expose timed source text');
   assert.ok(listed.result.tools[5].outputSchema.properties.matches,'find_in_link must expose ranked source matches');
