@@ -4,6 +4,7 @@ import { hashAccountPassword, hmacSha256, pkceS256, randomNumericCode, randomTok
 import type { AuthInfo } from '@modelcontextprotocol/server';
 import { Link2AIError } from '../util/errors.js';
 import { fetchCimdOAuthClient, validateOAuthRedirectUris, type ResolvedOAuthClient } from './clientMetadata.js';
+import { recordActivationEvent } from '../analytics/product.js';
 
 const SESSION_COOKIE = 'link2ai_session';
 const LOGIN_FLOW_COOKIE = 'link2ai_login_flow';
@@ -803,6 +804,10 @@ export async function exchangeAuthorizationCode(input: {code:string;clientId:str
       );
     }
     await client.query('COMMIT');
+    await recordActivationEvent(row.user_id,'connection_success',{
+      distributionProfile:row.resource===mcpResource('openai')?'openai':'default',
+      metadata:{client_id:row.client_id}
+    });
     return { access_token: access, ...(refresh?{refresh_token:refresh}:{}), expires_in: 3600, scope: row.scope };
   } catch(err) { await client.query('ROLLBACK'); throw err; }
   finally { client.release(); }
