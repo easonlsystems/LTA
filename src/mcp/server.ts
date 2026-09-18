@@ -186,6 +186,24 @@ function formatTime(seconds:number):string{
   return h>0?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;
 }
 
+export function selectTimedSegmentWindow(
+  segments:Array<{start:number;end:number;text:string}>,
+  startSeconds:number,
+  endSeconds:number,
+  maxChars=50_000
+):{timed_text:string;segment_count:number;delivery_complete:boolean;next_start_seconds:number|null}{
+  const matching=segments.filter(s=>s.end>=startSeconds&&s.start<=endSeconds);
+  const lines:string[]=[];
+  let chars=0;
+  let nextStart:number|null=null;
+  for(const s of matching){
+    const line=`[${formatTime(s.start)}–${formatTime(s.end)}] ${s.text}`;
+    if(chars+line.length+1>maxChars){nextStart=s.start;break;}
+    lines.push(line);chars+=line.length+1;
+  }
+  return {timed_text:lines.join('\n'),segment_count:lines.length,delivery_complete:nextStart===null,next_start_seconds:nextStart};
+}
+
 export function buildMcpServer(){
   const e=env();
   const redditReady=Boolean(e.REDDIT_CLIENT_ID?.trim()&&e.REDDIT_CLIENT_SECRET?.trim());
@@ -291,20 +309,11 @@ export function buildMcpServer(){
     if(result.transcript_source==='post'||result.transcript_source==='page')throw new Link2AIError('TIMELINE_UNAVAILABLE','This source is not a timed video transcript.',422,false);
     const segments=result.segments??[];
     if(!segments.length)throw new Link2AIError('TIMELINE_UNAVAILABLE','This video result does not contain timestamped transcript segments.',422,false);
-    const matching=segments.filter(s=>s.end>=start_seconds&&s.start<=end_seconds);
-    const lines:string[]=[];
-    let chars=0;
-    let nextStart:number|null=null;
-    for(const s of matching){
-      const line=`[${formatTime(s.start)}–${formatTime(s.end)}] ${s.text}`;
-      if(chars+line.length+1>50_000){nextStart=s.start;break;}
-      lines.push(line);chars+=line.length+1;
-    }
+    const window=selectTimedSegmentWindow(segments,start_seconds,end_seconds);
     return {
       status:'completed',job_id:result.job_id,source_url:result.source_url,source_key:result.source_key,
-      requested_start_seconds:start_seconds,requested_end_seconds:end_seconds,segment_count:lines.length,
-      timed_text:lines.join('\n'),delivery_complete:nextStart===null,next_start_seconds:nextStart,
-      ...(lines.length?{}:{message:'No timestamped speech/caption segment overlaps the requested range.'})
+      requested_start_seconds:start_seconds,requested_end_seconds:end_seconds,...window,
+      ...(window.segment_count?{}:{message:'No timestamped speech/caption segment overlaps the requested range.'})
     };
   }));
 
