@@ -163,8 +163,8 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
   return {status:'processing',job_id:row.id,message:`${env().PUBLIC_BRAND_NAME} is reading this link.`,retry_after_seconds:3};
 }
 
-export async function usageForTool(userId:string){
-  await recordActivationEvent(userId,'connector_enabled',{distributionProfile:'default',metadata:{inferred_from:'usage_tool_call'}});
+export async function usageForTool(userId:string,profile:DistributionProfile='default'){
+  await recordActivationEvent(userId,'connector_enabled',{distributionProfile:profile,metadata:{inferred_from:'usage_tool_call'}});
   const usage=await getUsageSnapshot(userId);
   return {
     plan:usage.plan,
