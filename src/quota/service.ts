@@ -1,7 +1,7 @@
 import type { PoolClient } from 'pg';
 import { pool } from '../db/pool.js';
 import { Link2AIError } from '../util/errors.js';
-import { MAX_PROCESSABLE_VIDEO_SECONDS, PLAN_LIMITS, type Plan } from './plans.js';
+import { PLAN_LIMITS, type Plan } from './plans.js';
 import { usageUnitsToLegacySeconds } from '../content/limits.js';
 import { foundingBonusUnits, type FoundingPlan } from '../billing/foundingPolicy.js';
 
@@ -51,6 +51,35 @@ function periodSql(period: Period, alias: string): {sql:string; params:unknown[]
   return { sql: ` AND ${alias}.created_at >= $2 AND ${alias}.created_at < $3`, params: [period.start, period.end] };
 }
 
+
+export async function availableUsageUnits(userId:string,excludeJobId?:string):Promise<{plan:Plan;remaining_usage_units:number;remaining_seconds:number}>{
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const {plan,period,trialEligible,bonusSeconds,rolloverSeconds,periodBaseSeconds}=await getUserAndPeriod(client,userId);
+    if(plan==='trial'&&!trialEligible){
+      await client.query('COMMIT');
+      return {plan,remaining_usage_units:0,remaining_seconds:0};
+    }
+    await client.query('DELETE FROM quota_reservations WHERE expires_at <= now()');
+    const limitSeconds=periodBaseSeconds+rolloverSeconds+bonusSeconds;
+    const pf=periodSql(period,'u');
+    const usage=await client.query<{seconds:string}>(
+      `SELECT COALESCE(SUM(u.seconds),0)::text AS seconds FROM usage_ledger u WHERE u.user_id=$1${pf.sql}`,
+      [userId,...pf.params]
+    );
+    const reservations=excludeJobId
+      ? await client.query<{seconds:string}>(`SELECT COALESCE(SUM(seconds),0)::text AS seconds FROM quota_reservations WHERE user_id=$1 AND job_id<>$2 AND expires_at>now()`,[userId,excludeJobId])
+      : await client.query<{seconds:string}>(`SELECT COALESCE(SUM(seconds),0)::text AS seconds FROM quota_reservations WHERE user_id=$1 AND expires_at>now()`,[userId]);
+    const remainingSeconds=Math.max(0,limitSeconds-Number(usage.rows[0]?.seconds??0)-Number(reservations.rows[0]?.seconds??0));
+    await client.query('COMMIT');
+    return {plan,remaining_seconds:remainingSeconds,remaining_usage_units:Math.floor(remainingSeconds/60)};
+  }catch(error){
+    await client.query('ROLLBACK').catch(()=>{});
+    throw error;
+  }finally{client.release();}
+}
+
 export async function reserveQuota(userId: string, jobId: string, usageUnits: number, contentDurationSeconds?:number): Promise<void> {
   const seconds=usageUnitsToLegacySeconds(usageUnits);
   const client = await pool.connect();
@@ -69,10 +98,6 @@ export async function reserveQuota(userId: string, jobId: string, usageUnits: nu
         plan,remaining_seconds:0,remaining_videos:0
       });
     }
-    if (contentDurationSeconds!==undefined&&contentDurationSeconds > MAX_PROCESSABLE_VIDEO_SECONDS) {
-      throw new Link2AIError('DURATION_LIMIT_EXCEEDED', `This video exceeds Link2AI's current ${Math.round(MAX_PROCESSABLE_VIDEO_SECONDS/3600)} hour processing safety limit.`, 413, false, { max_video_seconds: MAX_PROCESSABLE_VIDEO_SECONDS });
-    }
-
     await client.query('DELETE FROM quota_reservations WHERE expires_at <= now()');
     const pf = periodSql(period, 'u');
     const usage = await client.query<{seconds:string; videos:string}>(
@@ -91,7 +116,9 @@ export async function reserveQuota(userId: string, jobId: string, usageUnits: nu
         plan,
         remaining_seconds: Math.max(0, limitSeconds - usedSeconds),
         remaining_videos: limitVideos === null ? null : Math.max(0, limitVideos - usedVideos),
-        remaining_usage_units:Math.floor(Math.max(0,limitSeconds-usedSeconds)/60)
+        remaining_usage_units:Math.floor(Math.max(0,limitSeconds-usedSeconds)/60),
+        required_usage_units:usageUnits,
+        required_usage_units_at_least:usageUnits
       });
     }
     await client.query(

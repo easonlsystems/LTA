@@ -1,16 +1,5 @@
 export type TextContentClass='web'|'discussion'|'github_issue'|'github_pr'|'pdf'|'social';
 
-export const EXTRACTION_LIMITS={
-  // V3 completeness limits are intentionally generous enough for long-form source
-  // analysis while remaining bounded for memory, storage and third-party API safety.
-  web:{tokens:60_000,hardItems:1},
-  discussion:{tokens:60_000,hardItems:1_000,maxDepth:8},
-  github_issue:{tokens:60_000,hardItems:600},
-  github_pr:{tokens:100_000,hardItems:800},
-  pdf:{tokens:100_000,maxPages:250},
-  social:{tokens:24_000,hardItems:50}
-} as const;
-
 // Deterministic, API-free approximation: four Unicode code points per token.
 // It is intentionally conservative and stable across platforms and runtimes.
 export function estimateTokens(text:string):number{
@@ -18,8 +7,15 @@ export function estimateTokens(text:string):number{
   return characters===0?0:Math.ceil(characters/4);
 }
 
+export const TEXT_TOKENS_PER_UNIT=2500;
+export const ESTIMATED_CHARS_PER_TOKEN=4;
+
 export function textUsageUnits(tokenEstimate:number):number{
-  return tokenEstimate<=0?0:Math.max(1,Math.ceil(tokenEstimate/2500));
+  return tokenEstimate<=0?0:Math.max(1,Math.ceil(tokenEstimate/TEXT_TOKENS_PER_UNIT));
+}
+
+export function textCharacterBudget(usageUnits:number):number{
+  return Math.max(0,Math.floor(usageUnits))*TEXT_TOKENS_PER_UNIT*ESTIMATED_CHARS_PER_TOKEN;
 }
 
 export function videoUsageUnits(durationSeconds:number):number{
@@ -45,16 +41,15 @@ export interface CompletenessMetadata{
   contentSectionsTruncated?:string[];
 }
 
-export function boundExtractedText(text:string,contentClass:TextContentClass,extra:Partial<CompletenessMetadata>={}):{text:string;metadata:CompletenessMetadata}{
-  const limit=EXTRACTION_LIMITS[contentClass].tokens;
-  const chars=Array.from(text.trim());
-  const maxChars=limit*4;
-  const clipped=chars.length>maxChars?chars.slice(0,maxChars).join('').trimEnd():chars.join('');
-  const truncated=Boolean(extra.truncated)||chars.length>maxChars;
-  const extractedTokenEstimate=estimateTokens(clipped);
-  return {text:clipped,metadata:{
+export function boundExtractedText(text:string,_contentClass:TextContentClass,extra:Partial<CompletenessMetadata>={}):{text:string;metadata:CompletenessMetadata}{
+  // V3 does not truncate a supported text source to a product-defined content cap.
+  // The caller enforces the user's available processing-unit budget instead.
+  const fullText=text.trim();
+  const truncated=Boolean(extra.truncated);
+  const extractedTokenEstimate=estimateTokens(fullText);
+  return {text:fullText,metadata:{
     truncated,
-    ...(truncated?{truncationReason:extra.truncationReason??'safe_content_limit'}:{}),
+    ...(truncated?{truncationReason:extra.truncationReason??'upstream_incomplete'}:{}),
     extractedTokenEstimate,
     usageUnits:textUsageUnits(extractedTokenEstimate),
     ...(extra.itemsAvailable!==undefined?{itemsAvailable:extra.itemsAvailable}:{}),
