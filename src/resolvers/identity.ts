@@ -12,7 +12,8 @@ export function validateResolvedMediaIdentity(input:ParsedMediaUrl,resolvedId:st
     if(resolvedId!==input.canonicalMediaId)mismatch();
     if(resolvedUrl){
       let parsed:ParsedMediaUrl;try{parsed=parseMediaUrl(resolvedUrl);}catch{mismatch();}
-      if(parsed.platform!==input.platform||parsed.kind!=='media'||parsed.canonicalMediaId!==input.canonicalMediaId)mismatch();
+      const mediaIdentityMatches=parsed.kind==='media'||(input.platform==='x'&&parsed.kind==='post');
+      if(parsed.platform!==input.platform||!mediaIdentityMatches||parsed.canonicalMediaId!==input.canonicalMediaId)mismatch();
     }
     return resolvedId;
   }

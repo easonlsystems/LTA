@@ -26,6 +26,15 @@ function mapYtDlpError(stderr: string): Link2AIError {
   if (s.includes('429') || s.includes('too many requests') || s.includes('rate limit')) {
     return new Link2AIError('RATE_LIMITED', 'The platform is temporarily rate limiting requests.', 429, true);
   }
+  if (s.includes('no video could be found in this tweet')) {
+    return new Link2AIError(
+      'EXTRACTION_FAILED',
+      'This X post advertises attached media, but Link2AI could not verify a readable video track.',
+      502,
+      true,
+      {cause_code:'x_video_track_not_verified'}
+    );
+  }
   if (s.includes('video unavailable') || s.includes('does not exist') || s.includes('404')) {
     return new Link2AIError('MEDIA_NOT_FOUND', 'The video was not found or has been removed.', 404);
   }

@@ -51,7 +51,7 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
   // A model may call the same read tool more than once while answering. Reuse a still-cached successful result
   // for this user so retries/follow-ups do not consume quota twice. Explicit refresh bypasses successful-result
   // reuse and the shared cache, but still reuses any in-flight job to avoid duplicate concurrent processing.
-  if(!options.refresh){
+  if(!options.refresh&&parsed.platform!=='x'){
     const completed=await pool.query<{id:string}>(
       `SELECT j.id FROM transcript_jobs j JOIN transcript_cache c ON c.id=j.transcript_cache_id
        WHERE j.user_id=$1 AND j.platform=$2 AND (j.canonical_media_id=$3 OR j.normalized_url=$4)
@@ -82,7 +82,7 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
   const jobId=job.rows[0].id;
 
   // Fast path: avoid queue/extraction when this canonical media is already cached. Explicit refresh bypasses it.
-  const cached=options.refresh?null:await findCache(parsed.platform,parsed.canonicalMediaId,'auto');
+  const cached=options.refresh||parsed.platform==='x'?null:await findCache(parsed.platform,parsed.canonicalMediaId,'auto');
   if(cached){
     // Persist duration before quota evaluation so a payment-blocked cached job can be
     // resumed correctly after entitlement changes.
