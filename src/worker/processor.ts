@@ -17,6 +17,7 @@ import { deferJob, deferJobToRegion, heartbeatJob, markAwaitingPayment, markComp
 import { acquireMediaClaim, releaseMediaClaim } from './mediaClaims.js';
 import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limits.js';
 import { regionalFallbackTarget } from './regions.js';
+import { recordProviderOutcome } from '../resolvers/providerTelemetry.js';
 
 const resolver=new ResolverOrchestrator();
 
@@ -132,8 +133,13 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       metadata=prefetchedMetadata??await resolver.metadata(parsed);
     }catch(metadataError){
       if(parsed.platform!=='youtube')throw metadataError;
+      const transcriptProviderStarted=Date.now();
       try{
         const fallback=await resolveYouTubeTranscriptFallback(parsed,job.language,45_000);
+        await recordProviderOutcome({
+          platform:'youtube',operation:'transcript',provider:'youtube_transcript',
+          outcome:'success',durationMs:Date.now()-transcriptProviderStarted,attemptIndex:1
+        });
         metadata=fallback.metadata;
         directCaption=fallback.caption;
         logEvent('youtube_transcript_fallback_success',{
@@ -141,6 +147,10 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
           duration_seconds:metadata.durationSeconds,language:fallback.caption.language,transport:'youtube_transcript'
         });
       }catch(fallbackError){
+        await recordProviderOutcome({
+          platform:'youtube',operation:'transcript',provider:'youtube_transcript',
+          outcome:'failed',durationMs:Date.now()-transcriptProviderStarted,error:fallbackError,attemptIndex:1
+        });
         const mapped=asLink2AIError(fallbackError);
         // The fallback can distinguish regional restrictions and cloud-IP blocks that
         // yt-dlp sometimes reports only as the ambiguous "Video unavailable".
