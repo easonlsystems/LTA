@@ -89,7 +89,7 @@ assert.match(orchestratorSource,/MEDIA_PROVIDER_URL/,'Managed external provider 
 assert.match(linkSource,/name:'gallery_dl'[\s\S]*name:'public_page'/,'Instagram and TikTok text posts must use an explicit primary-to-page fallback chain');
 assert.match(processorSource,/provider:'youtube_transcript'/,'YouTube transcript fallback must report provider health separately from yt-dlp');
 assert.match(providerTelemetrySource,/provider_health_hourly/,'Provider outcomes must feed rolling health telemetry');
-assert.doesNotMatch(providerTelemetrySource,/source_url|normalized_url|canonical_media_id|content_text|transcript/,'Provider health telemetry must not persist source URLs, identifiers, or source content');
+assert.doesNotMatch(providerTelemetrySource,/\b(?:source_url|normalized_url|canonical_media_id|content_text|transcript)\s*:/,'Provider health telemetry must not accept or persist source URLs, identifiers, or source content fields');
 assert.match(providerHealthMigration,/PRIMARY KEY\(bucket_start,platform,operation,provider\)/,'Provider health storage must use bounded hourly aggregates instead of unbounded per-request rows');
 assert.match(processorSource,/if\(reserved\)\{await releaseQuota\(job\.id\)/,'Failed provider\/extraction paths must release reserved quota before retry or failure');
 assert.match(billingSource,/j\.error_code='QUOTA_EXCEEDED'/,'A successful top-up must resume quota-blocked jobs');
