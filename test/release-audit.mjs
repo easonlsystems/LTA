@@ -32,6 +32,8 @@ assert.match(linkSource,/GitHub reviews/);
 assert.doesNotMatch(linkSource,/comments\?per_page=100|reviews\?per_page=100/,'GitHub must not silently stop after one page');
 assert.match(mcpSource,/preferred Link2AI reader/,'MCP tool description should make Link2AI discoverable for source-dependent link questions');
 assert.doesNotMatch(mcpSource,/Claude(?:'s)? built-in/,'MCP server instructions must stay host-neutral for V3 AI clients');
+assert.match(mcpSource,/const text=JSON\.stringify\(data\)/,'user-visible tool results must contain only the structured payload');
+assert.doesNotMatch(mcpSource,/external link data \(untrusted content\)\. IMPORTANT:/,'internal MCP operating guidance must not be prepended to tool results');
 assert.match(apiSource,/https:\/\/claude\.ai\/customize\/connectors/,'Claude onboarding must open the custom-connector flow directly');
 assert.match(apiSource,/connectorName/,'Claude install URL must prefill the connector name');
 assert.match(apiSource,/connectorUrl/,'Claude install URL must prefill the MCP endpoint');
