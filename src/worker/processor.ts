@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { parseMediaUrl } from '../media/url.js';
-import { extractTextLink, probeXPostAttachedMedia, resolveRedditSharePost } from '../content/linkText.js';
+import { extractTextLink, resolveRedditSharePost } from '../content/linkText.js';
 import { fetchBestCaption } from '../media/captions.js';
 import { normalizeAudioForAsr, probeMediaDurationSeconds } from '../media/audio.js';
 import { ResolverOrchestrator } from '../resolvers/orchestrator.js';
@@ -55,17 +55,20 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       logEvent('reddit_share_resolved',{job_id:job.id,platform:'reddit',canonical_media_id:parsed.canonicalMediaId});
     }
 
-    // X status URLs do not encode whether a post contains media. The official oEmbed
-    // markup does preserve the pic.twitter.com / pic.x.com attachment marker, so probe
-    // that first. If media is attached, require the media pipeline to succeed; never
-    // silently downgrade a video/image attachment to a text-only "completed" post.
-    if(parsed.platform==='x'&&parsed.kind==='post'&&await probeXPostAttachedMedia(parsed)){
-      prefetchedMetadata=await resolver.metadata(parsed);
-      parsed={...parsed,kind:'media'};
-      logEvent('x_attached_media_detected',{
-        job_id:job.id,platform:'x',canonical_media_id:parsed.canonicalMediaId,
-        resolver:prefetchedMetadata.resolver??'unknown',duration_seconds:prefetchedMetadata.durationSeconds||null
-      });
+    // X status URLs do not encode media kind in the URL. Inspect X's structured embed
+    // payload before allowing the text-only post path. If it exposes a real video track,
+    // route the job through the normal caption/audio/ASR pipeline. If no video is present,
+    // continue with the oEmbed post-text path and keep visual_content_included=false.
+    if(parsed.platform==='x'&&parsed.kind==='post'){
+      const xVideoMetadata=await resolver.probeXVideoMetadata(parsed);
+      if(xVideoMetadata){
+        prefetchedMetadata=xVideoMetadata;
+        parsed={...parsed,kind:'media'};
+        logEvent('x_attached_media_detected',{
+          job_id:job.id,platform:'x',canonical_media_id:parsed.canonicalMediaId,
+          resolver:prefetchedMetadata.resolver??'unknown',duration_seconds:prefetchedMetadata.durationSeconds||null
+        });
+      }
     }
 
     if(parsed.kind!=='media'){
