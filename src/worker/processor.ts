@@ -12,9 +12,8 @@ import { transcribeAudio } from '../transcription/router.js';
 import { availableUsageUnits, reserveQuota, finalizeQuota, releaseQuota } from '../quota/service.js';
 import { saveCache, findCache, findUserCompletedCache } from './cache.js';
 import { asLink2AIError, Link2AIError } from '../util/errors.js';
-import { canPurchaseTopup, createCheckoutSession, createTopupCheckoutSession } from '../billing/lemon.js';
 import { logEvent, logErrorEvent } from '../util/log.js';
-import { deferJob, deferJobToRegion, heartbeatJob, markAwaitingPayment, markCompleted, markFailed, markRetry, planForUser, setJobMetadata, type JobRow } from './jobs.js';
+import { deferJob, deferJobToRegion, heartbeatJob, markAwaitingPayment, markCompleted, markFailed, markRetry, setJobMetadata, type JobRow } from './jobs.js';
 import { acquireMediaClaim, releaseMediaClaim } from './mediaClaims.js';
 import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limits.js';
 import { regionalFallbackTarget } from './regions.js';
@@ -28,20 +27,6 @@ export function videoCompleteness(text:string,durationSeconds:number,segments?:A
 }
 function cachedUsageUnits(cache:{usage_units:number;source:string;transcript:string;duration_seconds:number}):number{
   return cache.usage_units>0?cache.usage_units:(cache.source==='post'||cache.source==='page'?textUsageUnits(estimateTokens(cache.transcript)):videoUsageUnits(cache.duration_seconds));
-}
-
-async function paymentUrl(job:JobRow,duration:number,code:string,details?:Record<string,unknown>):Promise<string|null>{
-  const plan=await planForUser(job.user_id);
-  if(code==='QUOTA_EXCEEDED'&&plan!=='trial'&&await canPurchaseTopup(job.user_id)){
-    const remaining=Math.max(0,Number(details?.remaining_usage_units??0)||0);
-    const requiredAtLeast=Math.max(remaining+1,Number(details?.required_usage_units_at_least??0)||0);
-    const deficit=Math.max(1,requiredAtLeast-remaining);
-    return await createTopupCheckoutSession(job.user_id,deficit>500?'1500':'500');
-  }
-  if(plan==='pro')return null;
-  const requiredUnits=Math.max(1,Number(details?.required_usage_units??details?.required_usage_units_at_least??0)||1);
-  const target=plan==='trial'&&requiredUnits<=500?'basic':'pro';
-  return await createCheckoutSession(job.user_id,target,job.id);
 }
 
 function captionDurationSeconds(segments:Array<{start:number;end:number;text:string}>):number{
@@ -298,10 +283,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     const transport=typeof err.details?.transport==='string'?err.details.transport.slice(0,40):undefined;
     logErrorEvent('job_error',e,{job_id:job.id,platform:job.platform,error_code:err.code,retryable:err.retryable,attempt:job.attempts,processing_ms:Date.now()-startedAt,...(causeCode?{cause_code:causeCode}:{}),...(transport?{transport}:{} )});
     if(err.code==='QUOTA_EXCEEDED'){
-      const duration=Number(job.duration_seconds??(err.details?.max_video_seconds as number|undefined)??0);
-      const checkout=await paymentUrl(job,duration,err.code,err.details as Record<string,unknown>|undefined).catch(()=>null);
-      if(checkout){await markAwaitingPayment(job.id,err.code,err.message,checkout);return;}
-      await markFailed(job.id,err.code,err.message,false);return;
+      await markAwaitingPayment(job.id,err.code,err.message,null);return;
     }
     if(err.retryable&&job.attempts<3){await markRetry(job,err.code,err.message);return;}
     await markFailed(job.id,err.code,err.message,err.retryable);
