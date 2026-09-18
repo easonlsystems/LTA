@@ -839,7 +839,7 @@ export async function authInfoFromBearer(authorization?: string,expectedResource
     `SELECT t.user_id,t.client_id,t.scope,t.expires_at
      FROM oauth_access_tokens t JOIN users u ON u.id=t.user_id
      WHERE t.token_hash=$1 AND t.resource=$2 AND t.revoked_at IS NULL AND t.expires_at > now()
-       AND u.account_status <> 'disabled'`, [sha256(token),mcpResource()]
+       AND u.account_status <> 'disabled'`, [sha256(token),expectedResource]
   );
   if (!r.rowCount) return null;
   const row=r.rows[0];
