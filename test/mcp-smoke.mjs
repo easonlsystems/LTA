@@ -5,7 +5,7 @@ process.env.PUBLIC_BASE_URL='http://localhost:3000';
 process.env.APP_SECRET='01234567890123456789012345678901';
 process.env.PUBLIC_BRAND_NAME='LaunchBrand';
 
-const [{createMcpHandler},{buildMcpServer,unicodeSafeSlice,chunkResult},{pool}]=await Promise.all([
+const [{createMcpHandler},{buildMcpServer,unicodeSafeSlice,chunkResult,selectTimedSegmentWindow},{pool}]=await Promise.all([
   import('@modelcontextprotocol/server'),
   import('../dist/src/mcp/server.js'),
   import('../dist/src/db/pool.js')
@@ -58,6 +58,27 @@ const unverifiedVideo=chunkResult({
 assert.equal(unverifiedVideo.source_completeness,'unverified');
 assert.equal(unverifiedVideo.timeline_coverage_verified,false);
 assert.equal(unverifiedVideo.content_complete,false);
+
+const timed=selectTimedSegmentWindow([
+  {start:0,end:10,text:'intro'},
+  {start:2220,end:2240,text:'target section one'},
+  {start:2240,end:2260,text:'target section two'},
+  {start:2600,end:2610,text:'outside range'}
+],2220,2520);
+assert.equal(timed.segment_count,2);
+assert.match(timed.timed_text,/37:00–37:20/);
+assert.match(timed.timed_text,/target section two/);
+assert.doesNotMatch(timed.timed_text,/outside range/);
+assert.equal(timed.delivery_complete,true);
+assert.equal(timed.next_start_seconds,null);
+
+const timedPaged=selectTimedSegmentWindow([
+  {start:10,end:20,text:'a'.repeat(80)},
+  {start:20,end:30,text:'b'.repeat(80)}
+],0,60,100);
+assert.equal(timedPaged.segment_count,1);
+assert.equal(timedPaged.delivery_complete,false);
+assert.equal(timedPaged.next_start_seconds,20);
 
 const handler=createMcpHandler(buildMcpServer);
 const authInfo={
