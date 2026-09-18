@@ -51,6 +51,35 @@ function periodSql(period: Period, alias: string): {sql:string; params:unknown[]
   return { sql: ` AND ${alias}.created_at >= $2 AND ${alias}.created_at < $3`, params: [period.start, period.end] };
 }
 
+
+export async function availableUsageUnits(userId:string,excludeJobId?:string):Promise<{plan:Plan;remaining_usage_units:number;remaining_seconds:number}>{
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const {plan,period,trialEligible,bonusSeconds,rolloverSeconds,periodBaseSeconds}=await getUserAndPeriod(client,userId);
+    if(plan==='trial'&&!trialEligible){
+      await client.query('COMMIT');
+      return {plan,remaining_usage_units:0,remaining_seconds:0};
+    }
+    await client.query('DELETE FROM quota_reservations WHERE expires_at <= now()');
+    const limitSeconds=periodBaseSeconds+rolloverSeconds+bonusSeconds;
+    const pf=periodSql(period,'u');
+    const usage=await client.query<{seconds:string}>(
+      `SELECT COALESCE(SUM(u.seconds),0)::text AS seconds FROM usage_ledger u WHERE u.user_id=$1${pf.sql}`,
+      [userId,...pf.params]
+    );
+    const reservations=excludeJobId
+      ? await client.query<{seconds:string}>(`SELECT COALESCE(SUM(seconds),0)::text AS seconds FROM quota_reservations WHERE user_id=$1 AND job_id<>$2 AND expires_at>now()`,[userId,excludeJobId])
+      : await client.query<{seconds:string}>(`SELECT COALESCE(SUM(seconds),0)::text AS seconds FROM quota_reservations WHERE user_id=$1 AND expires_at>now()`,[userId]);
+    const remainingSeconds=Math.max(0,limitSeconds-Number(usage.rows[0]?.seconds??0)-Number(reservations.rows[0]?.seconds??0));
+    await client.query('COMMIT');
+    return {plan,remaining_seconds:remainingSeconds,remaining_usage_units:Math.floor(remainingSeconds/60)};
+  }catch(error){
+    await client.query('ROLLBACK').catch(()=>{});
+    throw error;
+  }finally{client.release();}
+}
+
 export async function reserveQuota(userId: string, jobId: string, usageUnits: number, contentDurationSeconds?:number): Promise<void> {
   const seconds=usageUnitsToLegacySeconds(usageUnits);
   const client = await pool.connect();
