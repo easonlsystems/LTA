@@ -346,7 +346,7 @@ async function fetchGitHubDiscussion(input:ParsedMediaUrl,budget?:TextExtraction
 type HnRendered={lines:string[];count:number};
 function renderHnComments(children:unknown,depth:number,out:HnRendered):void{
   if(!Array.isArray(children))return;
-  for(const value of children){const item=jsonObject(value);if(!item)continue;const text=stripHtml(jsonString(item.text));if(text){out.lines.push(`${depth?`${'↳'.repeat(depth)} `:''}- ${jsonString(item.author)||'unknown'}: ${cleanText(text)}`);out.count++;}renderHnComments(item.children,depth+1,out);}
+  for(const value of children){const item=jsonObject(value);if(!item)continue;out.count++;const text=stripHtml(jsonString(item.text));if(text){out.lines.push(`${depth?`${'↳'.repeat(depth)} `:''}- ${jsonString(item.author)||'unknown'}: ${cleanText(text)}`);}renderHnComments(item.children,depth+1,out);}
 }
 
 export function parseHackerNewsItem(input:ParsedMediaUrl,payload:unknown,budget?:TextExtractionBudget):LinkTextPayload{
