@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-const [linkSource,limitsSource,mcpSource,mcpServiceSource,apiSource,authWrapperSource,authBaseSource,authServiceSource,audioSource,safeHttpSource,publicUrlSource,workerSource,processorSource,plansSource,billingSource]=await Promise.all([
+const [linkSource,limitsSource,mcpSource,mcpServiceSource,apiSource,authWrapperSource,authBaseSource,authServiceSource,audioSource,safeHttpSource,publicUrlSource,workerSource,processorSource,plansSource,billingSource,cacheSource]=await Promise.all([
   readFile(new URL('../src/content/linkText.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/content/limits.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/mcp/server.ts',import.meta.url),'utf8'),
@@ -15,12 +15,16 @@ const [linkSource,limitsSource,mcpSource,mcpServiceSource,apiSource,authWrapperS
   readFile(new URL('../src/worker/main.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/worker/processor.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/quota/plans.ts',import.meta.url),'utf8'),
-  readFile(new URL('../src/billing/lemon.ts',import.meta.url),'utf8')
+  readFile(new URL('../src/billing/lemon.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/worker/cache.ts',import.meta.url),'utf8')
 ]);
 const authSource=authWrapperSource+'\n'+authBaseSource;
 const policySource=await readFile(new URL('../src/mcp/policy.ts',import.meta.url),'utf8');
 assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News must use the official Firebase API path');
 assert.doesNotMatch(linkSource,/hn\.algolia\.com/,'OpenAI-ready core must not depend on the community Algolia HN adapter');
+assert.match(cacheSource,/HACKERNEWS_OFFICIAL_API_CACHE_EPOCH/,'HN cache must have a provenance epoch for the official API migration');
+assert.match(cacheSource,/platform==='hackernews'[\s\S]*created_at >=/,'HN shared cache lookup must reject cache entries created before the official API migration');
+assert.match(cacheSource,/findUserCompletedCache[\s\S]*platform==='hackernews'[\s\S]*c\.created_at >=/,'HN same-user cache reuse must reject pre-official cache entries');
 assert.match(policySource,/OPENAI_ALLOWED_PLATFORMS[^\n]*\['bluesky','github','hackernews'\]/,'ChatGPT distribution must default-deny every source outside the reviewed allowlist');
 assert.match(apiSource,/app\.all\('\/mcp\/openai'/,'API must expose a distinct ChatGPT MCP endpoint');
 assert.match(authServiceSource,/mcpResource\('openai'\)/,'OAuth must define a distinct ChatGPT MCP audience');
