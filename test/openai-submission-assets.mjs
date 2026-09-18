@@ -5,13 +5,25 @@ const cases=await readFile(new URL('../integrations/openai/REVIEW_CASES.md',impo
 const demo=await readFile(new URL('../integrations/openai/DEMO_VIDEO.md',import.meta.url),'utf8');
 const release=await readFile(new URL('../integrations/openai/RELEASE_NOTES.md',import.meta.url),'utf8');
 const submission=await readFile(new URL('../integrations/openai/SUBMISSION.md',import.meta.url),'utf8');
+const mcp=JSON.parse(await readFile(new URL('../integrations/openai/mcp.json',import.meta.url),'utf8'));
+const skill=await readFile(new URL('../integrations/openai/skills/read-public-links/SKILL.md',import.meta.url),'utf8');
 
 assert.equal((cases.match(/^### P\d+ /gm)||[]).length,5,'OpenAI remote MCP submission requires exactly five positive cases');
 assert.equal((cases.match(/^### N\d+ /gm)||[]).length,3,'OpenAI remote MCP submission requires exactly three negative cases');
+const positiveCases=cases.split('## Negative cases')[0];
+assert.match(positiveCases,/GitHub pull request/);
+assert.match(positiveCases,/Hacker News discussion/);
+assert.match(positiveCases,/Bluesky post/);
+assert.doesNotMatch(positiveCases,/YouTube source fallback|Public PDF|Long article continuation/,'OpenAI positive review cases must use only the gated source matrix');
+assert.equal(mcp.mcpServers.link2ai.url,'https://api-production-0383e.up.railway.app/mcp/openai');
+assert.match(skill,/supported public-source categories are limited to Bluesky posts, GitHub Issues \/ pull requests, and Hacker News discussions/i);
+assert.match(skill,/intentionally blocked on this distribution/i);
 assert.match(cases,/continuation_required/);
 assert.match(cases,/Failed reads consume 0 processing units/);
 assert.match(demo,/production, not localhost/i);
 assert.match(demo,/Do not show passwords, tokens, client secrets/i);
+assert.match(demo,/\/mcp\/openai/);
+assert.match(demo,/Do not use the previous Instagram Reel demo/i);
 assert.match(release,/first public OpenAI Plugin Directory submission/i);
 assert.match(submission,/interface\.logo/);
 assert.match(submission,/interface\.composerIcon/);
