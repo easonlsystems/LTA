@@ -188,23 +188,41 @@ async function fetchPage(input:ParsedMediaUrl,budget?:TextExtractionBudget):Prom
   return complete({platform:input.platform,canonicalMediaId:input.canonicalMediaId,sourceUrl:response.finalUrl,title:doc.title,creator:doc.creator,caption:doc.description,language:doc.language,text:doc.text,source:input.kind==='post'?'post':'page'},input.kind==='post'?'social':'web',{},budget);
 }
 
-function xPostText(html:string):string{
-  const p=/<p\b[^>]*>([\s\S]*?)<\/p>/i.exec(html)?.[1]??html;
-  return stripHtml(p).replace(/\s+pic\.x\.com\/\S+$/i,'').trim();
-}
+type XOEmbedData={html:string;author_name?:string};
 
-async function fetchXPost(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+async function fetchXOEmbedData(input:ParsedMediaUrl):Promise<XOEmbedData>{
   const canonical=input.normalizedUrl.replace(/^https:\/\/(?:www\.)?x\.com\//,'https://twitter.com/');
   const endpoint=`https://publish.x.com/oembed?omit_script=1&dnt=true&url=${encodeURIComponent(canonical)}`;
   const response=await safeGetBuffer(endpoint,{maxBytes:1_000_000,timeoutMs:12_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/json'});
   let data:any;
   try{data=JSON.parse(response.bytes.toString('utf8'));}catch{throw new Link2AIError('EXTRACTION_FAILED','X returned invalid post metadata.',502,true);}
-  const text=xPostText(String(data?.html??''));
+  return {html:String(data?.html??''),author_name:typeof data?.author_name==='string'?data.author_name:undefined};
+}
+
+export function xOembedHasAttachedMedia(html:string):boolean{
+  const visible=stripHtml(html);
+  return /\bpic\.(?:twitter|x)\.com\/[A-Za-z0-9_-]+/i.test(visible);
+}
+
+export async function probeXPostAttachedMedia(input:ParsedMediaUrl):Promise<boolean>{
+  if(input.platform!=='x')return false;
+  const data=await fetchXOEmbedData(input);
+  return xOembedHasAttachedMedia(data.html);
+}
+
+function xPostText(html:string):string{
+  const p=/<p\b[^>]*>([\s\S]*?)<\/p>/i.exec(html)?.[1]??html;
+  return stripHtml(p).replace(/\s+pic\.(?:twitter|x)\.com\/\S+$/i,'').trim();
+}
+
+async function fetchXPost(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  const data=await fetchXOEmbedData(input);
+  const text=xPostText(data.html);
   if(!text)throw new Link2AIError('EXTRACTION_FAILED','This X post did not expose readable public text.',422,false);
   return complete({
     platform:'x',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,
-    title:clipExternalText(`X post by ${String(data?.author_name??'').trim()}`,METADATA_LIMITS.title),
-    creator:clipExternalText(data?.author_name,METADATA_LIMITS.creator),language:'und',text:cleanText(text),source:'post'
+    title:clipExternalText(`X post by ${String(data.author_name??'').trim()}`,METADATA_LIMITS.title),
+    creator:clipExternalText(data.author_name,METADATA_LIMITS.creator),language:'und',text:cleanText(text),source:'post'
   },'social',{},budget);
 }
 
