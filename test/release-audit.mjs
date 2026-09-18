@@ -57,7 +57,7 @@ assert.match(processorSource,/caption_incomplete_fallback_asr/,'Known incomplete
 assert.match(processorSource,/probeXPostAttachedMedia/,'X posts must probe attached media before the text-only completion path');
 assert.match(processorSource,/x_attached_media_detected/,'X attached media must enter the media pipeline and emit an explicit routing event');
 assert.match(processorSource,/prefetchedMetadata\?\?await resolver\.metadata\(parsed\)/,'X media metadata probe must feed the normal caption\/audio\/ASR pipeline');
-assert.match(linkSource,/pic\\\.\(\?:twitter\\\|x\)\\\.com/,'X oEmbed parsing must recognize the attached-media marker');
+assert.match(linkSource,/xOembedHasAttachedMedia/,'X oEmbed parsing must expose attached-media detection');
 assert.match(mcpServiceSource,/cacheProvenanceEpoch\(parsed\.platform\)/,'MCP reuse must not return pre-media-aware X completed jobs');
 assert.match(billingSource,/j\.error_code='QUOTA_EXCEEDED'/,'A successful top-up must resume quota-blocked jobs');
 assert.doesNotMatch(apiSource,/supports videos up to 30 minutes|supports videos up to 120 minutes|very large sources may return partial context/i,'Published copy must match the unit-bounded full-source policy');
