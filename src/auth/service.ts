@@ -697,7 +697,7 @@ export async function userFromBearer(authorization?: string): Promise<AuthUser |
   const r = await pool.query<AuthUser>(
     `SELECT u.id,u.email,u.plan FROM oauth_access_tokens t JOIN users u ON u.id=t.user_id
      WHERE t.token_hash=$1 AND t.resource=$2 AND t.revoked_at IS NULL AND t.expires_at > now()
-       AND u.account_status <> 'disabled'`, [sha256(token),expectedResource]
+       AND u.account_status <> 'disabled'`, [sha256(token),mcpResource()]
   );
   return r.rows[0] ?? null;
 }
