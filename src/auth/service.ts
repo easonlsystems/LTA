@@ -182,7 +182,7 @@ export async function beginGoogleSignIn(returnTo:string):Promise<{authorizationU
     await client.query('BEGIN');
     await client.query('DELETE FROM google_oauth_flows WHERE expires_at<now() OR consumed_at IS NOT NULL');
     await client.query(
-      'INSERT INTO google_oauth_flows(state_hash,code_verifier,return_to,expires_at) VALUES($1,$2,$3,now()+interval \\'10 minutes\\')',
+      "INSERT INTO google_oauth_flows(state_hash,code_verifier,return_to,expires_at) VALUES($1,$2,$3,now()+interval '10 minutes')",
       [sha256(state),codeVerifier,returnTo]
     );
     await client.query('COMMIT');
@@ -318,7 +318,7 @@ export async function completeGoogleSignIn(input:{code:string;state:string;cooki
 
     const sessionToken=randomToken(32);
     await accountClient.query(
-      'INSERT INTO web_sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval \\'30 days\\')',
+      "INSERT INTO web_sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '30 days')",
       [user.id,sha256(sessionToken)]
     );
     await accountClient.query('COMMIT');
