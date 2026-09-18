@@ -49,7 +49,6 @@ const linkResultOutputSchema=z.object({
   transcript_offset:z.number().int().nonnegative().optional(),
   next_offset:z.number().int().nonnegative().nullable().optional(),
   total_characters:z.number().int().nonnegative().optional(),
-  checkout_url:z.string().url().nullable().optional(),
   error_code:z.string().nullable().optional(),
   message:z.string().optional(),
   retry_after_seconds:z.number().nonnegative().optional(),
@@ -75,7 +74,6 @@ const timeRangeOutputSchema=z.object({
   timed_text:z.string().optional(),
   delivery_complete:z.boolean().optional(),
   next_start_seconds:z.number().nonnegative().nullable().optional(),
-  checkout_url:z.string().url().nullable().optional(),
   error_code:z.string().nullable().optional(),
   retry_after_seconds:z.number().nonnegative().optional(),
   retryable:z.boolean().optional(),
@@ -95,7 +93,6 @@ const sourceSearchOutputSchema=z.object({
     score:z.number().nonnegative(),
     snippet:z.string()
   })).optional(),
-  checkout_url:z.string().url().nullable().optional(),
   error_code:z.string().nullable().optional(),
   retry_after_seconds:z.number().nonnegative().optional(),
   retryable:z.boolean().optional(),
@@ -117,7 +114,6 @@ const videoMapOutputSchema=z.object({
     excerpt:z.string(),
     keywords:z.array(z.string())
   })).optional(),
-  checkout_url:z.string().url().nullable().optional(),
   error_code:z.string().nullable().optional(),
   retry_after_seconds:z.number().nonnegative().optional(),
   retryable:z.boolean().optional(),
