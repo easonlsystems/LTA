@@ -299,6 +299,14 @@ async function processTopupOrderEvent(eventName:string,event:any,obj:any):Promis
       );
       if(inserted.rowCount){
         await client.query(`UPDATE users SET paid_rollover_seconds=paid_rollover_seconds+$2,updated_at=now() WHERE id=$1`,[userId,units*60]);
+        await client.query(
+          `UPDATE transcript_jobs j SET status='queued',
+             priority=CASE u.plan WHEN 'pro' THEN 20 WHEN 'basic' THEN 10 ELSE 0 END,
+             next_attempt_at=now(),error_code=NULL,error_message=NULL,checkout_url=NULL,updated_at=now()
+           FROM users u
+           WHERE j.user_id=$1 AND u.id=j.user_id AND j.status='awaiting_payment' AND j.error_code='QUOTA_EXCEEDED'`,
+          [userId]
+        );
       }
       await client.query('COMMIT');
       return true;
