@@ -24,6 +24,8 @@ assert.doesNotMatch(linkSource,/hn\.algolia\.com/,'OpenAI-ready core must not de
 assert.match(policySource,/OPENAI_ALLOWED_PLATFORMS[^\n]*\['bluesky','github','hackernews'\]/,'ChatGPT distribution must default-deny every source outside the reviewed allowlist');
 assert.match(apiSource,/app\.all\('\/mcp\/openai'/,'API must expose a distinct ChatGPT MCP endpoint');
 assert.match(authServiceSource,/mcpResource\('openai'\)/,'OAuth must define a distinct ChatGPT MCP audience');
+assert.match(authServiceSource,/authInfoFromBearer\(authorization\?: string,expectedResource=mcpResource\(\)\)/,'Bearer validation must accept an explicit expected MCP resource');
+assert.match(authServiceSource,/\[sha256\(token\),expectedResource\]/,'Bearer validation must query the token by the endpoint-specific OAuth resource');
 assert.match(linkSource,/safeJsonArrayPages/,'GitHub discussions must paginate through public discussion pages');
 assert.match(linkSource,/GitHub comments/);
 assert.match(linkSource,/GitHub reviews/);
