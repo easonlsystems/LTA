@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-const [linkSource,mcpSource,apiSource,authWrapperSource,authBaseSource,authServiceSource,audioSource,safeHttpSource,publicUrlSource,workerSource]=await Promise.all([
+const [linkSource,limitsSource,mcpSource,apiSource,authWrapperSource,authBaseSource,authServiceSource,audioSource,safeHttpSource,publicUrlSource,workerSource,processorSource,plansSource,billingSource]=await Promise.all([
   readFile(new URL('../src/content/linkText.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/content/limits.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/mcp/server.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/api/main.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/auth/routes.ts',import.meta.url),'utf8'),
@@ -10,10 +11,13 @@ const [linkSource,mcpSource,apiSource,authWrapperSource,authBaseSource,authServi
   readFile(new URL('../src/media/audio.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/util/safeHttp.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/config/publicUrl.ts',import.meta.url),'utf8'),
-  readFile(new URL('../src/worker/main.ts',import.meta.url),'utf8')
+  readFile(new URL('../src/worker/main.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/worker/processor.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/quota/plans.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/billing/lemon.ts',import.meta.url),'utf8')
 ]);
 const authSource=authWrapperSource+'\n'+authBaseSource;
-assert.match(linkSource,/safeJsonArrayPages/,'GitHub discussions must use bounded pagination');
+assert.match(linkSource,/safeJsonArrayPages/,'GitHub discussions must paginate through public discussion pages');
 assert.match(linkSource,/GitHub comments/);
 assert.match(linkSource,/GitHub reviews/);
 assert.doesNotMatch(linkSource,/comments\?per_page=100|reviews\?per_page=100/,'GitHub must not silently stop after one page');
@@ -33,4 +37,10 @@ assert.match(safeHttpSource,/Remote content response was truncated/,'prematurely
 assert.match(authServiceSource,/pg_advisory_xact_lock\(hashtext\('link2ai:password-auth:global'\)\)/,'password admission count+insert must be serialized');
 assert.match(workerSource,/event:'job_claim_error'/,'a transient database claim error must not terminate the worker');
 assert.doesNotMatch(audioSource,/V1 transcription limit/,'User-facing errors must not expose internal V1 naming');
+assert.doesNotMatch(limitsSource,/EXTRACTION_LIMITS/,'V3 must not impose product-defined text/source caps');
+assert.doesNotMatch(plansSource,/MAX_PROCESSABLE_VIDEO_SECONDS|30\s*\*\s*60|120\s*\*\s*60/,'Plans must not impose product-defined per-video duration caps');
+assert.match(processorSource,/availableUsageUnits/,'Text extraction must derive its source budget from the user unit wallet');
+assert.match(processorSource,/caption_incomplete_fallback_asr/,'Known incomplete video captions must fall back to ASR instead of becoming a successful partial result');
+assert.match(billingSource,/j\.error_code='QUOTA_EXCEEDED'/,'A successful top-up must resume quota-blocked jobs');
+assert.doesNotMatch(apiSource,/supports videos up to 30 minutes|supports videos up to 120 minutes|very large sources may return partial context/i,'Published copy must match the unit-bounded full-source policy');
 console.log('release audit tests PASS');
