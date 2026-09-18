@@ -9,10 +9,10 @@ import { ResolverOrchestrator } from '../resolvers/orchestrator.js';
 import { resolveYouTubeTranscriptFallback } from '../resolvers/youtubeTranscript.js';
 import type { MediaMetadata, TranscriptSegment } from '../media/types.js';
 import { transcribeAudio } from '../transcription/router.js';
-import { reserveQuota, finalizeQuota, releaseQuota } from '../quota/service.js';
+import { availableUsageUnits, reserveQuota, finalizeQuota, releaseQuota } from '../quota/service.js';
 import { saveCache, findCache, findUserCompletedCache } from './cache.js';
 import { asLink2AIError } from '../util/errors.js';
-import { createCheckoutSession } from '../billing/lemon.js';
+import { canPurchaseTopup, createCheckoutSession, createTopupCheckoutSession } from '../billing/lemon.js';
 import { logEvent, logErrorEvent } from '../util/log.js';
 import { deferJob, deferJobToRegion, heartbeatJob, markAwaitingPayment, markCompleted, markFailed, markRetry, planForUser, setJobMetadata, type JobRow } from './jobs.js';
 import { acquireMediaClaim, releaseMediaClaim } from './mediaClaims.js';
@@ -30,8 +30,14 @@ function cachedUsageUnits(cache:{usage_units:number;source:string;transcript:str
   return cache.usage_units>0?cache.usage_units:(cache.source==='post'||cache.source==='page'?textUsageUnits(estimateTokens(cache.transcript)):videoUsageUnits(cache.duration_seconds));
 }
 
-async function paymentUrl(job:JobRow,duration:number,code:string):Promise<string|null>{
+async function paymentUrl(job:JobRow,duration:number,code:string,details?:Record<string,unknown>):Promise<string|null>{
   const plan=await planForUser(job.user_id);
+  if(code==='QUOTA_EXCEEDED'&&plan!=='trial'&&await canPurchaseTopup(job.user_id)){
+    const remaining=Math.max(0,Number(details?.remaining_usage_units??0)||0);
+    const requiredAtLeast=Math.max(remaining+1,Number(details?.required_usage_units_at_least??0)||0);
+    const deficit=Math.max(1,requiredAtLeast-remaining);
+    return await createTopupCheckoutSession(job.user_id,deficit>500?'1500':'500');
+  }
   if(plan==='pro')return null;
   const target=plan==='trial' && duration<=30*60 && code!=='DURATION_LIMIT_EXCEEDED'?'basic':'pro';
   return await createCheckoutSession(job.user_id,target,job.id);
@@ -81,12 +87,14 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
         return;
       }
 
-      // A successful text-only post/page consumes one equivalent content minute.
-      // The job itself still records duration_seconds=0 because this is not media duration.
-      await reserveQuota(job.user_id,job.id,1);reserved=true;
+      const availability=await availableUsageUnits(job.user_id,job.id);
+      if(availability.remaining_usage_units<=0){
+        throw new Link2AIError('QUOTA_EXCEEDED','This account has no processing units left for this source. Add processing units and try again.',402,false,{
+          cause_code:'no_remaining_units',remaining_usage_units:0,required_usage_units_at_least:1
+        });
+      }
       mediaClaim=await acquireMediaClaim(job.platform,parsed.canonicalMediaId,job.language,job.id);
       if(!mediaClaim){
-        await releaseQuota(job.id);reserved=false;
         await deferJob(job.id,3);
         logEvent('job_deferred_for_media_claim',{job_id:job.id,platform:job.platform,content_kind:parsed.kind});
         return;
@@ -101,7 +109,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
         return;
       }
 
-      const content=await extractTextLink(parsed);
+      const content=await extractTextLink(parsed,{maxUsageUnits:availability.remaining_usage_units});
       await reserveQuota(job.user_id,job.id,content.completeness.usageUnits);reserved=true;
       const cache=await saveCache({
         platform:parsed.platform,canonicalMediaId:parsed.canonicalMediaId,sourceUrl:content.sourceUrl,
@@ -213,15 +221,18 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     if(caption?.transcript&&metadata.durationSeconds>0){
       if(!reserved){await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);reserved=true;}
       const completeness=videoCompleteness(caption.transcript,metadata.durationSeconds,caption.segments);
-      const cache=await saveCache({
-        platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
-        title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
-        language:caption.language,transcript:caption.transcript,segments:caption.segments,source:'caption',completeness
-      });
-      await finalizeQuota(job.user_id,job.id); reserved=false;
-      await markCompleted(job.id,cache.id,metadata.durationSeconds);
-      logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'caption',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,extracted_token_estimate:estimateTokens(caption.transcript),usage_units:videoUsageUnits(metadata.durationSeconds),truncated:completeness.truncated,processing_ms:Date.now()-startedAt});
-      return;
+      if(!completeness.truncated){
+        const cache=await saveCache({
+          platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
+          title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
+          language:caption.language,transcript:caption.transcript,segments:caption.segments,source:'caption',completeness
+        });
+        await finalizeQuota(job.user_id,job.id); reserved=false;
+        await markCompleted(job.id,cache.id,metadata.durationSeconds);
+        logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'caption',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,extracted_token_estimate:estimateTokens(caption.transcript),usage_units:videoUsageUnits(metadata.durationSeconds),truncated:false,processing_ms:Date.now()-startedAt});
+        return;
+      }
+      logEvent('caption_incomplete_fallback_asr',{job_id:job.id,platform:job.platform,duration_seconds:metadata.durationSeconds,truncation_reason:completeness.truncationReason??'caption_timeline_incomplete'});
     }
 
     const tmpDir=await fs.mkdtemp(path.join(os.tmpdir(),'link2ai-'));
@@ -242,23 +253,32 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     // duration. Prefer those captions now instead of spending an ASR request.
     if(caption?.transcript){
       const completeness=videoCompleteness(caption.transcript,metadata.durationSeconds,caption.segments);
-      const cache=await saveCache({
-        platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
-        title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
-        language:caption.language,transcript:caption.transcript,segments:caption.segments,source:'caption',completeness
-      });
-      await finalizeQuota(job.user_id,job.id); reserved=false;
-      await markCompleted(job.id,cache.id,metadata.durationSeconds);
-      logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'caption_after_duration_probe',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,truncated:completeness.truncated,processing_ms:Date.now()-startedAt});
-      return;
+      if(!completeness.truncated){
+        const cache=await saveCache({
+          platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
+          title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
+          language:caption.language,transcript:caption.transcript,segments:caption.segments,source:'caption',completeness
+        });
+        await finalizeQuota(job.user_id,job.id); reserved=false;
+        await markCompleted(job.id,cache.id,metadata.durationSeconds);
+        logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'caption_after_duration_probe',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,truncated:false,processing_ms:Date.now()-startedAt});
+        return;
+      }
+      logEvent('caption_incomplete_fallback_asr',{job_id:job.id,platform:job.platform,duration_seconds:metadata.durationSeconds,truncation_reason:completeness.truncationReason??'caption_timeline_incomplete'});
     }
 
     const preparedAudio=await normalizeAudioForAsr(audio,tmpDir);
     const asr=await transcribeAudio(preparedAudio,job.language);
+    const asrCompleteness=videoCompleteness(asr.transcript,metadata.durationSeconds,asr.segments);
+    if(asrCompleteness.truncated){
+      throw new Link2AIError('EXTRACTION_FAILED','The full video timeline could not be transcribed reliably. No processing units were charged.',502,true,{
+        cause_code:'asr_timeline_incomplete',truncation_reason:asrCompleteness.truncationReason
+      });
+    }
     const cache=await saveCache({
       platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
       title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
-      language:asr.language,transcript:asr.transcript,segments:asr.segments,source:'asr',completeness:videoCompleteness(asr.transcript,metadata.durationSeconds)
+      language:asr.language,transcript:asr.transcript,segments:asr.segments,source:'asr',completeness:asrCompleteness
     });
     await finalizeQuota(job.user_id,job.id); reserved=false;
     await markCompleted(job.id,cache.id,metadata.durationSeconds);
@@ -278,7 +298,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     logErrorEvent('job_error',e,{job_id:job.id,platform:job.platform,error_code:err.code,retryable:err.retryable,attempt:job.attempts,processing_ms:Date.now()-startedAt,...(causeCode?{cause_code:causeCode}:{}),...(transport?{transport}:{} )});
     if(err.code==='QUOTA_EXCEEDED'||err.code==='DURATION_LIMIT_EXCEEDED'){
       const duration=Number(job.duration_seconds??(err.details?.max_video_seconds as number|undefined)??0);
-      const checkout=await paymentUrl(job,duration,err.code).catch(()=>null);
+      const checkout=await paymentUrl(job,duration,err.code,err.details as Record<string,unknown>|undefined).catch(()=>null);
       if(checkout){await markAwaitingPayment(job.id,err.code,err.message,checkout);return;}
       await markFailed(job.id,err.code,err.message,false);return;
     }
