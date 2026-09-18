@@ -1,6 +1,5 @@
 import { env } from '../config/env.js';
 import { pool } from '../db/pool.js';
-import { parseMediaUrl } from '../media/url.js';
 import { assertPlatformAllowedForProfile, parseAllowedMediaUrl, type DistributionProfile } from './policy.js';
 import { asLink2AIError, Link2AIError } from '../util/errors.js';
 import { reserveQuota, finalizeQuota, getUsageSnapshot } from '../quota/service.js';
