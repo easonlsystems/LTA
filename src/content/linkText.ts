@@ -4,12 +4,10 @@ import { Link2AIError } from '../util/errors.js';
 import { env } from '../config/env.js';
 import { clipExternalText, METADATA_LIMITS } from '../media/text.js';
 import { parseMediaUrl, type ParsedMediaUrl } from '../media/url.js';
-import { boundExtractedText, EXTRACTION_LIMITS, type CompletenessMetadata, type TextContentClass } from './limits.js';
+import { boundExtractedText, estimateTokens, textCharacterBudget, textUsageUnits, type CompletenessMetadata, type TextContentClass } from './limits.js';
 
-const PAGE_MAX_BYTES=2_500_000;
-const PAGE_MAX_CHARS=240_000;
-const API_MAX_BYTES=3_000_000;
-const PDF_MAX_BYTES=12_000_000;
+const API_PAGE_BYTES=3_000_000;
+const INFRA_SOURCE_MAX_BYTES=256_000_000;
 const BROWSER_UA='Link2AI/1.2 public-link-reader (+https://api-production-0383e.up.railway.app/support)';
 
 export interface LinkTextPayload{
@@ -25,7 +23,53 @@ export interface LinkTextPayload{
   completeness:CompletenessMetadata;
 }
 
-function complete(payload:Omit<LinkTextPayload,'completeness'>,contentClass:TextContentClass,extra:Partial<CompletenessMetadata>={}):LinkTextPayload{
+export interface TextExtractionBudget{maxUsageUnits:number;}
+
+function quotaBudgetError(budget:TextExtractionBudget,context:string):Link2AIError{
+  return new Link2AIError(
+    'QUOTA_EXCEEDED',
+    `This source is larger than your remaining ${budget.maxUsageUnits} processing units. Add processing units and try again; Link2AI will not return an intentionally partial source.`,
+    402,false,{
+      cause_code:'source_exceeds_remaining_units',
+      context,
+      remaining_usage_units:budget.maxUsageUnits,
+      required_usage_units_at_least:budget.maxUsageUnits+1
+    }
+  );
+}
+
+function assertCharsWithinBudget(characters:number,budget:TextExtractionBudget|undefined,context:string):void{
+  if(!budget)return;
+  const units=textUsageUnits(Math.ceil(Math.max(0,characters)/4));
+  if(units>budget.maxUsageUnits)throw quotaBudgetError(budget,context);
+}
+
+function assertTextWithinBudget(text:string,budget:TextExtractionBudget|undefined,context:string):void{
+  if(!budget)return;
+  if(textUsageUnits(estimateTokens(text))>budget.maxUsageUnits)throw quotaBudgetError(budget,context);
+}
+
+function sourceByteBudget(budget:TextExtractionBudget|undefined,floorBytes:number):{maxBytes:number;quotaBounded:boolean}{
+  if(!budget)return {maxBytes:INFRA_SOURCE_MAX_BYTES,quotaBounded:false};
+  // Raw HTML/JSON/PDF can be much larger than extracted text. Give it generous
+  // overhead while still stopping obviously unaffordable sources before buffering
+  // hundreds of MB.
+  const derived=Math.max(floorBytes,textCharacterBudget(budget.maxUsageUnits)*8);
+  return {maxBytes:Math.min(INFRA_SOURCE_MAX_BYTES,derived),quotaBounded:derived<INFRA_SOURCE_MAX_BYTES};
+}
+
+async function safeGetForBudget(url:string,opts:{floorBytes:number;timeoutMs:number;maxRedirects?:number;userAgent?:string;accept?:string},budget:TextExtractionBudget|undefined,context:string){
+  const bytes=sourceByteBudget(budget,opts.floorBytes);
+  try{
+    return await safeGetBuffer(url,{maxBytes:bytes.maxBytes,timeoutMs:opts.timeoutMs,maxRedirects:opts.maxRedirects,userAgent:opts.userAgent,accept:opts.accept});
+  }catch(error){
+    if(bytes.quotaBounded&&error instanceof Link2AIError&&/exceeded safety limit/i.test(error.message))throw quotaBudgetError(budget!,context);
+    throw error;
+  }
+}
+
+function complete(payload:Omit<LinkTextPayload,'completeness'>,contentClass:TextContentClass,extra:Partial<CompletenessMetadata>={},budget?:TextExtractionBudget):LinkTextPayload{
+  assertTextWithinBudget(payload.text,budget,`${contentClass}_content`);
   const bounded=boundExtractedText(payload.text,contentClass,extra);
   return {...payload,text:bounded.text,completeness:bounded.metadata};
 }
@@ -74,7 +118,7 @@ export async function resolveRedditSharePost(input:ParsedMediaUrl):Promise<Parse
   );
 }
 
-function cleanText(value:string,max=PAGE_MAX_CHARS):string{
+function cleanText(value:string,max=Number.MAX_SAFE_INTEGER):string{
   const text=decodeEntities(value)
     .replace(/\r/g,'')
     .replace(/[ \t]+/g,' ')
@@ -139,15 +183,15 @@ function pageTextFromHtml(html:string):{title?:string;creator?:string;descriptio
   return {title:clipExternalText(title,METADATA_LIMITS.title),creator:clipExternalText(creator,METADATA_LIMITS.creator),description:clipExternalText(description,METADATA_LIMITS.description),language,text:cleanText(text)};
 }
 
-async function fetchPage(input:ParsedMediaUrl):Promise<LinkTextPayload>{
-  const response=await safeGetBuffer(input.normalizedUrl,{maxBytes:PAGE_MAX_BYTES,timeoutMs:15_000,maxRedirects:5,userAgent:BROWSER_UA,accept:'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.2'});
+async function fetchPage(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  const response=await safeGetForBudget(input.normalizedUrl,{floorBytes:8_000_000,timeoutMs:15_000,maxRedirects:5,userAgent:BROWSER_UA,accept:'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.2'},budget,'web_response');
   const ct=(response.contentType??'').toLowerCase();
   if(ct&&!ct.includes('text/html')&&!ct.includes('application/xhtml+xml')&&!ct.includes('text/plain')){
     throw new Link2AIError('UNSUPPORTED_URL','This link is not a readable public HTML/text page.',415,false);
   }
   const html=response.bytes.toString('utf8');
   const doc=pageTextFromHtml(html);
-  return complete({platform:input.platform,canonicalMediaId:input.canonicalMediaId,sourceUrl:response.finalUrl,title:doc.title,creator:doc.creator,caption:doc.description,language:doc.language,text:doc.text,source:input.kind==='post'?'post':'page'},input.kind==='post'?'social':'web');
+  return complete({platform:input.platform,canonicalMediaId:input.canonicalMediaId,sourceUrl:response.finalUrl,title:doc.title,creator:doc.creator,caption:doc.description,language:doc.language,text:doc.text,source:input.kind==='post'?'post':'page'},input.kind==='post'?'social':'web',{},budget);
 }
 
 function xPostText(html:string):string{
@@ -155,7 +199,7 @@ function xPostText(html:string):string{
   return stripHtml(p).replace(/\s+pic\.x\.com\/\S+$/i,'').trim();
 }
 
-async function fetchXPost(input:ParsedMediaUrl):Promise<LinkTextPayload>{
+async function fetchXPost(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
   const canonical=input.normalizedUrl.replace(/^https:\/\/(?:www\.)?x\.com\//,'https://twitter.com/');
   const endpoint=`https://publish.x.com/oembed?omit_script=1&dnt=true&url=${encodeURIComponent(canonical)}`;
   const response=await safeGetBuffer(endpoint,{maxBytes:1_000_000,timeoutMs:12_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/json'});
@@ -167,11 +211,11 @@ async function fetchXPost(input:ParsedMediaUrl):Promise<LinkTextPayload>{
     platform:'x',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,
     title:clipExternalText(`X post by ${String(data?.author_name??'').trim()}`,METADATA_LIMITS.title),
     creator:clipExternalText(data?.author_name,METADATA_LIMITS.creator),language:'und',text:cleanText(text),source:'post'
-  },'social');
+  },'social',{},budget);
 }
 
-const REDDIT_MAX_COMMENTS=EXTRACTION_LIMITS.discussion.hardItems;
-const REDDIT_MAX_DEPTH=EXTRACTION_LIMITS.discussion.maxDepth;
+const REDDIT_API_COMMENT_LIMIT=500;
+const REDDIT_API_DEPTH=10;
 
 type JsonObject=Record<string,unknown>;
 
@@ -189,8 +233,8 @@ function jsonNumber(value:unknown):number|undefined{
 
 function jsonBoolean(value:unknown):boolean|undefined{return typeof value==='boolean'?value:undefined;}
 
-async function safeJson(url:string,description:string,maxBytes=API_MAX_BYTES):Promise<unknown>{
-  const response=await safeGetBuffer(url,{maxBytes,timeoutMs:15_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/json'});
+async function safeJson(url:string,description:string,maxBytes=API_PAGE_BYTES,budget?:TextExtractionBudget):Promise<unknown>{
+  const response=budget?await safeGetForBudget(url,{floorBytes:maxBytes,timeoutMs:15_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/json'},budget,`${description.toLowerCase().replace(/\\s+/g,'_')}_response`):await safeGetBuffer(url,{maxBytes,timeoutMs:15_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/json'});
   const ct=(response.contentType??'').toLowerCase();
   if(ct&&!ct.includes('json')&&!ct.includes('javascript')&&!ct.includes('text/plain'))throw new Link2AIError('EXTRACTION_FAILED',`${description} returned a non-JSON response.`,502,true);
   try{return JSON.parse(response.bytes.toString('utf8'));}
@@ -198,24 +242,27 @@ async function safeJson(url:string,description:string,maxBytes=API_MAX_BYTES):Pr
 }
 
 
-async function safeJsonArrayPages(url:string,description:string,maxItems:number):Promise<{items:unknown[];truncated:boolean}>{
+async function safeJsonArrayPages(url:string,description:string,budget?:TextExtractionBudget):Promise<{items:unknown[];truncated:boolean}>{
   const items:unknown[]=[];
   const perPage=100;
   let page=1;
-  let truncated=false;
-  while(items.length<maxItems){
+  let observedTextChars=0;
+  while(true){
     const u=new URL(url);
     u.searchParams.set('per_page',String(perPage));
     u.searchParams.set('page',String(page));
-    const value=await safeJson(u.toString(),description);
+    const value=await safeJson(u.toString(),description,API_PAGE_BYTES,budget);
     if(!Array.isArray(value))throw new Link2AIError('EXTRACTION_FAILED',`${description} returned an invalid list.`,502,true);
-    const remaining=maxItems-items.length;
-    items.push(...value.slice(0,remaining));
+    for(const raw of value){
+      const item=jsonObject(raw);
+      observedTextChars+=Array.from(jsonString(item?.body)).length+Array.from(jsonString(item?.title)).length+256;
+      assertCharsWithinBudget(observedTextChars,budget,`${description.toLowerCase().replace(/\s+/g,'_')}_content`);
+      items.push(raw);
+    }
     if(value.length<perPage)break;
-    if(items.length>=maxItems){truncated=true;break;}
     page++;
   }
-  return {items,truncated};
+  return {items,truncated:false};
 }
 
 function isoTimestamp(value:unknown):string{
@@ -225,9 +272,8 @@ function isoTimestamp(value:unknown):string{
 
 type BlueskyRendered={lines:string[];count:number};
 function collectBlueskyReplies(replies:unknown,out:BlueskyRendered,depth=0):void{
-  if(!Array.isArray(replies)||depth>EXTRACTION_LIMITS.discussion.maxDepth||out.count>=EXTRACTION_LIMITS.social.hardItems)return;
+  if(!Array.isArray(replies))return;
   for(const raw of replies){
-    if(out.count>=EXTRACTION_LIMITS.social.hardItems)return;
     const node=jsonObject(raw);const post=jsonObject(node?.post);const record=jsonObject(post?.record);const author=jsonObject(post?.author);
     const text=cleanText(jsonString(record?.text),6000);
     if(text){
@@ -239,7 +285,7 @@ function collectBlueskyReplies(replies:unknown,out:BlueskyRendered,depth=0):void
   }
 }
 
-export function parseBlueskyThread(input:ParsedMediaUrl,payload:unknown):LinkTextPayload{
+export function parseBlueskyThread(input:ParsedMediaUrl,payload:unknown,budget?:TextExtractionBudget):LinkTextPayload{
   const root=jsonObject(payload);const thread=jsonObject(root?.thread);const post=jsonObject(thread?.post);
   const [actor,rkey]=input.canonicalMediaId.split('/');
   if(jsonString(post?.uri)!==`at://${actor}/app.bsky.feed.post/${rkey}`)throw new Link2AIError('EXTRACTION_FAILED','Bluesky returned a different post than requested.',502,true);
@@ -258,21 +304,19 @@ export function parseBlueskyThread(input:ParsedMediaUrl,payload:unknown):LinkTex
   const parent=jsonObject(thread?.parent);const parentPost=jsonObject(parent?.post);const parentRecord=jsonObject(parentPost?.record);
   if(parentRecord&&jsonString(parentRecord.text))sections.push(`Direct parent/replied-to post:\n${cleanText(jsonString(parentRecord.text),5000)}`);
   const replies:BlueskyRendered={lines:[],count:0};collectBlueskyReplies(thread?.replies,replies,0);
-  let usedChars=sections.join('\n\n').length;const includedReplies:string[]=[];const replyBudget=EXTRACTION_LIMITS.social.tokens*4;
-  for(const line of replies.lines){if(usedChars+line.length+1>replyBudget)break;includedReplies.push(line);usedChars+=line.length+1;}
-  if(includedReplies.length)sections.push(`Public replies (${includedReplies.length} entries):\n${includedReplies.join('\n')}`);
-  const repliesAvailable=jsonNumber(post?.replyCount);const repliesTruncated=includedReplies.length<replies.count||(repliesAvailable!==undefined&&includedReplies.length<repliesAvailable);
-  return complete({platform:'bluesky',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title:clipExternalText(`Bluesky post by ${display||handle}`,METADATA_LIMITS.title),creator:clipExternalText(handle?`@${handle}`:display,METADATA_LIMITS.creator),caption:clipExternalText(text,METADATA_LIMITS.description),language:jsonString(record?.langs instanceof Array?record.langs[0]:undefined)||'und',text:cleanText(sections.filter(Boolean).join('\n\n')),source:'post'},'social',{itemsAvailable:repliesAvailable,itemsExtracted:includedReplies.length,truncated:repliesTruncated,contentSectionsTruncated:repliesTruncated?['replies']:undefined});
+  if(replies.lines.length)sections.push(`Public replies (${replies.lines.length} entries):\n${replies.lines.join('\n')}`);
+  const repliesAvailable=jsonNumber(post?.replyCount);const repliesTruncated=repliesAvailable!==undefined&&replies.count<repliesAvailable;
+  return complete({platform:'bluesky',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title:clipExternalText(`Bluesky post by ${display||handle}`,METADATA_LIMITS.title),creator:clipExternalText(handle?`@${handle}`:display,METADATA_LIMITS.creator),caption:clipExternalText(text,METADATA_LIMITS.description),language:jsonString(record?.langs instanceof Array?record.langs[0]:undefined)||'und',text:cleanText(sections.filter(Boolean).join('\n\n')),source:'post'},'social',{itemsAvailable:repliesAvailable,itemsExtracted:replies.count,truncated:repliesTruncated,contentSectionsTruncated:repliesTruncated?['upstream_replies']:undefined},budget);
 }
 
-async function fetchBlueskyPost(input:ParsedMediaUrl):Promise<LinkTextPayload>{
+async function fetchBlueskyPost(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
   const [actor,rkey]=input.canonicalMediaId.split('/');
   const uri=`at://${actor}/app.bsky.feed.post/${rkey}`;
-  const data=await safeJson(`https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=${EXTRACTION_LIMITS.discussion.maxDepth}&parentHeight=1`,'Bluesky');
-  return parseBlueskyThread(input,data);
+  const data=await safeJson(`https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=1000&parentHeight=1`,'Bluesky',API_PAGE_BYTES,budget);
+  return parseBlueskyThread(input,data,budget);
 }
 
-export function parseGitHubDiscussion(input:ParsedMediaUrl,itemValue:unknown,commentsValue:unknown,reviewsValue:unknown=[],diff='',sourceTruncated=false):LinkTextPayload{
+export function parseGitHubDiscussion(input:ParsedMediaUrl,itemValue:unknown,commentsValue:unknown,reviewsValue:unknown=[],diff='',sourceTruncated=false,budget?:TextExtractionBudget):LinkTextPayload{
   const item=jsonObject(itemValue);if(!item)throw new Link2AIError('EXTRACTION_FAILED','GitHub returned invalid issue metadata.',502,true);
   const expectedNumber=Number(input.canonicalMediaId.split('/')[3]);
   if(jsonNumber(item.number)!==expectedNumber)throw new Link2AIError('EXTRACTION_FAILED','GitHub returned a different issue or pull request than requested.',502,true);
@@ -280,91 +324,80 @@ export function parseGitHubDiscussion(input:ParsedMediaUrl,itemValue:unknown,com
   const user=jsonObject(item.user);const labels=Array.isArray(item.labels)?item.labels.map(v=>jsonString(jsonObject(v)?.name)).filter(Boolean).slice(0,20):[];
   const sections=[`${isPr?'Pull request':'Issue'}: ${repo}#${jsonNumber(item.number)??''}`,`Title: ${jsonString(item.title)}`,`Author: @${jsonString(user?.login)}`,`State: ${jsonString(item.state)}${jsonBoolean(item.merged)===true?' (merged)':''}`,labels.length?`Labels: ${labels.join(', ')}`:'',jsonString(item.created_at)?`Created: ${isoTimestamp(item.created_at)}`:''];
   if(isPr){const base=jsonObject(item.base),head=jsonObject(item.head);sections.push(`Branches: ${jsonString(base?.ref)} ← ${jsonString(head?.ref)}`);}
-  if(jsonString(item.body).trim())sections.push(`Body:\n${cleanText(jsonString(item.body),30_000)}`);
+  if(jsonString(item.body).trim())sections.push(`Body:\n${cleanText(jsonString(item.body))}`);
   const contentClass=isPr?'github_pr':'github_issue';
   const allDiscussion=[...(Array.isArray(commentsValue)?commentsValue:[]),...(Array.isArray(reviewsValue)?reviewsValue:[])];
-  const discussionCandidates=allDiscussion.slice(0,EXTRACTION_LIMITS[contentClass].hardItems).map(value=>{
-    const comment=jsonObject(value);const author=jsonObject(comment?.user);const body=cleanText(jsonString(comment?.body),8000);if(!body)return '';
+  const discussionCandidates=allDiscussion.map(value=>{
+    const comment=jsonObject(value);const author=jsonObject(comment?.user);const body=cleanText(jsonString(comment?.body));if(!body)return '';
     const timestamp=isoTimestamp(comment?.created_at)||isoTimestamp(comment?.submitted_at);
     const path=jsonString(comment?.path);const line=jsonNumber(comment?.line)??jsonNumber(comment?.original_line);
     const location=path?` · ${path}${line!==undefined?`:${line}`:''}`:'';
     return `@${jsonString(author?.login)||'unknown'}${timestamp?` · ${timestamp}`:''}${location}: ${body}`;
   }).filter(Boolean);
-  const maxChars=EXTRACTION_LIMITS[contentClass].tokens*4;const discussions:string[]=[];let usedChars=sections.join('\n\n').length;
-  for(const entry of discussionCandidates){if(usedChars+entry.length+2>maxChars)break;discussions.push(entry);usedChars+=entry.length+2;}
-  if(discussions.length)sections.push(`Bounded public discussion (${discussions.length} entries):\n${discussions.join('\n\n')}`);
-  const beforeDiff=cleanText(sections.filter(Boolean).join('\n\n'),Number.MAX_SAFE_INTEGER);const diffBudget=Math.max(0,maxChars-beforeDiff.length-40);const cleanedDiff=isPr?cleanText(diff,diffBudget):'';
-  if(cleanedDiff)sections.push(`Pull request diff (bounded, lowest priority):\n${cleanedDiff}`);
-  const diffTruncated=isPr&&cleanText(diff,Number.MAX_SAFE_INTEGER).length>cleanedDiff.length;const rawText=cleanText(sections.filter(Boolean).join('\n\n'),maxChars);
-  const discussionTruncated=sourceTruncated||allDiscussion.length>discussions.length;
-  const title=jsonString(item.title);return complete({platform:'github',canonicalMediaId:input.canonicalMediaId,sourceUrl:jsonString(item.html_url)||input.normalizedUrl,title:clipExternalText(title,METADATA_LIMITS.title),creator:clipExternalText(jsonString(user?.login),METADATA_LIMITS.creator),caption:clipExternalText(jsonString(item.body),METADATA_LIMITS.description),language:'und',text:rawText,source:'post'},isPr?'github_pr':'github_issue',{itemsAvailable:allDiscussion.length,itemsExtracted:discussions.length,truncated:discussionTruncated||diffTruncated,contentSectionsTruncated:[...(discussionTruncated?['discussion']:[]),...(diffTruncated?['diff']:[])]});
+  if(discussionCandidates.length)sections.push(`Public discussion (${discussionCandidates.length} entries):\n${discussionCandidates.join('\n\n')}`);
+  if(isPr&&diff.trim())sections.push(`Pull request diff:\n${cleanText(diff)}`);
+  const rawText=cleanText(sections.filter(Boolean).join('\n\n'));
+  const title=jsonString(item.title);return complete({platform:'github',canonicalMediaId:input.canonicalMediaId,sourceUrl:jsonString(item.html_url)||input.normalizedUrl,title:clipExternalText(title,METADATA_LIMITS.title),creator:clipExternalText(jsonString(user?.login),METADATA_LIMITS.creator),caption:clipExternalText(jsonString(item.body),METADATA_LIMITS.description),language:'und',text:rawText,source:'post'},contentClass,{itemsAvailable:allDiscussion.length,itemsExtracted:discussionCandidates.length,truncated:sourceTruncated,contentSectionsTruncated:sourceTruncated?['upstream_discussion']:undefined},budget);
 }
 
-async function fetchGitHubDiscussion(input:ParsedMediaUrl):Promise<LinkTextPayload>{
+async function fetchGitHubDiscussion(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
   const [owner,repo,type,number]=input.canonicalMediaId.split('/');const apiBase=`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
   const isPr=type==='pull';
-  const item=await safeJson(`${apiBase}/${isPr?'pulls':'issues'}/${number}`,'GitHub');
-  const maxItems=EXTRACTION_LIMITS[isPr?'github_pr':'github_issue'].hardItems;
-  const commentsPage=await safeJsonArrayPages(`${apiBase}/issues/${number}/comments`,'GitHub comments',maxItems);
-  const reviewsPage=isPr?await safeJsonArrayPages(`${apiBase}/pulls/${number}/reviews`,'GitHub reviews',maxItems):{items:[] as unknown[],truncated:false};
-  const reviewCommentsPage=isPr?await safeJsonArrayPages(`${apiBase}/pulls/${number}/comments`,'GitHub inline review comments',maxItems):{items:[] as unknown[],truncated:false};
+  const item=await safeJson(`${apiBase}/${isPr?'pulls':'issues'}/${number}`,'GitHub',API_PAGE_BYTES,budget);
+  const commentsPage=await safeJsonArrayPages(`${apiBase}/issues/${number}/comments`,'GitHub comments',budget);
+  const reviewsPage=isPr?await safeJsonArrayPages(`${apiBase}/pulls/${number}/reviews`,'GitHub reviews',budget):{items:[] as unknown[],truncated:false};
+  const reviewCommentsPage=isPr?await safeJsonArrayPages(`${apiBase}/pulls/${number}/comments`,'GitHub inline review comments',budget):{items:[] as unknown[],truncated:false};
   const allFetched=[...commentsPage.items,...reviewsPage.items,...reviewCommentsPage.items];
   const combined=allFetched
-    .sort((a,b)=>Date.parse(jsonString(jsonObject(a)?.created_at)||jsonString(jsonObject(a)?.submitted_at)||'')-Date.parse(jsonString(jsonObject(b)?.created_at)||jsonString(jsonObject(b)?.submitted_at)||''))
-    .slice(0,maxItems);
-  const sourceTruncated=commentsPage.truncated||reviewsPage.truncated||reviewCommentsPage.truncated||allFetched.length>maxItems;
-  let diff='';if(isPr){const response=await safeGetBuffer(`${apiBase}/pulls/${number}`,{maxBytes:5_000_000,timeoutMs:15_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/vnd.github.v3.diff'});diff=response.bytes.toString('utf8');}
-  return parseGitHubDiscussion(input,item,combined,[],diff,sourceTruncated);
+    .sort((a,b)=>Date.parse(jsonString(jsonObject(a)?.created_at)||jsonString(jsonObject(a)?.submitted_at)||'')-Date.parse(jsonString(jsonObject(b)?.created_at)||jsonString(jsonObject(b)?.submitted_at)||''));
+  const sourceTruncated=commentsPage.truncated||reviewsPage.truncated||reviewCommentsPage.truncated;
+  let diff='';if(isPr){const response=await safeGetForBudget(`${apiBase}/pulls/${number}`,{floorBytes:8_000_000,timeoutMs:20_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/vnd.github.v3.diff'},budget,'github_diff');diff=response.bytes.toString('utf8');}
+  return parseGitHubDiscussion(input,item,combined,[],diff,sourceTruncated,budget);
 }
 
 type HnRendered={lines:string[];count:number};
 function renderHnComments(children:unknown,depth:number,out:HnRendered):void{
-  if(!Array.isArray(children)||depth>EXTRACTION_LIMITS.discussion.maxDepth)return;
-  for(const value of children){if(out.count>=EXTRACTION_LIMITS.discussion.hardItems)return;const item=jsonObject(value);if(!item)continue;const text=stripHtml(jsonString(item.text));if(text){out.lines.push(`${depth?`${'↳'.repeat(depth)} `:''}- ${jsonString(item.author)||'unknown'}: ${cleanText(text,4000)}`);out.count++;}renderHnComments(item.children,depth+1,out);}
+  if(!Array.isArray(children))return;
+  for(const value of children){const item=jsonObject(value);if(!item)continue;const text=stripHtml(jsonString(item.text));if(text){out.lines.push(`${depth?`${'↳'.repeat(depth)} `:''}- ${jsonString(item.author)||'unknown'}: ${cleanText(text)}`);out.count++;}renderHnComments(item.children,depth+1,out);}
 }
 
-export function parseHackerNewsItem(input:ParsedMediaUrl,payload:unknown):LinkTextPayload{
+export function parseHackerNewsItem(input:ParsedMediaUrl,payload:unknown,budget?:TextExtractionBudget):LinkTextPayload{
   const item=jsonObject(payload);if(!item)throw new Link2AIError('EXTRACTION_FAILED','Hacker News returned malformed item data.',502,true);
   if(jsonNumber(item.id)!==Number(input.canonicalMediaId))throw new Link2AIError('EXTRACTION_FAILED','Hacker News returned a different item than requested.',502,true);
   const title=cleanText(jsonString(item.title),METADATA_LIMITS.title);const body=stripHtml(jsonString(item.text));
   if(!title&&!body)throw new Link2AIError('EXTRACTION_FAILED','This Hacker News item is deleted or has no readable public content.',422,false);
   const sections=[title?`Title: ${title}`:'',`Submitter: ${jsonString(item.author)||'unknown'}`,jsonNumber(item.points)!==undefined?`Score: ${jsonNumber(item.points)}`:'',isoTimestamp(item.created_at)?`Published: ${isoTimestamp(item.created_at)}`:'',jsonString(item.url)?`Destination: ${jsonString(item.url)}`:'',body?`Story text:\n${body}`:''];
-  const rendered:HnRendered={lines:[],count:0};renderHnComments(item.children,0,rendered);const included:string[]=[];let used=sections.join('\n\n').length;for(const line of rendered.lines){if(used+line.length+1>EXTRACTION_LIMITS.discussion.tokens*4)break;included.push(line);used+=line.length+1;}if(included.length)sections.push(`Bounded comment tree (${included.length} comments, depth ≤ ${EXTRACTION_LIMITS.discussion.maxDepth}):\n${included.join('\n')}`);
-  const hnTruncated=included.length<rendered.count||rendered.count>=EXTRACTION_LIMITS.discussion.hardItems;return complete({platform:'hackernews',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title:clipExternalText(title,METADATA_LIMITS.title),creator:clipExternalText(jsonString(item.author),METADATA_LIMITS.creator),caption:clipExternalText(body,METADATA_LIMITS.description),language:'und',text:cleanText(sections.filter(Boolean).join('\n\n')),source:'post'},'discussion',{itemsAvailable:jsonNumber(item.children_count),itemsExtracted:included.length,truncated:hnTruncated,contentSectionsTruncated:hnTruncated?['comments']:undefined});
+  const rendered:HnRendered={lines:[],count:0};renderHnComments(item.children,0,rendered);if(rendered.lines.length)sections.push(`Comment tree (${rendered.lines.length} comments):\n${rendered.lines.join('\n')}`);
+  const itemsAvailable=jsonNumber(item.children_count);const hnTruncated=itemsAvailable!==undefined&&rendered.count<itemsAvailable;return complete({platform:'hackernews',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title:clipExternalText(title,METADATA_LIMITS.title),creator:clipExternalText(jsonString(item.author),METADATA_LIMITS.creator),caption:clipExternalText(body,METADATA_LIMITS.description),language:'und',text:cleanText(sections.filter(Boolean).join('\n\n')),source:'post'},'discussion',{itemsAvailable,itemsExtracted:rendered.count,truncated:hnTruncated,contentSectionsTruncated:hnTruncated?['upstream_comments']:undefined},budget);
 }
 
-async function fetchHackerNewsItem(input:ParsedMediaUrl):Promise<LinkTextPayload>{
-  return parseHackerNewsItem(input,await safeJson(`https://hn.algolia.com/api/v1/items/${input.canonicalMediaId}`,'Hacker News'));
+async function fetchHackerNewsItem(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  return parseHackerNewsItem(input,await safeJson(`https://hn.algolia.com/api/v1/items/${input.canonicalMediaId}`,'Hacker News',API_PAGE_BYTES,budget),budget);
 }
 
-export async function parsePdfBuffer(input:ParsedMediaUrl,bytes:Buffer,contentType:string|null):Promise<LinkTextPayload>{
+export async function parsePdfBuffer(input:ParsedMediaUrl,bytes:Buffer,contentType:string|null,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
   const ct=(contentType??'').toLowerCase();
-  if(bytes.length>PDF_MAX_BYTES)throw new Link2AIError('EXTRACTION_FAILED','PDF exceeded the 12 MB safety limit.',413,false);
   if(!bytes.subarray(0,1024).includes(Buffer.from('%PDF-')))throw new Link2AIError('UNSUPPORTED_URL','The document response did not have a valid PDF signature.',415,false);
   if(ct&&!ct.includes('pdf')&&!ct.includes('octet-stream'))throw new Link2AIError('UNSUPPORTED_URL','The document response did not use a PDF content type.',415,false);
   try{
     const pdfjs=await import('pdfjs-dist/legacy/build/pdf.mjs');
     const document=await pdfjs.getDocument({data:new Uint8Array(bytes),isEvalSupported:false,useSystemFonts:false}).promise;
-    const pages:string[]=[];let usedChars=0;let pageTextTruncated=false;
-    const maxChars=EXTRACTION_LIMITS.pdf.tokens*4;
-    for(let pageNumber=1;pageNumber<=document.numPages&&pageNumber<=EXTRACTION_LIMITS.pdf.maxPages&&usedChars<maxChars;pageNumber++){
+    const pages:string[]=[];let usedChars=0;
+    for(let pageNumber=1;pageNumber<=document.numPages;pageNumber++){
       const page=await document.getPage(pageNumber);const content=await page.getTextContent();
-      const rawText=cleanText(content.items.map((v:any)=>typeof v.str==='string'?v.str:'').join(' '),Number.MAX_SAFE_INTEGER);
-      const remaining=Math.max(0,maxChars-usedChars-32);
-      const text=cleanText(rawText,Math.min(30_000,remaining));
-      if(rawText.length>text.length)pageTextTruncated=true;
-      if(text){const rendered=`[Page ${pageNumber}]\n${text}`;pages.push(rendered);usedChars+=rendered.length+2;}
+      const text=cleanText(content.items.map((v:any)=>typeof v.str==='string'?v.str:'').join(' '));
+      if(text){const rendered=`[Page ${pageNumber}]\n${text}`;usedChars+=Array.from(rendered).length+2;assertCharsWithinBudget(usedChars,budget,'pdf_text');pages.push(rendered);}
       page.cleanup();
     }
-    const text=cleanText(pages.join('\n\n'),maxChars);if(!text)throw new Link2AIError('EXTRACTION_FAILED','This PDF has no readable text layer; OCR is not enabled.',422,false);
+    const text=cleanText(pages.join('\n\n'));if(!text)throw new Link2AIError('EXTRACTION_FAILED','This PDF has no readable text layer; OCR is not enabled.',422,false);
     const metadata=await document.getMetadata().catch(()=>({info:{}} as any));const info=jsonObject(metadata.info);const title=clipExternalText(jsonString(info?.Title),METADATA_LIMITS.title);
-    const pagesAvailable=document.numPages;const pagesTruncated=pages.length<pagesAvailable;await document.destroy();return complete({platform:'pdf',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title,caption:`${pagesAvailable} pages`,language:'und',text,source:'page'},'pdf',{pagesAvailable,pagesExtracted:pages.length,truncated:pagesTruncated||pageTextTruncated,contentSectionsTruncated:[...(pagesTruncated?['pages']:[]),...(pageTextTruncated?['page_text']:[])]});
+    const pagesAvailable=document.numPages;await document.destroy();return complete({platform:'pdf',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title,caption:`${pagesAvailable} pages`,language:'und',text,source:'page'},'pdf',{pagesAvailable,pagesExtracted:pages.length,truncated:false},budget);
   }catch(error){if(error instanceof Link2AIError)throw error;const message=error instanceof Error?error.message.toLowerCase():'';if(message.includes('password'))throw new Link2AIError('EXTRACTION_FAILED','Password-protected PDFs are not supported.',422,false);throw new Link2AIError('EXTRACTION_FAILED','The PDF was malformed or could not be parsed safely.',422,false);}
 }
 
-async function fetchPdf(input:ParsedMediaUrl):Promise<LinkTextPayload>{
-  const response=await safeGetBuffer(input.normalizedUrl,{maxBytes:PDF_MAX_BYTES,timeoutMs:20_000,maxRedirects:5,userAgent:BROWSER_UA,accept:'application/pdf'});
-  return await parsePdfBuffer({...input,normalizedUrl:response.finalUrl},response.bytes,response.contentType);
+async function fetchPdf(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  const response=await safeGetForBudget(input.normalizedUrl,{floorBytes:24_000_000,timeoutMs:45_000,maxRedirects:5,userAgent:BROWSER_UA,accept:'application/pdf'},budget,'pdf_response');
+  return await parsePdfBuffer({...input,normalizedUrl:response.finalUrl},response.bytes,response.contentType,budget);
 }
 
 function redditChildren(listing:unknown):unknown[]{
@@ -381,15 +414,13 @@ interface RedditCommentLine{
 }
 
 function collectRedditComments(listing:unknown,out:RedditCommentLine[],depth=0):void{
-  if(depth>REDDIT_MAX_DEPTH||out.length>=REDDIT_MAX_COMMENTS)return;
   for(const childValue of redditChildren(listing)){
-    if(out.length>=REDDIT_MAX_COMMENTS)return;
     const child=jsonObject(childValue);
     if(child?.kind!=='t1')continue;
     const data=jsonObject(child.data);
     if(!data)continue;
     const rawBody=jsonString(data.body).trim();
-    const body=cleanText(rawBody,4_000);
+    const body=cleanText(rawBody);
     if(body&&body!=='[deleted]'&&body!=='[removed]'){
       const rawAuthor=jsonString(data.author).trim();
       out.push({
@@ -404,7 +435,7 @@ function collectRedditComments(listing:unknown,out:RedditCommentLine[],depth=0):
   }
 }
 
-export function parseRedditJson(input:ParsedMediaUrl,payload:unknown):LinkTextPayload{
+export function parseRedditJson(input:ParsedMediaUrl,payload:unknown,budget?:TextExtractionBudget):LinkTextPayload{
   if(!Array.isArray(payload)||payload.length<1)throw new Link2AIError('EXTRACTION_FAILED','Reddit returned an unexpected public-post response.',502,true);
   const postChild=redditChildren(payload[0]).map(jsonObject).find(child=>child?.kind==='t3');
   const post=jsonObject(postChild?.data);
@@ -415,7 +446,7 @@ export function parseRedditJson(input:ParsedMediaUrl,payload:unknown):LinkTextPa
   const authorRaw=jsonString(post.author).trim();
   const author=authorRaw&&authorRaw!=='[deleted]'?authorRaw:'unknown';
   const subreddit=jsonString(post.subreddit_name_prefixed).trim()||((jsonString(post.subreddit).trim())?`r/${jsonString(post.subreddit).trim()}`:'');
-  const selftext=cleanText(jsonString(post.selftext),20_000);
+  const selftext=cleanText(jsonString(post.selftext));
   const externalUrl=jsonString(post.url).trim();
   const permalink=jsonString(post.permalink).trim();
   const numComments=jsonNumber(post.num_comments);
@@ -434,14 +465,13 @@ export function parseRedditJson(input:ParsedMediaUrl,payload:unknown):LinkTextPa
     sections.push(`Linked URL: ${externalUrl}`);
   }
   if(comments.length){
-    const rendered:string[]=[];let used=sections.join('\n\n').length;
+    const rendered:string[]=[];
     for(const comment of comments){
-      const indent='  '.repeat(Math.min(comment.depth,REDDIT_MAX_DEPTH));
+      const indent='  '.repeat(comment.depth);
       const score=comment.score===undefined?'':` · score ${comment.score}`;
-      const line=`${indent}- u/${comment.author}${score}: ${comment.body}`;if(used+line.length+1>EXTRACTION_LIMITS.discussion.tokens*4)break;rendered.push(line);used+=line.length+1;
+      rendered.push(`${indent}- u/${comment.author}${score}: ${comment.body}`);
     }
-    if(rendered.length)sections.push(`Public comments (bounded by safe content and emergency item limits; Reddit ordering at fetch time):\n${rendered.join('\n')}`);
-    comments.splice(rendered.length);
+    sections.push(`Public comments returned by Reddit at fetch time (${rendered.length}):\n${rendered.join('\n')}`);
   }
   let text=cleanText(sections.join('\n\n'));
   if(text.length<40)throw new Link2AIError('EXTRACTION_FAILED','This Reddit post did not expose enough readable public text.',422,false);
@@ -454,7 +484,7 @@ export function parseRedditJson(input:ParsedMediaUrl,payload:unknown):LinkTextPa
     creator:clipExternalText(`u/${author}`,METADATA_LIMITS.creator),
     caption:clipExternalText(captionParts.join(' · '),METADATA_LIMITS.description),
     language:'und',text,source:'post'
-  },'discussion',{itemsAvailable:numComments,itemsExtracted:comments.length,truncated:numComments!==undefined&&comments.length<numComments,contentSectionsTruncated:numComments!==undefined&&comments.length<numComments?['comments']:undefined});
+  },'discussion',{itemsAvailable:numComments,itemsExtracted:comments.length,truncated:numComments!==undefined&&comments.length<numComments,contentSectionsTruncated:numComments!==undefined&&comments.length<numComments?['upstream_comments']:undefined},budget);
 }
 
 type RedditTokenCache={accessToken:string;expiresAt:number};
@@ -507,32 +537,33 @@ async function redditAccessToken(force=false):Promise<string>{
   return token;
 }
 
-async function redditOAuthJson(postId:string,retry401=true):Promise<unknown>{
+async function redditOAuthJson(postId:string,budget?:TextExtractionBudget,retry401=true):Promise<unknown>{
   const token=await redditAccessToken(!retry401);
   const e=env();
-  const endpoint=`https://oauth.reddit.com/comments/${encodeURIComponent(postId)}?raw_json=1&limit=${REDDIT_MAX_COMMENTS}&depth=${REDDIT_MAX_DEPTH}&sort=top`;
+  const endpoint=`https://oauth.reddit.com/comments/${encodeURIComponent(postId)}?raw_json=1&limit=${REDDIT_API_COMMENT_LIMIT}&depth=${REDDIT_API_DEPTH}&sort=top`;
   let response:Response;
   try{
     response=await fetch(endpoint,{headers:{'authorization':`Bearer ${token}`,'accept':'application/json','user-agent':e.REDDIT_USER_AGENT},signal:AbortSignal.timeout(15_000)});
   }catch(error){
     throw new Link2AIError('EXTRACTION_FAILED','Reddit Data API could not be reached.',502,true,{transport:'reddit_oauth',cause_code:error instanceof Error?error.name:'network_error'});
   }
-  if(response.status===401&&retry401){redditTokenCache=undefined;return await redditOAuthJson(postId,false);}
+  if(response.status===401&&retry401){redditTokenCache=undefined;return await redditOAuthJson(postId,budget,false);}
   if(response.status===404)throw new Link2AIError('MEDIA_NOT_FOUND','This Reddit post was not found or is no longer public.',404,false,{transport:'reddit_oauth',cause_code:'reddit_http_404'});
   if(response.status===403)throw new Link2AIError('PLATFORM_BLOCKED','Reddit did not permit this app to access the requested public post.',403,false,{transport:'reddit_oauth',cause_code:'reddit_http_403'});
   if(response.status===429)throw new Link2AIError('RATE_LIMITED','Reddit rate-limited this request. Try again later.',429,true,{transport:'reddit_oauth',cause_code:'reddit_http_429'});
   if(!response.ok)throw new Link2AIError('EXTRACTION_FAILED',`Reddit Data API returned HTTP ${response.status}.`,502,response.status>=500,{transport:'reddit_oauth',cause_code:`reddit_http_${response.status}`});
+  const responseBudget=sourceByteBudget(budget,API_PAGE_BYTES);
   const declared=Number(response.headers.get('content-length')??0);
-  if(Number.isFinite(declared)&&declared>API_MAX_BYTES)throw new Link2AIError('EXTRACTION_FAILED','Reddit response exceeded the safe content limit.',502,false,{transport:'reddit_oauth',cause_code:'response_too_large'});
+  if(Number.isFinite(declared)&&declared>responseBudget.maxBytes){if(responseBudget.quotaBounded)throw quotaBudgetError(budget!,'reddit_response');throw new Link2AIError('EXTRACTION_FAILED','Reddit response exceeded the infrastructure safety envelope.',502,false,{transport:'reddit_oauth',cause_code:'response_too_large'});}
   const bytes=Buffer.from(await response.arrayBuffer());
-  if(bytes.length>API_MAX_BYTES)throw new Link2AIError('EXTRACTION_FAILED','Reddit response exceeded the safe content limit.',502,false,{transport:'reddit_oauth',cause_code:'response_too_large'});
+  if(bytes.length>responseBudget.maxBytes){if(responseBudget.quotaBounded)throw quotaBudgetError(budget!,'reddit_response');throw new Link2AIError('EXTRACTION_FAILED','Reddit response exceeded the infrastructure safety envelope.',502,false,{transport:'reddit_oauth',cause_code:'response_too_large'});}
   const ct=(response.headers.get('content-type')??'').toLowerCase();
   if(ct&&!ct.includes('json'))throw new Link2AIError('EXTRACTION_FAILED','Reddit Data API returned a non-JSON response.',502,true,{transport:'reddit_oauth',cause_code:`non_json_${response.status}`});
   try{return JSON.parse(bytes.toString('utf8'));}
   catch{throw new Link2AIError('EXTRACTION_FAILED','Reddit Data API returned malformed JSON.',502,true,{transport:'reddit_oauth',cause_code:'invalid_json'});}
 }
 
-async function fetchRedditPost(input:ParsedMediaUrl):Promise<LinkTextPayload>{
+async function fetchRedditPost(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
   if(!redditOAuthConfigured()){
     throw new Link2AIError(
       'PLATFORM_BLOCKED',
@@ -540,7 +571,7 @@ async function fetchRedditPost(input:ParsedMediaUrl):Promise<LinkTextPayload>{
       503,false,{cause_code:'reddit_oauth_not_configured',transport:'reddit_oauth'}
     );
   }
-  return parseRedditJson(input,await redditOAuthJson(input.canonicalMediaId));
+  return parseRedditJson(input,await redditOAuthJson(input.canonicalMediaId,budget),budget);
 }
 
 function collectGalleryCandidates(node:unknown,out:{texts:string[];creators:string[];titles:string[]}):void{
@@ -562,10 +593,10 @@ function collectGalleryCandidates(node:unknown,out:{texts:string[];creators:stri
   for(const v of Object.values(obj))if(v&&typeof v==='object')collectGalleryCandidates(v,out);
 }
 
-async function fetchGalleryPost(input:ParsedMediaUrl):Promise<LinkTextPayload|null>{
+async function fetchGalleryPost(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload|null>{
   let result;
   try{
-    result=await runProcess('gallery-dl',['--no-input','--no-colors','--simulate','--dump-json',input.normalizedUrl],{timeoutMs:20_000,maxOutputBytes:4_000_000});
+    result=await runProcess('gallery-dl',['--no-input','--no-colors','--simulate','--dump-json',input.normalizedUrl],{timeoutMs:30_000,maxOutputBytes:sourceByteBudget(budget,8_000_000).maxBytes});
   }catch{return null;}
   if(result.code!==0||!result.stdout.trim())return null;
   let data:unknown;
@@ -575,25 +606,25 @@ async function fetchGalleryPost(input:ParsedMediaUrl):Promise<LinkTextPayload|nu
   }
   const found={texts:[] as string[],creators:[] as string[],titles:[] as string[]};
   collectGalleryCandidates(data,found);
-  const unique=[...new Set(found.texts.map(v=>cleanText(v,METADATA_LIMITS.description)).filter(Boolean))];
+  const unique=[...new Set(found.texts.map(v=>cleanText(v)).filter(Boolean))];
   const text=unique.sort((a,b)=>b.length-a.length)[0]??'';
   if(!text)return null;
   const creator=[...new Set(found.creators.map(v=>cleanText(v,METADATA_LIMITS.creator)).filter(Boolean))][0];
   const title=[...new Set(found.titles.map(v=>cleanText(v,METADATA_LIMITS.title)).filter(Boolean))][0];
-  return complete({platform:input.platform,canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title,creator,caption:text,language:'und',text,source:'post'},'social');
+  return complete({platform:input.platform,canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title,creator,caption:clipExternalText(text,METADATA_LIMITS.description),language:'und',text,source:'post'},'social',{},budget);
 }
 
-export async function extractTextLink(input:ParsedMediaUrl):Promise<LinkTextPayload>{
+export async function extractTextLink(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
   if(input.kind==='media')throw new Link2AIError('INTERNAL_ERROR','Media links must use the media extraction pipeline.',500);
-  if(input.platform==='x')return await fetchXPost(input);
-  if(input.platform==='reddit')return await fetchRedditPost(input);
-  if(input.platform==='bluesky')return await fetchBlueskyPost(input);
-  if(input.platform==='github')return await fetchGitHubDiscussion(input);
-  if(input.platform==='hackernews')return await fetchHackerNewsItem(input);
-  if(input.platform==='pdf')return await fetchPdf(input);
+  if(input.platform==='x')return await fetchXPost(input,budget);
+  if(input.platform==='reddit')return await fetchRedditPost(input,budget);
+  if(input.platform==='bluesky')return await fetchBlueskyPost(input,budget);
+  if(input.platform==='github')return await fetchGitHubDiscussion(input,budget);
+  if(input.platform==='hackernews')return await fetchHackerNewsItem(input,budget);
+  if(input.platform==='pdf')return await fetchPdf(input,budget);
   if(input.platform==='instagram'||input.platform==='tiktok'){
-    const gallery=await fetchGalleryPost(input);
+    const gallery=await fetchGalleryPost(input,budget);
     if(gallery)return gallery;
   }
-  return await fetchPage(input);
+  return await fetchPage(input,budget);
 }
