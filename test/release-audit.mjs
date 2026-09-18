@@ -58,7 +58,8 @@ assert.match(processorSource,/probeXPostAttachedMedia/,'X posts must probe attac
 assert.match(processorSource,/x_attached_media_detected/,'X attached media must enter the media pipeline and emit an explicit routing event');
 assert.match(processorSource,/prefetchedMetadata\?\?await resolver\.metadata\(parsed\)/,'X media metadata probe must feed the normal caption\/audio\/ASR pipeline');
 assert.match(linkSource,/xOembedHasAttachedMedia/,'X oEmbed parsing must expose attached-media detection');
-assert.match(mcpServiceSource,/cacheProvenanceEpoch\(parsed\.platform\)/,'MCP reuse must not return pre-media-aware X completed jobs');
+assert.match(mcpServiceSource,/!options\.refresh&&parsed\.platform!=='x'/,'MCP must bypass stale completed-result reuse for X during media-routing rollout');
+assert.match(processorSource,/const reuseCache=job\.platform!=='x'/,'Worker must bypass stale X transcript caches during media-routing rollout');
 assert.match(billingSource,/j\.error_code='QUOTA_EXCEEDED'/,'A successful top-up must resume quota-blocked jobs');
 assert.doesNotMatch(apiSource,/supports videos up to 30 minutes|supports videos up to 120 minutes|very large sources may return partial context/i,'Published copy must match the unit-bounded full-source policy');
 assert.match(mcpServiceSource,/if\(!options\.refresh\)[\s\S]*j\.status='completed'[\s\S]*c\.expires_at>now\(\)/,'Normal same-source reads must reuse a still-valid completed user result');
