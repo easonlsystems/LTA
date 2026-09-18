@@ -39,7 +39,8 @@ async function paymentUrl(job:JobRow,duration:number,code:string,details?:Record
     return await createTopupCheckoutSession(job.user_id,deficit>500?'1500':'500');
   }
   if(plan==='pro')return null;
-  const target=plan==='trial' && duration<=30*60 && code!=='DURATION_LIMIT_EXCEEDED'?'basic':'pro';
+  const requiredUnits=Math.max(1,Number(details?.required_usage_units??details?.required_usage_units_at_least??0)||1);
+  const target=plan==='trial'&&requiredUnits<=500?'basic':'pro';
   return await createCheckoutSession(job.user_id,target,job.id);
 }
 
@@ -296,7 +297,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     const causeCode=typeof err.details?.cause_code==='string'?err.details.cause_code.slice(0,80):undefined;
     const transport=typeof err.details?.transport==='string'?err.details.transport.slice(0,40):undefined;
     logErrorEvent('job_error',e,{job_id:job.id,platform:job.platform,error_code:err.code,retryable:err.retryable,attempt:job.attempts,processing_ms:Date.now()-startedAt,...(causeCode?{cause_code:causeCode}:{}),...(transport?{transport}:{} )});
-    if(err.code==='QUOTA_EXCEEDED'||err.code==='DURATION_LIMIT_EXCEEDED'){
+    if(err.code==='QUOTA_EXCEEDED'){
       const duration=Number(job.duration_seconds??(err.details?.max_video_seconds as number|undefined)??0);
       const checkout=await paymentUrl(job,duration,err.code,err.details as Record<string,unknown>|undefined).catch(()=>null);
       if(checkout){await markAwaitingPayment(job.id,err.code,err.message,checkout);return;}
