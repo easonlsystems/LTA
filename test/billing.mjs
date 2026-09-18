@@ -10,6 +10,8 @@ Object.assign(process.env,{
   LEMONSQUEEZY_STORE_ID:'123',
   LEMONSQUEEZY_BASIC_VARIANT_ID:'456',
   LEMONSQUEEZY_PRO_VARIANT_ID:'789',
+  LEMONSQUEEZY_TOPUP_500_VARIANT_ID:'900',
+  LEMONSQUEEZY_TOPUP_1500_VARIANT_ID:'901',
   LEMONSQUEEZY_TEST_MODE:'true'
 });
 
@@ -86,6 +88,16 @@ try{
   queries.length=0;existingOwner=null;
   await processLemonEvent({...event,data:{...event.data,attributes:{...event.data.attributes,test_mode:false}}});
   assert.equal(queries.some(q=>q.sql.includes('INSERT INTO subscriptions')),false,'live/test webhook modes must not cross');
+
+  queries.length=0;
+  await processLemonEvent({
+    meta:{event_name:'order_created',custom_data:{user_id:'user-1',purpose:'topup',topup_pack:'500',units:'500'}},
+    data:{type:'orders',id:'order-topup-1',attributes:{status:'paid',test_mode:true,total:500,first_order_item:{variant_id:900}}}
+  });
+  assert.ok(queries.some(q=>q.sql.includes("kind,'topup_purchase'")||q.sql.includes("'topup_purchase'")),'paid top-up must create an idempotent unit transaction');
+  assert.ok(queries.some(q=>q.sql.includes('paid_rollover_seconds=paid_rollover_seconds+$2')),'paid top-up must add units to the wallet');
+  assert.ok(queries.some(q=>q.sql.includes("j.status='awaiting_payment'")&&q.sql.includes("j.error_code='QUOTA_EXCEEDED'")&&q.sql.includes("status='queued'")),'paid top-up must automatically resume quota-blocked jobs');
+
   console.log('billing tests PASS');
 }finally{
   pool.query=originalQuery;
