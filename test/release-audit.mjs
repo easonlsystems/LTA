@@ -18,6 +18,12 @@ const [linkSource,limitsSource,mcpSource,mcpServiceSource,apiSource,authWrapperS
   readFile(new URL('../src/billing/lemon.ts',import.meta.url),'utf8')
 ]);
 const authSource=authWrapperSource+'\n'+authBaseSource;
+const policySource=await readFile(new URL('../src/mcp/policy.ts',import.meta.url),'utf8');
+assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News must use the official Firebase API path');
+assert.doesNotMatch(linkSource,/hn\.algolia\.com/,'OpenAI-ready core must not depend on the community Algolia HN adapter');
+assert.match(policySource,/OPENAI_ALLOWED_PLATFORMS[^\n]*\['bluesky','github','hackernews'\]/,'ChatGPT distribution must default-deny every source outside the reviewed allowlist');
+assert.match(apiSource,/app\.all\('\/mcp\/openai'/,'API must expose a distinct ChatGPT MCP endpoint');
+assert.match(authServiceSource,/mcpResource\('openai'\)/,'OAuth must define a distinct ChatGPT MCP audience');
 assert.match(linkSource,/safeJsonArrayPages/,'GitHub discussions must paginate through public discussion pages');
 assert.match(linkSource,/GitHub comments/);
 assert.match(linkSource,/GitHub reviews/);
