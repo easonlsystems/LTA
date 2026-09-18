@@ -62,8 +62,8 @@ assert.match(mcpServiceSource,/!options\.refresh&&parsed\.platform!=='x'/,'MCP m
 assert.match(processorSource,/const reuseCache=job\.platform!=='x'/,'Worker must bypass stale X transcript caches during media-routing rollout');
 assert.match(billingSource,/j\.error_code='QUOTA_EXCEEDED'/,'A successful top-up must resume quota-blocked jobs');
 assert.doesNotMatch(apiSource,/supports videos up to 30 minutes|supports videos up to 120 minutes|very large sources may return partial context/i,'Published copy must match the unit-bounded full-source policy');
-assert.match(mcpServiceSource,/if\(!options\.refresh\)[\s\S]*j\.status='completed'[\s\S]*c\.expires_at>now\(\)/,'Normal same-source reads must reuse a still-valid completed user result');
-assert.match(mcpServiceSource,/options\.refresh\?null:await findCache/,'Explicit refresh must be the only path that bypasses the shared successful cache');
+assert.match(mcpServiceSource,/if\(!options\.refresh(?:&&parsed\.platform!=='x')?\)[\s\S]*j\.status='completed'[\s\S]*c\.expires_at>now\(\)/,'Normal non-X same-source reads must reuse a still-valid completed user result');
+assert.match(mcpServiceSource,/options\.refresh\|\|parsed\.platform==='x'\?null:await findCache/,'Explicit refresh and the X media-routing rollout must bypass the shared successful cache');
 assert.match(mcpSource,/read_public_links/,'V3 must expose a first-class multi-link reader');
 assert.match(mcpSource,/turn count alone is never a reason to refresh/i,'Host instructions must not use conversation length as a refresh policy');
 assert.match(mcpSource,/get_video_time_range/,'V3 must expose timed lookup for processed video jobs');
