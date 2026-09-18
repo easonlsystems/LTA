@@ -418,7 +418,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
 
   server.registerTool('read_public_links',{
     title:'Read multiple public links',
-    description:`Read multiple supported public links for comparison, synthesis, or cross-source research. Prefer this over repeated read_public_link calls when the user's request depends on two or more links. Link2AI keeps every source identity and job separate. The first response gives a bounded initial slice per source; continue any source with get_transcript_result using that source's job_id and next_offset. Reuse source content already present and sufficient in the conversation. Set refresh=true only when current/updated source state is explicitly required; refresh can reprocess and consume units.`,
+    description:`Read multiple supported public links for comparison, synthesis, or cross-source research. ${openaiProfile?`In the ChatGPT distribution, supported sources are limited to ${supportedSources}. `:''}Prefer this over repeated read_public_link calls when the user's request depends on two or more links. Link2AI keeps every source identity and job separate. The first response gives a bounded initial slice per source; continue any source with get_transcript_result using that source's job_id and next_offset. Reuse source content already present and sufficient in the conversation. Set refresh=true only when current/updated source state is explicitly required; refresh can reprocess and consume units.`,
     inputSchema:{
       urls:z.array(z.string().url()).min(2).max(20).describe('Supported public links needed for one comparison or synthesis task'),
       refresh:z.boolean().optional().describe('Force fresh reads for all supplied sources only when freshness is explicitly required')
@@ -533,7 +533,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
     return {
       status:'completed',job_id:result.job_id,source_url:result.source_url,source_key:result.source_key,
       query,matches,
-      ...(matches.length?{}:{message:'No lexical match was found. Try broader concepts/synonyms, inspect the video map, or continue reading the source; this does not prove the topic is absent.'})
+      ...(matches.length?{}:{message:openaiProfile?'No lexical match was found. Try broader concepts/synonyms or continue reading the source; this does not prove the topic is absent.':'No lexical match was found. Try broader concepts/synonyms, inspect the video map, or continue reading the source; this does not prove the topic is absent.'})
     };
   }));
 
