@@ -2,7 +2,7 @@ import { pool } from '../db/pool.js';
 import { asLink2AIError } from '../util/errors.js';
 import { logEvent } from '../util/log.js';
 
-export type ProviderOperation='metadata'|'audio'|'transcript';
+export type ProviderOperation='metadata'|'audio'|'transcript'|'text';
 
 export interface ProviderOutcomeInput{
   platform:string;
