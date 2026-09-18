@@ -11,7 +11,9 @@ const grokEmail=await readFile(new URL('../integrations/grok/REQUEST_EMAIL.md',i
 assert.equal(openaiPlugin.name,'link2ai');
 assert.equal(openaiPlugin.version,'3.0.0');
 assert.equal(openaiPlugin.author.name,'Eason Systems');
-assert.equal(openaiPlugin.skills,'./skills/');
+const allowedManifestKeys=new Set(['$schema','name','version','description','author','homepage','repository','license','keywords','extensions']);
+for(const key of Object.keys(openaiPlugin))assert.ok(allowedManifestKeys.has(key),'unsupported portable plugin manifest key: '+key);
+assert.equal('skills' in openaiPlugin,false,'portable plugins discover skills from the fixed skills/ directory');
 assert.equal(openaiMcp.mcpServers.link2ai.type,'streamable-http');
 assert.equal(openaiMcp.mcpServers.link2ai.url,'https://api-production-0383e.up.railway.app/mcp');
 
