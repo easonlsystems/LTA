@@ -14,7 +14,6 @@ const [linkSource,mcpSource,apiSource,authWrapperSource,authBaseSource,authServi
 ]);
 const authSource=authWrapperSource+'\n'+authBaseSource;
 const v3ConnectSource=await readFile(new URL('../src/api/v3AiConnect.ts',import.meta.url),'utf8');
-const v3ConnectSource=await readFile(new URL('../src/api/v3AiConnect.ts',import.meta.url),'utf8');
 assert.match(linkSource,/safeJsonArrayPages/,'GitHub discussions must use bounded pagination');
 assert.match(linkSource,/GitHub comments/);
 assert.match(linkSource,/GitHub reviews/);
