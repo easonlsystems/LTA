@@ -96,6 +96,13 @@ try{
   assert.deepEqual(listed.result.tools[1].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true});
   assert.equal(listed.result.tools[2].annotations.readOnlyHint,true);
   assert.equal(listed.result.tools[3].annotations.readOnlyHint,true);
+  for(const tool of listed.result.tools){
+    assert.deepEqual(tool.securitySchemes,[{type:'oauth2',scopes:['link2ai:read']}],tool.name+' must declare OAuth explicitly for ChatGPT plugin review');
+    assert.ok(tool.outputSchema&&tool.outputSchema.type==='object',tool.name+' must publish an output schema');
+  }
+  assert.ok(listed.result.tools[0].outputSchema.properties.source_completeness,'read_public_link output schema must expose completeness');
+  assert.ok(listed.result.tools[0].outputSchema.properties.continuation_required,'read_public_link output schema must expose pagination state');
+  assert.ok(listed.result.tools[3].outputSchema.properties.remaining_usage_units,'get_usage output schema must expose remaining units');
 
   // Assertions for the production selection contract: use Link2AI when the user's
   // question actually depends on supported link contents, while avoiding unrelated URLs.
