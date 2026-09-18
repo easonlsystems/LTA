@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-const [linkSource,limitsSource,mcpSource,apiSource,authWrapperSource,authBaseSource,authServiceSource,audioSource,safeHttpSource,publicUrlSource,workerSource,processorSource,plansSource,billingSource]=await Promise.all([
+const [linkSource,limitsSource,mcpSource,mcpServiceSource,apiSource,authWrapperSource,authBaseSource,authServiceSource,audioSource,safeHttpSource,publicUrlSource,workerSource,processorSource,plansSource,billingSource]=await Promise.all([
   readFile(new URL('../src/content/linkText.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/content/limits.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/mcp/server.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/mcp/service.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/api/main.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/auth/routes.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/auth/routes.base.ts',import.meta.url),'utf8'),
@@ -43,4 +44,9 @@ assert.match(processorSource,/availableUsageUnits/,'Text extraction must derive 
 assert.match(processorSource,/caption_incomplete_fallback_asr/,'Known incomplete video captions must fall back to ASR instead of becoming a successful partial result');
 assert.match(billingSource,/j\.error_code='QUOTA_EXCEEDED'/,'A successful top-up must resume quota-blocked jobs');
 assert.doesNotMatch(apiSource,/supports videos up to 30 minutes|supports videos up to 120 minutes|very large sources may return partial context/i,'Published copy must match the unit-bounded full-source policy');
+assert.match(mcpServiceSource,/if\(!options\.refresh\)[\s\S]*j\.status='completed'[\s\S]*c\.expires_at>now\(\)/,'Normal same-source reads must reuse a still-valid completed user result');
+assert.match(mcpServiceSource,/options\.refresh\?null:await findCache/,'Explicit refresh must be the only path that bypasses the shared successful cache');
+assert.match(mcpSource,/read_public_links/,'V3 must expose a first-class multi-link reader');
+assert.match(mcpSource,/turn count alone is never a reason to refresh/i,'Host instructions must not use conversation length as a refresh policy');
+assert.match(mcpSource,/get_video_time_range/,'V3 must expose timed lookup for processed video jobs');
 console.log('release audit tests PASS');
