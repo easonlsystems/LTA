@@ -2,6 +2,8 @@ import { pool } from '../db/pool.js';
 import { env } from '../config/env.js';
 import type { TranscriptPayload } from '../media/types.js';
 
+const HACKERNEWS_OFFICIAL_API_CACHE_EPOCH='2026-09-18T18:03:16.000Z';
+
 export interface CacheRow {
   id: string;
   platform: 'instagram'|'tiktok'|'youtube'|'x'|'reddit'|'bluesky'|'github'|'hackernews'|'pdf'|'web';
@@ -27,22 +29,35 @@ export interface CacheRow {
 
 export async function findCache(platform: string, canonicalId: string, language: string): Promise<CacheRow | null> {
   const params: unknown[] = [platform, canonicalId];
-  let langClause = '';
-  if (language !== 'auto') { params.push(language); langClause = ' AND language=$3'; }
+  const clauses=['platform=$1','canonical_media_id=$2','expires_at > now()'];
+  if (language !== 'auto') { params.push(language); clauses.push(`language=${params.length}`); }
+  // Hacker News switched from the community Algolia mirror to the official Firebase API
+  // in the OpenAI compliance release. Never reuse an older HN cache entry, because its
+  // retrieval provenance predates the reviewed/authorized transport.
+  if(platform==='hackernews'){
+    params.push(HACKERNEWS_OFFICIAL_API_CACHE_EPOCH);
+    clauses.push(`created_at >= ${params.length}::timestamptz`);
+  }
   const r = await pool.query<CacheRow>(
-    `SELECT * FROM transcript_cache WHERE platform=$1 AND canonical_media_id=$2${langClause} AND expires_at > now()
+    `SELECT * FROM transcript_cache WHERE ${clauses.join(' AND ')}
      ORDER BY created_at DESC LIMIT 1`, params
   );
   return r.rows[0] ?? null;
 }
 
 export async function findUserCompletedCache(userId:string,platform:string,canonicalId:string):Promise<CacheRow|null>{
+  const params:unknown[]=[userId,platform,canonicalId];
+  let provenanceClause='';
+  if(platform==='hackernews'){
+    params.push(HACKERNEWS_OFFICIAL_API_CACHE_EPOCH);
+    provenanceClause=` AND c.created_at >= ${params.length}::timestamptz`;
+  }
   const r=await pool.query<CacheRow>(
     `SELECT c.* FROM transcript_jobs j JOIN transcript_cache c ON c.id=j.transcript_cache_id
      WHERE j.user_id=$1 AND j.platform=$2 AND j.canonical_media_id=$3
-       AND j.status='completed' AND c.expires_at>now()
+       AND j.status='completed' AND c.expires_at>now()${provenanceClause}
      ORDER BY j.completed_at DESC LIMIT 1`,
-    [userId,platform,canonicalId]
+    params
   );
   return r.rows[0]??null;
 }
