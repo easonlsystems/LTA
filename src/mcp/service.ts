@@ -1,7 +1,7 @@
 import { env } from '../config/env.js';
 import { pool } from '../db/pool.js';
 import { parseMediaUrl } from '../media/url.js';
-import { createCheckoutSession } from '../billing/lemon.js';
+import { canPurchaseTopup, createCheckoutSession, createTopupCheckoutSession } from '../billing/lemon.js';
 import { asLink2AIError, Link2AIError } from '../util/errors.js';
 import { reserveQuota, finalizeQuota, getUsageSnapshot } from '../quota/service.js';
 import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limits.js';
@@ -36,8 +36,14 @@ export interface ToolJobResult {
   content_sections_truncated?:string[];
 }
 
-async function checkoutForError(userId:string,jobId:string,duration:number|undefined):Promise<string|null>{
+async function checkoutForError(userId:string,jobId:string,duration:number|undefined,details?:Record<string,unknown>):Promise<string|null>{
   const plan=await planForUser(userId);
+  if(plan!=='trial'&&await canPurchaseTopup(userId)){
+    const remaining=Math.max(0,Number(details?.remaining_usage_units??0)||0);
+    const requiredAtLeast=Math.max(remaining+1,Number(details?.required_usage_units_at_least??0)||0);
+    const deficit=Math.max(1,requiredAtLeast-remaining);
+    return await createTopupCheckoutSession(userId,deficit>500?'1500':'500');
+  }
   if(plan==='pro')return null;
   const target=plan==='trial' && (duration??0)<=30*60 ? 'basic' : 'pro';
   return await createCheckoutSession(userId,target,jobId);
@@ -98,7 +104,7 @@ export async function startTranscriptJob(userId:string,url:string):Promise<ToolJ
     }catch(e){
       const err=asLink2AIError(e);
       if(err.code==='QUOTA_EXCEEDED'||err.code==='DURATION_LIMIT_EXCEEDED'){
-        const checkout=await checkoutForError(userId,jobId,cached.duration_seconds);
+        const checkout=await checkoutForError(userId,jobId,cached.duration_seconds,err.details as Record<string,unknown>|undefined);
         await markAwaitingPayment(jobId,err.code,err.message,checkout);
         return await getJobResult(userId,jobId);
       }
