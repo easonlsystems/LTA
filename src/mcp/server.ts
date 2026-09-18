@@ -201,5 +201,33 @@ export function buildMcpServer(){
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}
   } as any,async(_args:Record<string,unknown>,ctx:any)=>safeToolCall(async()=>await usageForTool(userIdFromContext(ctx)) as unknown as Record<string,unknown>));
 
+  // @modelcontextprotocol/server 2.0.0 serializes auth schemes only inside
+  // tool._meta. ChatGPT public-plugin review requires the canonical root-level
+  // securitySchemes field too. Keep the SDK's call/input/output validation and
+  // override only tools/list serialization until the SDK exposes this natively.
+  const sdkServer=server as any;
+  server.server.setRequestHandler('tools/list', (async()=>{
+    const registered=sdkServer._registeredTools as Record<string,any>;
+    const tools=Object.entries(registered)
+      .filter(([,tool])=>tool?.enabled)
+      .map(([name,tool])=>{
+        const securitySchemes=tool?._meta?.securitySchemes;
+        const definition:Record<string,unknown>={
+          name,
+          ...(tool.title!==undefined?{title:tool.title}:{}),
+          ...(tool.description!==undefined?{description:tool.description}:{}),
+          inputSchema:sdkServer.toolInputSchemaJson(name)??{type:'object',properties:{}},
+          ...(tool.outputSchemaJson!==undefined?{outputSchema:tool.outputSchemaJson}:{}),
+          ...(tool.annotations!==undefined?{annotations:tool.annotations}:{}),
+          ...(tool.icons!==undefined?{icons:tool.icons}:{}),
+          ...(tool.execution!==undefined?{execution:tool.execution}:{}),
+          ...(tool._meta!==undefined?{_meta:tool._meta}:{}),
+          ...(securitySchemes!==undefined?{securitySchemes}:{})
+        };
+        return definition;
+      });
+    return {tools};
+  }) as any);
+
   return server;
 }
