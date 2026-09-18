@@ -82,7 +82,7 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
   const jobId=job.rows[0].id;
 
   // Fast path: avoid queue/extraction when this canonical media is already cached. Explicit refresh bypasses it.
-  const cached=options.refresh?null:await findCache(parsed.platform,parsed.canonicalMediaId,'auto');
+  const cached=options.refresh||parsed.platform==='x'?null:await findCache(parsed.platform,parsed.canonicalMediaId,'auto');
   if(cached){
     // Persist duration before quota evaluation so a payment-blocked cached job can be
     // resumed correctly after entitlement changes.
