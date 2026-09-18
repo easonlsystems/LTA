@@ -1,12 +1,14 @@
 export type TextContentClass='web'|'discussion'|'github_issue'|'github_pr'|'pdf'|'social';
 
 export const EXTRACTION_LIMITS={
-  web:{tokens:30_000,hardItems:1},
-  discussion:{tokens:30_000,hardItems:500,maxDepth:4},
-  github_issue:{tokens:30_000,hardItems:300},
-  github_pr:{tokens:40_000,hardItems:300},
-  pdf:{tokens:50_000,maxPages:100},
-  social:{tokens:12_000,hardItems:20}
+  // V3 completeness limits are intentionally generous enough for long-form source
+  // analysis while remaining bounded for memory, storage and third-party API safety.
+  web:{tokens:60_000,hardItems:1},
+  discussion:{tokens:60_000,hardItems:1_000,maxDepth:8},
+  github_issue:{tokens:60_000,hardItems:600},
+  github_pr:{tokens:100_000,hardItems:800},
+  pdf:{tokens:100_000,maxPages:250},
+  social:{tokens:24_000,hardItems:50}
 } as const;
 
 // Deterministic, API-free approximation: four Unicode code points per token.

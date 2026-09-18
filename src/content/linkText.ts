@@ -7,7 +7,7 @@ import { parseMediaUrl, type ParsedMediaUrl } from '../media/url.js';
 import { boundExtractedText, EXTRACTION_LIMITS, type CompletenessMetadata, type TextContentClass } from './limits.js';
 
 const PAGE_MAX_BYTES=2_500_000;
-const PAGE_MAX_CHARS=120_000;
+const PAGE_MAX_CHARS=240_000;
 const API_MAX_BYTES=3_000_000;
 const PDF_MAX_BYTES=12_000_000;
 const BROWSER_UA='Link2AI/1.2 public-link-reader (+https://api-production-0383e.up.railway.app/support)';
@@ -171,7 +171,7 @@ async function fetchXPost(input:ParsedMediaUrl):Promise<LinkTextPayload>{
 }
 
 const REDDIT_MAX_COMMENTS=EXTRACTION_LIMITS.discussion.hardItems;
-const REDDIT_MAX_DEPTH=4;
+const REDDIT_MAX_DEPTH=EXTRACTION_LIMITS.discussion.maxDepth;
 
 type JsonObject=Record<string,unknown>;
 
@@ -223,6 +223,22 @@ function isoTimestamp(value:unknown):string{
   const time=Date.parse(value);return Number.isFinite(time)?new Date(time).toISOString():'';
 }
 
+type BlueskyRendered={lines:string[];count:number};
+function collectBlueskyReplies(replies:unknown,out:BlueskyRendered,depth=0):void{
+  if(!Array.isArray(replies)||depth>EXTRACTION_LIMITS.discussion.maxDepth||out.count>=EXTRACTION_LIMITS.social.hardItems)return;
+  for(const raw of replies){
+    if(out.count>=EXTRACTION_LIMITS.social.hardItems)return;
+    const node=jsonObject(raw);const post=jsonObject(node?.post);const record=jsonObject(post?.record);const author=jsonObject(post?.author);
+    const text=cleanText(jsonString(record?.text),6000);
+    if(text){
+      const handle=jsonString(author?.handle)||jsonString(author?.displayName)||'unknown';
+      out.lines.push(`${depth?`${'↳'.repeat(depth)} `:''}- @${handle}: ${text}`);
+      out.count++;
+    }
+    collectBlueskyReplies(node?.replies,out,depth+1);
+  }
+}
+
 export function parseBlueskyThread(input:ParsedMediaUrl,payload:unknown):LinkTextPayload{
   const root=jsonObject(payload);const thread=jsonObject(root?.thread);const post=jsonObject(thread?.post);
   const [actor,rkey]=input.canonicalMediaId.split('/');
@@ -241,13 +257,18 @@ export function parseBlueskyThread(input:ParsedMediaUrl,payload:unknown):LinkTex
   if(quotedValue&&jsonString(quotedValue.text))sections.push(`Quoted post${jsonString(quotedAuthor?.handle)?` by @${jsonString(quotedAuthor?.handle)}`:''}:\n${cleanText(jsonString(quotedValue.text),5000)}`);
   const parent=jsonObject(thread?.parent);const parentPost=jsonObject(parent?.post);const parentRecord=jsonObject(parentPost?.record);
   if(parentRecord&&jsonString(parentRecord.text))sections.push(`Direct parent/replied-to post:\n${cleanText(jsonString(parentRecord.text),5000)}`);
-  return complete({platform:'bluesky',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title:clipExternalText(`Bluesky post by ${display||handle}`,METADATA_LIMITS.title),creator:clipExternalText(handle?`@${handle}`:display,METADATA_LIMITS.creator),caption:clipExternalText(text,METADATA_LIMITS.description),language:jsonString(record?.langs instanceof Array?record.langs[0]:undefined)||'und',text:cleanText(sections.filter(Boolean).join('\n\n')),source:'post'},'social');
+  const replies:BlueskyRendered={lines:[],count:0};collectBlueskyReplies(thread?.replies,replies,0);
+  let usedChars=sections.join('\n\n').length;const includedReplies:string[]=[];const replyBudget=EXTRACTION_LIMITS.social.tokens*4;
+  for(const line of replies.lines){if(usedChars+line.length+1>replyBudget)break;includedReplies.push(line);usedChars+=line.length+1;}
+  if(includedReplies.length)sections.push(`Public replies (${includedReplies.length} entries):\n${includedReplies.join('\n')}`);
+  const repliesAvailable=jsonNumber(post?.replyCount);const repliesTruncated=includedReplies.length<replies.count||(repliesAvailable!==undefined&&includedReplies.length<repliesAvailable);
+  return complete({platform:'bluesky',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title:clipExternalText(`Bluesky post by ${display||handle}`,METADATA_LIMITS.title),creator:clipExternalText(handle?`@${handle}`:display,METADATA_LIMITS.creator),caption:clipExternalText(text,METADATA_LIMITS.description),language:jsonString(record?.langs instanceof Array?record.langs[0]:undefined)||'und',text:cleanText(sections.filter(Boolean).join('\n\n')),source:'post'},'social',{itemsAvailable:repliesAvailable,itemsExtracted:includedReplies.length,truncated:repliesTruncated,contentSectionsTruncated:repliesTruncated?['replies']:undefined});
 }
 
 async function fetchBlueskyPost(input:ParsedMediaUrl):Promise<LinkTextPayload>{
   const [actor,rkey]=input.canonicalMediaId.split('/');
   const uri=`at://${actor}/app.bsky.feed.post/${rkey}`;
-  const data=await safeJson(`https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=0&parentHeight=1`,'Bluesky');
+  const data=await safeJson(`https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=${EXTRACTION_LIMITS.discussion.maxDepth}&parentHeight=1`,'Bluesky');
   return parseBlueskyThread(input,data);
 }
 
@@ -260,12 +281,16 @@ export function parseGitHubDiscussion(input:ParsedMediaUrl,itemValue:unknown,com
   const sections=[`${isPr?'Pull request':'Issue'}: ${repo}#${jsonNumber(item.number)??''}`,`Title: ${jsonString(item.title)}`,`Author: @${jsonString(user?.login)}`,`State: ${jsonString(item.state)}${jsonBoolean(item.merged)===true?' (merged)':''}`,labels.length?`Labels: ${labels.join(', ')}`:'',jsonString(item.created_at)?`Created: ${isoTimestamp(item.created_at)}`:''];
   if(isPr){const base=jsonObject(item.base),head=jsonObject(item.head);sections.push(`Branches: ${jsonString(base?.ref)} ← ${jsonString(head?.ref)}`);}
   if(jsonString(item.body).trim())sections.push(`Body:\n${cleanText(jsonString(item.body),30_000)}`);
+  const contentClass=isPr?'github_pr':'github_issue';
   const allDiscussion=[...(Array.isArray(commentsValue)?commentsValue:[]),...(Array.isArray(reviewsValue)?reviewsValue:[])];
-  const discussionCandidates=allDiscussion.slice(0,EXTRACTION_LIMITS.github_pr.hardItems).map(value=>{
-    const comment=jsonObject(value);const author=jsonObject(comment?.user);const body=cleanText(jsonString(comment?.body),5000);if(!body)return '';
-    return `@${jsonString(author?.login)||'unknown'}${isoTimestamp(comment?.created_at)||isoTimestamp(comment?.submitted_at)?` · ${isoTimestamp(comment?.created_at)||isoTimestamp(comment?.submitted_at)}`:''}: ${body}`;
+  const discussionCandidates=allDiscussion.slice(0,EXTRACTION_LIMITS[contentClass].hardItems).map(value=>{
+    const comment=jsonObject(value);const author=jsonObject(comment?.user);const body=cleanText(jsonString(comment?.body),8000);if(!body)return '';
+    const timestamp=isoTimestamp(comment?.created_at)||isoTimestamp(comment?.submitted_at);
+    const path=jsonString(comment?.path);const line=jsonNumber(comment?.line)??jsonNumber(comment?.original_line);
+    const location=path?` · ${path}${line!==undefined?`:${line}`:''}`:'';
+    return `@${jsonString(author?.login)||'unknown'}${timestamp?` · ${timestamp}`:''}${location}: ${body}`;
   }).filter(Boolean);
-  const maxChars=EXTRACTION_LIMITS[isPr?'github_pr':'github_issue'].tokens*4;const discussions:string[]=[];let usedChars=sections.join('\n\n').length;
+  const maxChars=EXTRACTION_LIMITS[contentClass].tokens*4;const discussions:string[]=[];let usedChars=sections.join('\n\n').length;
   for(const entry of discussionCandidates){if(usedChars+entry.length+2>maxChars)break;discussions.push(entry);usedChars+=entry.length+2;}
   if(discussions.length)sections.push(`Bounded public discussion (${discussions.length} entries):\n${discussions.join('\n\n')}`);
   const beforeDiff=cleanText(sections.filter(Boolean).join('\n\n'),Number.MAX_SAFE_INTEGER);const diffBudget=Math.max(0,maxChars-beforeDiff.length-40);const cleanedDiff=isPr?cleanText(diff,diffBudget):'';
@@ -282,17 +307,19 @@ async function fetchGitHubDiscussion(input:ParsedMediaUrl):Promise<LinkTextPaylo
   const maxItems=EXTRACTION_LIMITS[isPr?'github_pr':'github_issue'].hardItems;
   const commentsPage=await safeJsonArrayPages(`${apiBase}/issues/${number}/comments`,'GitHub comments',maxItems);
   const reviewsPage=isPr?await safeJsonArrayPages(`${apiBase}/pulls/${number}/reviews`,'GitHub reviews',maxItems):{items:[] as unknown[],truncated:false};
-  const combined=[...commentsPage.items,...reviewsPage.items]
+  const reviewCommentsPage=isPr?await safeJsonArrayPages(`${apiBase}/pulls/${number}/comments`,'GitHub inline review comments',maxItems):{items:[] as unknown[],truncated:false};
+  const allFetched=[...commentsPage.items,...reviewsPage.items,...reviewCommentsPage.items];
+  const combined=allFetched
     .sort((a,b)=>Date.parse(jsonString(jsonObject(a)?.created_at)||jsonString(jsonObject(a)?.submitted_at)||'')-Date.parse(jsonString(jsonObject(b)?.created_at)||jsonString(jsonObject(b)?.submitted_at)||''))
     .slice(0,maxItems);
-  const sourceTruncated=commentsPage.truncated||reviewsPage.truncated||(commentsPage.items.length+reviewsPage.items.length)>maxItems;
+  const sourceTruncated=commentsPage.truncated||reviewsPage.truncated||reviewCommentsPage.truncated||allFetched.length>maxItems;
   let diff='';if(isPr){const response=await safeGetBuffer(`${apiBase}/pulls/${number}`,{maxBytes:5_000_000,timeoutMs:15_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/vnd.github.v3.diff'});diff=response.bytes.toString('utf8');}
   return parseGitHubDiscussion(input,item,combined,[],diff,sourceTruncated);
 }
 
 type HnRendered={lines:string[];count:number};
 function renderHnComments(children:unknown,depth:number,out:HnRendered):void{
-  if(!Array.isArray(children)||depth>4)return;
+  if(!Array.isArray(children)||depth>EXTRACTION_LIMITS.discussion.maxDepth)return;
   for(const value of children){if(out.count>=EXTRACTION_LIMITS.discussion.hardItems)return;const item=jsonObject(value);if(!item)continue;const text=stripHtml(jsonString(item.text));if(text){out.lines.push(`${depth?`${'↳'.repeat(depth)} `:''}- ${jsonString(item.author)||'unknown'}: ${cleanText(text,4000)}`);out.count++;}renderHnComments(item.children,depth+1,out);}
 }
 
@@ -302,7 +329,7 @@ export function parseHackerNewsItem(input:ParsedMediaUrl,payload:unknown):LinkTe
   const title=cleanText(jsonString(item.title),METADATA_LIMITS.title);const body=stripHtml(jsonString(item.text));
   if(!title&&!body)throw new Link2AIError('EXTRACTION_FAILED','This Hacker News item is deleted or has no readable public content.',422,false);
   const sections=[title?`Title: ${title}`:'',`Submitter: ${jsonString(item.author)||'unknown'}`,jsonNumber(item.points)!==undefined?`Score: ${jsonNumber(item.points)}`:'',isoTimestamp(item.created_at)?`Published: ${isoTimestamp(item.created_at)}`:'',jsonString(item.url)?`Destination: ${jsonString(item.url)}`:'',body?`Story text:\n${body}`:''];
-  const rendered:HnRendered={lines:[],count:0};renderHnComments(item.children,0,rendered);const included:string[]=[];let used=sections.join('\n\n').length;for(const line of rendered.lines){if(used+line.length+1>EXTRACTION_LIMITS.discussion.tokens*4)break;included.push(line);used+=line.length+1;}if(included.length)sections.push(`Bounded comment tree (${included.length} comments, depth ≤ 4):\n${included.join('\n')}`);
+  const rendered:HnRendered={lines:[],count:0};renderHnComments(item.children,0,rendered);const included:string[]=[];let used=sections.join('\n\n').length;for(const line of rendered.lines){if(used+line.length+1>EXTRACTION_LIMITS.discussion.tokens*4)break;included.push(line);used+=line.length+1;}if(included.length)sections.push(`Bounded comment tree (${included.length} comments, depth ≤ ${EXTRACTION_LIMITS.discussion.maxDepth}):\n${included.join('\n')}`);
   const hnTruncated=included.length<rendered.count||rendered.count>=EXTRACTION_LIMITS.discussion.hardItems;return complete({platform:'hackernews',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title:clipExternalText(title,METADATA_LIMITS.title),creator:clipExternalText(jsonString(item.author),METADATA_LIMITS.creator),caption:clipExternalText(body,METADATA_LIMITS.description),language:'und',text:cleanText(sections.filter(Boolean).join('\n\n')),source:'post'},'discussion',{itemsAvailable:jsonNumber(item.children_count),itemsExtracted:included.length,truncated:hnTruncated,contentSectionsTruncated:hnTruncated?['comments']:undefined});
 }
 
@@ -318,16 +345,20 @@ export async function parsePdfBuffer(input:ParsedMediaUrl,bytes:Buffer,contentTy
   try{
     const pdfjs=await import('pdfjs-dist/legacy/build/pdf.mjs');
     const document=await pdfjs.getDocument({data:new Uint8Array(bytes),isEvalSupported:false,useSystemFonts:false}).promise;
-    const pages:string[]=[];
-    for(let pageNumber=1;pageNumber<=document.numPages&&pageNumber<=EXTRACTION_LIMITS.pdf.maxPages&&pages.join('').length<EXTRACTION_LIMITS.pdf.tokens*4;pageNumber++){
+    const pages:string[]=[];let usedChars=0;let pageTextTruncated=false;
+    const maxChars=EXTRACTION_LIMITS.pdf.tokens*4;
+    for(let pageNumber=1;pageNumber<=document.numPages&&pageNumber<=EXTRACTION_LIMITS.pdf.maxPages&&usedChars<maxChars;pageNumber++){
       const page=await document.getPage(pageNumber);const content=await page.getTextContent();
-      const text=cleanText(content.items.map((v:any)=>typeof v.str==='string'?v.str:'').join(' '),12_000);
-      if(text)pages.push(`[Page ${pageNumber}]\n${text}`);
+      const rawText=cleanText(content.items.map((v:any)=>typeof v.str==='string'?v.str:'').join(' '),Number.MAX_SAFE_INTEGER);
+      const remaining=Math.max(0,maxChars-usedChars-32);
+      const text=cleanText(rawText,Math.min(30_000,remaining));
+      if(rawText.length>text.length)pageTextTruncated=true;
+      if(text){const rendered=`[Page ${pageNumber}]\n${text}`;pages.push(rendered);usedChars+=rendered.length+2;}
       page.cleanup();
     }
-    const text=cleanText(pages.join('\n\n'));if(!text)throw new Link2AIError('EXTRACTION_FAILED','This PDF has no readable text layer; OCR is not enabled.',422,false);
+    const text=cleanText(pages.join('\n\n'),maxChars);if(!text)throw new Link2AIError('EXTRACTION_FAILED','This PDF has no readable text layer; OCR is not enabled.',422,false);
     const metadata=await document.getMetadata().catch(()=>({info:{}} as any));const info=jsonObject(metadata.info);const title=clipExternalText(jsonString(info?.Title),METADATA_LIMITS.title);
-    const pagesAvailable=document.numPages;await document.destroy();return complete({platform:'pdf',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title,caption:`${pagesAvailable} pages`,language:'und',text,source:'page'},'pdf',{pagesAvailable,pagesExtracted:pages.length,truncated:pages.length<pagesAvailable,contentSectionsTruncated:pages.length<pagesAvailable?['pages']:undefined});
+    const pagesAvailable=document.numPages;const pagesTruncated=pages.length<pagesAvailable;await document.destroy();return complete({platform:'pdf',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title,caption:`${pagesAvailable} pages`,language:'und',text,source:'page'},'pdf',{pagesAvailable,pagesExtracted:pages.length,truncated:pagesTruncated||pageTextTruncated,contentSectionsTruncated:[...(pagesTruncated?['pages']:[]),...(pageTextTruncated?['page_text']:[])]});
   }catch(error){if(error instanceof Link2AIError)throw error;const message=error instanceof Error?error.message.toLowerCase():'';if(message.includes('password'))throw new Link2AIError('EXTRACTION_FAILED','Password-protected PDFs are not supported.',422,false);throw new Link2AIError('EXTRACTION_FAILED','The PDF was malformed or could not be parsed safely.',422,false);}
 }
 
