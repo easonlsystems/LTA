@@ -3,8 +3,8 @@ import { env } from '../config/env.js';
 import { browserSameOriginOk } from '../config/publicUrl.js';
 import { Link2AIError } from '../util/errors.js';
 import {
-  beginEmailLogin, beginGuestLogin, createAuthorizationCode, csrfTokenFromSessionCookie, exchangeAuthorizationCode, exchangeRefreshToken,
-  getOAuthClient, loginFlowCookieName, mcpResource, parseCookies, registerOAuthClient, registerPasswordAccount, revokeOAuthToken, revokeWebSession, sessionCookieName,
+  beginEmailLogin, beginGoogleSignIn, beginGuestLogin, completeGoogleSignIn, createAuthorizationCode, csrfTokenFromSessionCookie, exchangeAuthorizationCode, exchangeRefreshToken,
+  getOAuthClient, googleSignInConfigured, loginFlowCookieName, mcpResource, parseCookies, registerOAuthClient, registerPasswordAccount, revokeOAuthToken, revokeWebSession, sessionCookieName,
   userFromSessionCookie, verifyCsrfToken, verifyEmailLogin, verifyPasswordLogin, verifyReviewerLogin, claimTrialDevice, trialDeviceCookieName, clearFounderStepUpCookie
 } from './service.js';
 import { linkWebsiteVisitorToUser, trackWebsiteEvent, trackWebsiteVisit } from '../analytics/visitors.js';
@@ -20,7 +20,7 @@ function html(body:string): string { return `<!doctype html><html><head><meta ch
 h1{font-size:34px;line-height:1.04;letter-spacing:-.045em;margin:15px 0 11px}p{line-height:1.58;margin:0 0 18px;color:var(--muted)}
 label{display:block;font-size:12px;font-weight:800;margin:14px 0 6px}input,button{box-sizing:border-box;width:100%;padding:13px 14px;margin:0 0 10px;font:inherit;border-radius:13px}
 input{border:1px solid #d5d0da;background:#fff;outline:none}input:focus{border-color:#8d77ff;box-shadow:0 0 0 4px rgba(111,84,232,.08)}
-button{cursor:pointer;border:0;background:linear-gradient(135deg,#6f54e8,#8d77ff);color:#fff;font-weight:820;box-shadow:0 8px 20px rgba(111,84,232,.18)}.muted{color:#706a78;font-size:13px}.tiny{font-size:12px;color:#908997;line-height:1.5}.review{margin-top:24px;padding-top:18px;border-top:1px solid var(--line)}details summary{cursor:pointer;color:#706a78;font-size:13px;font-weight:750}a{color:inherit}.trust{display:flex;gap:8px;flex-wrap:wrap;margin-top:17px}.trust span{font-size:10px;font-weight:800;color:#706a78;background:#f5f3f0;padding:6px 8px;border-radius:999px}
+button{cursor:pointer;border:0;background:linear-gradient(135deg,#6f54e8,#8d77ff);color:#fff;font-weight:820;box-shadow:0 8px 20px rgba(111,84,232,.18)}a.google{display:flex;align-items:center;justify-content:center;width:100%;min-height:50px;padding:13px 14px;margin:0 0 12px;border:1px solid #d5d0da;border-radius:13px;background:#fff;color:#17151f;text-decoration:none;font-weight:820;box-shadow:0 5px 18px rgba(39,31,64,.06)}a.google:hover{border-color:#b8b0c4;background:#fcfbff}.muted{color:#706a78;font-size:13px}.tiny{font-size:12px;color:#908997;line-height:1.5}.review{margin-top:24px;padding-top:18px;border-top:1px solid var(--line)}details summary{cursor:pointer;color:#706a78;font-size:13px;font-weight:750}a{color:inherit}.trust{display:flex;gap:8px;flex-wrap:wrap;margin-top:17px}.trust span{font-size:10px;font-weight:800;color:#706a78;background:#f5f3f0;padding:6px 8px;border-radius:999px}
 @media(max-width:620px){body{display:block;padding:16px 13px 28px;min-height:100dvh}.auth{width:100%;max-width:none;padding:22px 18px;border-radius:22px;margin:0 auto}.logo{margin-bottom:23px;font-size:18px}.logo img{width:32px;height:32px}h1{font-size:30px;line-height:1.07;margin-top:13px}p{font-size:14px;margin-bottom:16px}label{margin-top:13px}input,button{min-height:48px;font-size:16px;padding:12px 13px;border-radius:12px}button{font-size:15px}.trust{gap:6px}.trust span{font-size:9px}.review{margin-top:19px;padding-top:15px}.tiny{font-size:12px}}
 @media(max-width:360px){body{padding-left:10px;padding-right:10px}.auth{padding:19px 15px}h1{font-size:28px}}
 </style></head><body><main class="auth"><div class="logo"><img src="/logo.svg" alt=""><span>${escapeHtml(env().PUBLIC_BRAND_NAME)}</span></div>${body}${env().SUPPORT_EMAIL?`<p class="tiny" style="margin-top:18px;padding-top:15px;border-top:1px solid var(--line)">Need help? <a href="mailto:${escapeHtml(env().SUPPORT_EMAIL)}"><strong>${escapeHtml(env().SUPPORT_EMAIL)}</strong></a></p>`:''}<p class="tiny" style="margin-top:12px;text-align:center"><a href="/pricing">Pricing</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a><br>${escapeHtml(env().PUBLIC_BRAND_NAME)} is a product by Eason Systems.</p></main></body></html>`; }
@@ -94,6 +94,12 @@ function loginFlowCookie(value:string,maxAge:number):string{
   return `${loginFlowCookieName()}=${encodeURIComponent(value)}; Path=/auth/verify; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`;
 }
 
+const GOOGLE_FLOW_COOKIE='link2ai_google_oauth_state';
+function googleFlowCookie(value:string,maxAge=600):string{
+  const secure=env().NODE_ENV==='production'?'; Secure':'';
+  return `${GOOGLE_FLOW_COOKIE}=${encodeURIComponent(value)}; Path=/auth/google/callback; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+}
+
 function browserPostOriginOk(headers:Record<string,string|string[]|undefined>):boolean{
   return browserSameOriginOk(headers,env().PUBLIC_BASE_URL,env().NODE_ENV==='production');
 }
@@ -145,6 +151,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const q=req.query as any;
     const returnTo=safeReturnTo(q.return_to);
     const reviewer=Boolean(env().REVIEWER_EMAIL&&env().REVIEWER_PASSWORD);
+    if(googleSignInConfigured()){
+      return reply.type('text/html').send(html(`<span class="step">Link2AI account</span><h1>Sign in to continue.</h1><p>Use your Google account. Link2AI never sees or stores your Google password.</p><a class="google" href="/auth/google/start?return_to=${encodeURIComponent(returnTo)}">Continue with Google</a><div class="trust"><span>10 processing units free</span><span>Public links only</span><span>Failed or unsupported reads use 0 units</span></div>${reviewer?`<div class="review"><details><summary>OpenAI reviewer access</summary><form method="post" action="/auth/reviewer" style="margin-top:12px"><label>Reviewer email</label><input type="email" name="email" required autocomplete="username"><label>Reviewer password</label><input type="password" name="password" required autocomplete="current-password"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Reviewer sign in</button></form></details></div>`:''}`));
+    }
     const legacyCodeLogin=env().PUBLIC_EMAIL_LOGIN_ENABLED;
     return reply.type('text/html').send(html(`<span class="step">Link2AI account</span><h1>Sign in to continue.</h1><p>Your email is your Link2AI account. It keeps your trial, usage and plan attached to you across browsers and devices.</p><form method="post" action="/auth/password/login"><label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="you@example.com"><label>Password</label><input type="password" name="password" required minlength="10" maxlength="128" autocomplete="current-password" placeholder="Your password"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button autofocus>Sign in and continue</button></form><p class="tiny">New to ${escapeHtml(env().PUBLIC_BRAND_NAME)}? <a href="/signup?return_to=${encodeURIComponent(returnTo)}"><strong>Create an account</strong></a>. No card required for the trial.</p><div class="trust"><span>10 processing units free</span><span>Public links only</span><span>Failed or unsupported reads use 0 units</span></div>${legacyCodeLogin?`<div class="review"><details><summary>Use an email sign-in code instead</summary><form method="post" action="/auth/start" style="margin-top:12px"><label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="you@example.com"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Send sign-in code</button></form></details></div>`:''}${reviewer?`<div class="review"><details><summary>OpenAI reviewer access</summary><form method="post" action="/auth/reviewer" style="margin-top:12px"><label>Reviewer email</label><input type="email" name="email" required autocomplete="username"><label>Reviewer password</label><input type="password" name="password" required autocomplete="current-password"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>Reviewer sign in</button></form></details></div>`:''}`));
   });
@@ -153,12 +162,52 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     await trackWebsiteVisit(req,reply,'/signup');
     const q=req.query as any;
     const returnTo=safeReturnTo(q.return_to);
+    if(googleSignInConfigured()){
+      return reply.type('text/html').send(html(`<span class="step">Start free · 10 processing units</span><h1>Create your Link2AI account.</h1><p>Continue with Google. Your Google password stays with Google, and a verified email reconnects any existing Link2AI usage, plan and paid balance.</p><a class="google" href="/auth/google/start?return_to=${encodeURIComponent(returnTo)}">Continue with Google</a><div class="trust"><span>10 processing units free</span><span>No card</span><span>Failed / unsupported reads use 0 units</span></div>`));
+    }
     const current=await userFromSessionCookie(req.headers.cookie);
     const upgrading=Boolean(current&&!current.email);
     return reply.type('text/html').send(html(`<span class="step">${upgrading?'Finish account setup':'Start free · 10 processing units'}</span><h1>${upgrading?'Keep this Link2AI account.':'Create your Link2AI account.'}</h1><p>${upgrading?'Add an email and password to the account you already used. Your current usage and Claude connection stay attached.':'One account keeps your trial, usage and plan attached to you. After this, you go straight back to the Claude setup.'}</p><form method="post" action="/auth/password/register"><label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="you@example.com"><label>Password</label><input type="password" name="password" required minlength="10" maxlength="128" autocomplete="new-password" placeholder="At least 10 characters"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><button>${upgrading?'Save account and continue':'Create account → Continue to Claude setup'}</button></form><p class="tiny">Already have an account? <a href="/login?return_to=${encodeURIComponent(returnTo)}"><strong>Sign in</strong></a>. Need account help? Use <a href="/support"><strong>Support</strong></a>.</p><div class="trust"><span>10 processing units free</span><span>No card</span><span>Failed / unsupported reads use 0 units</span></div>`));
   });
 
+  app.get('/auth/google/start',async(req,reply)=>{
+    const q=req.query as any;
+    const returnTo=safeReturnTo(q.return_to);
+    try{
+      const result=await beginGoogleSignIn(returnTo);
+      reply.header('Set-Cookie',googleFlowCookie(result.state,600));
+      return reply.redirect(result.authorizationUrl);
+    }catch(e){return friendlyError(reply,e);}
+  });
+
+  app.get('/auth/google/callback',async(req,reply)=>{
+    const q=req.query as any;
+    const code=String(q?.code??'');
+    const state=String(q?.state??'');
+    const cookieState=parseCookies(req.headers.cookie)[GOOGLE_FLOW_COOKIE]??'';
+    try{
+      const current=await userFromSessionCookie(req.headers.cookie);
+      const result=await completeGoogleSignIn({code,state,cookieState,currentUserId:current?.id});
+      await linkWebsiteVisitorToUser(req.headers.cookie,result.user.id,Boolean(current&&!current.email));
+      await trackWebsiteEvent(req,'google_signin_complete','/login');
+      const priorDevice=parseCookies(req.headers.cookie)[trialDeviceCookieName()];
+      const trial=await claimTrialDevice(result.user.id,priorDevice);
+      const secure=env().NODE_ENV==='production'?'; Secure':'';
+      reply.header('Set-Cookie',[
+        `${sessionCookieName()}=${encodeURIComponent(result.sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`,
+        `${trialDeviceCookieName()}=${encodeURIComponent(trial.deviceToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`,
+        googleFlowCookie('',0),
+        clearFounderStepUpCookie()
+      ]);
+      return reply.redirect(result.returnTo);
+    }catch(e){
+      reply.header('Set-Cookie',googleFlowCookie('',0));
+      return friendlyError(reply,e);
+    }
+  });
+
   app.post('/auth/password/login',async(req,reply)=>{
+    if(googleSignInConfigured())return reply.code(404).type('text/plain').send('Not found');
     if(rejectCrossSiteBrowserPost(req as unknown as {headers:Record<string,string|string[]|undefined>},reply))return;
     const b=req.body as any;
     const returnTo=safeReturnTo(b?.return_to);
@@ -178,6 +227,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post('/auth/password/register',async(req,reply)=>{
+    if(googleSignInConfigured())return reply.code(404).type('text/plain').send('Not found');
     if(rejectCrossSiteBrowserPost(req as unknown as {headers:Record<string,string|string[]|undefined>},reply))return;
     const b=req.body as any;
     const returnTo=safeReturnTo(b?.return_to);
@@ -226,6 +276,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post('/auth/start', async (req, reply) => {
+    if(googleSignInConfigured())return reply.code(404).type('text/plain').send('Not found');
     if(rejectCrossSiteBrowserPost(req as unknown as {headers:Record<string,string|string[]|undefined>},reply))return;
     const b = req.body as any;
     const returnTo = safeReturnTo(b?.return_to);
@@ -237,6 +288,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post('/auth/verify', async (req, reply) => {
+    if(googleSignInConfigured())return reply.code(404).type('text/plain').send('Not found');
     if(rejectCrossSiteBrowserPost(req as unknown as {headers:Record<string,string|string[]|undefined>},reply))return;
     const b = req.body as any;
     const flowToken=parseCookies(req.headers.cookie)[loginFlowCookieName()]??'';

@@ -160,6 +160,174 @@ export async function verifyPasswordLogin(emailRaw:string,password:string,return
 }
 
 
+export function googleSignInConfigured():boolean{
+  return Boolean(env().GOOGLE_CLIENT_ID&&env().GOOGLE_CLIENT_SECRET);
+}
+
+function googleRedirectUri():string{
+  return new URL('/auth/google/callback',env().PUBLIC_BASE_URL).toString();
+}
+
+export async function beginGoogleSignIn(returnTo:string):Promise<{authorizationUrl:string;state:string}>{
+  validateReturnTo(returnTo);
+  const clientId=env().GOOGLE_CLIENT_ID;
+  const clientSecret=env().GOOGLE_CLIENT_SECRET;
+  if(!clientId||!clientSecret)throw new Link2AIError('INTERNAL_ERROR','Google sign-in is not configured.',503);
+
+  const state=randomToken(32);
+  const codeVerifier=randomToken(48);
+  const codeChallenge=pkceS256(codeVerifier);
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    await client.query('DELETE FROM google_oauth_flows WHERE expires_at<now() OR consumed_at IS NOT NULL');
+    await client.query(
+      "INSERT INTO google_oauth_flows(state_hash,code_verifier,return_to,expires_at) VALUES($1,$2,$3,now()+interval '10 minutes')",
+      [sha256(state),codeVerifier,returnTo]
+    );
+    await client.query('COMMIT');
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}
+  finally{client.release();}
+
+  const authorizationUrl=new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  authorizationUrl.searchParams.set('client_id',clientId);
+  authorizationUrl.searchParams.set('redirect_uri',googleRedirectUri());
+  authorizationUrl.searchParams.set('response_type','code');
+  authorizationUrl.searchParams.set('scope','openid email profile');
+  authorizationUrl.searchParams.set('state',state);
+  authorizationUrl.searchParams.set('code_challenge',codeChallenge);
+  authorizationUrl.searchParams.set('code_challenge_method','S256');
+  authorizationUrl.searchParams.set('prompt','select_account');
+  authorizationUrl.searchParams.set('include_granted_scopes','true');
+  return {authorizationUrl:authorizationUrl.toString(),state};
+}
+
+export async function completeGoogleSignIn(input:{code:string;state:string;cookieState:string;currentUserId?:string}):Promise<{user:AuthUser;sessionToken:string;returnTo:string}>{
+  const clientId=env().GOOGLE_CLIENT_ID;
+  const clientSecret=env().GOOGLE_CLIENT_SECRET;
+  if(!clientId||!clientSecret)throw new Link2AIError('INTERNAL_ERROR','Google sign-in is not configured.',503);
+  if(input.code.length<8||input.code.length>4096||input.state.length<16||input.state.length>512||input.cookieState.length<16||input.cookieState.length>512){
+    throw new Link2AIError('AUTH_REQUIRED','Google sign-in session is invalid or expired.',401);
+  }
+  if(!timingSafeEqualHex(sha256(input.state),sha256(input.cookieState))){
+    throw new Link2AIError('AUTH_REQUIRED','Google sign-in session is invalid or expired.',401);
+  }
+
+  const flowClient=await pool.connect();
+  let codeVerifier='',returnTo='/account';
+  try{
+    await flowClient.query('BEGIN');
+    const flow=await flowClient.query<{id:string;code_verifier:string;return_to:string}>(
+      'SELECT id,code_verifier,return_to FROM google_oauth_flows WHERE state_hash=$1 AND consumed_at IS NULL AND expires_at>now() LIMIT 1 FOR UPDATE',
+      [sha256(input.state)]
+    );
+    if(!flow.rowCount)throw new Link2AIError('AUTH_REQUIRED','Google sign-in session is invalid or expired.',401);
+    codeVerifier=flow.rows[0].code_verifier;
+    returnTo=flow.rows[0].return_to;
+    await flowClient.query('UPDATE google_oauth_flows SET consumed_at=now() WHERE id=$1',[flow.rows[0].id]);
+    await flowClient.query('COMMIT');
+  }catch(error){await flowClient.query('ROLLBACK').catch(()=>{});throw error;}
+  finally{flowClient.release();}
+
+  const tokenResponse=await fetch('https://oauth2.googleapis.com/token',{
+    method:'POST',
+    headers:{'content-type':'application/x-www-form-urlencoded'},
+    body:new URLSearchParams({
+      code:input.code,
+      client_id:clientId,
+      client_secret:clientSecret,
+      redirect_uri:googleRedirectUri(),
+      grant_type:'authorization_code',
+      code_verifier:codeVerifier
+    }),
+    signal:AbortSignal.timeout(15_000)
+  }).catch(()=>null);
+  if(!tokenResponse||!tokenResponse.ok)throw new Link2AIError('AUTH_REQUIRED','Google sign-in could not be completed. Please try again.',401);
+  const tokenJson=await tokenResponse.json() as {access_token?:string};
+  const accessToken=String(tokenJson.access_token??'');
+  if(accessToken.length<16||accessToken.length>8192)throw new Link2AIError('AUTH_REQUIRED','Google sign-in could not be completed. Please try again.',401);
+
+  const profileResponse=await fetch('https://openidconnect.googleapis.com/v1/userinfo',{
+    headers:{authorization:'Bearer '+accessToken},
+    signal:AbortSignal.timeout(15_000)
+  }).catch(()=>null);
+  if(!profileResponse||!profileResponse.ok)throw new Link2AIError('AUTH_REQUIRED','Google sign-in could not be completed. Please try again.',401);
+  const profile=await profileResponse.json() as {sub?:unknown;email?:unknown;email_verified?:unknown};
+  const googleSub=String(profile.sub??'').trim();
+  const email=normalizeAccountEmail(String(profile.email??''));
+  if(profile.email_verified!==true||googleSub.length<1||googleSub.length>255||/\s/.test(googleSub)){
+    throw new Link2AIError('AUTH_REQUIRED','Google did not provide a verified account identity.',401);
+  }
+
+  const accountClient=await pool.connect();
+  try{
+    await accountClient.query('BEGIN');
+    await accountClient.query('SELECT pg_advisory_xact_lock(hashtext($1))',['link2ai:google:'+googleSub]);
+    await accountClient.query('SELECT pg_advisory_xact_lock(hashtext($1))',['link2ai:account:'+email]);
+    const bySub=await accountClient.query<AuthUser & {account_status:string;google_sub:string|null}>(
+      'SELECT id,email,plan,account_status,google_sub FROM users WHERE google_sub=$1 FOR UPDATE',[googleSub]
+    );
+    const byEmail=await accountClient.query<AuthUser & {account_status:string;google_sub:string|null}>(
+      'SELECT id,email,plan,account_status,google_sub FROM users WHERE lower(email)=lower($1) FOR UPDATE',[email]
+    );
+    if(Number(byEmail.rowCount??0)>1)throw new Link2AIError('AUTH_REQUIRED','This account needs support before Google sign-in can be linked.',409);
+    const current=input.currentUserId
+      ? await accountClient.query<AuthUser & {account_status:string;google_sub:string|null}>(
+          'SELECT id,email,plan,account_status,google_sub FROM users WHERE id=$1 FOR UPDATE',[input.currentUserId]
+        )
+      : null;
+
+    let user:AuthUser & {account_status:string};
+    if(bySub.rowCount){
+      const existing=bySub.rows[0];
+      if(byEmail.rowCount&&byEmail.rows[0].id!==existing.id){
+        throw new Link2AIError('AUTH_REQUIRED','This Google account conflicts with an existing Link2AI account.',409);
+      }
+      if(existing.account_status==='disabled')throw new Link2AIError('AUTH_REQUIRED','This account is disabled.',403);
+      const updated=await accountClient.query<AuthUser & {account_status:string}>(
+        'UPDATE users SET email=$2,updated_at=now() WHERE id=$1 RETURNING id,email,plan,account_status',
+        [existing.id,email]
+      );
+      user=updated.rows[0];
+    }else if(byEmail.rowCount){
+      const existing=byEmail.rows[0];
+      if(existing.google_sub&&existing.google_sub!==googleSub){
+        throw new Link2AIError('AUTH_REQUIRED','This Link2AI account is already linked to a different Google account.',409);
+      }
+      if(existing.account_status==='disabled')throw new Link2AIError('AUTH_REQUIRED','This account is disabled.',403);
+      const updated=await accountClient.query<AuthUser & {account_status:string}>(
+        'UPDATE users SET google_sub=$2,email=$3,updated_at=now() WHERE id=$1 RETURNING id,email,plan,account_status',
+        [existing.id,googleSub,email]
+      );
+      user=updated.rows[0];
+    }else if(current?.rowCount&&current.rows[0].email===null){
+      const existing=current.rows[0];
+      if(existing.account_status==='disabled')throw new Link2AIError('AUTH_REQUIRED','This account is disabled.',403);
+      const updated=await accountClient.query<AuthUser & {account_status:string}>(
+        'UPDATE users SET email=$2,google_sub=$3,updated_at=now() WHERE id=$1 RETURNING id,email,plan,account_status',
+        [existing.id,email,googleSub]
+      );
+      user=updated.rows[0];
+    }else{
+      const created=await accountClient.query<AuthUser & {account_status:string}>(
+        'INSERT INTO users(email,google_sub) VALUES($1,$2) RETURNING id,email,plan,account_status',
+        [email,googleSub]
+      );
+      user=created.rows[0];
+    }
+
+    const sessionToken=randomToken(32);
+    await accountClient.query(
+      "INSERT INTO web_sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '30 days')",
+      [user.id,sha256(sessionToken)]
+    );
+    await accountClient.query('COMMIT');
+    return {user:{id:user.id,email:user.email,plan:user.plan},sessionToken,returnTo};
+  }catch(error){await accountClient.query('ROLLBACK').catch(()=>{});throw error;}
+  finally{accountClient.release();}
+}
+
+
 function founderStepUpSessionHash(userId:string,cookieHeader?:string):string|null{
   const sessionToken=parseCookies(cookieHeader)[SESSION_COOKIE];
   if(!sessionToken)return null;
