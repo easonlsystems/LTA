@@ -5,7 +5,7 @@ process.env.PUBLIC_BASE_URL='http://localhost:3000';
 process.env.APP_SECRET='01234567890123456789012345678901';
 process.env.PUBLIC_BRAND_NAME='LaunchBrand';
 
-const [{createMcpHandler},{buildMcpServer,unicodeSafeSlice,chunkResult,selectTimedSegmentWindow},{pool}]=await Promise.all([
+const [{createMcpHandler},{buildMcpServer,unicodeSafeSlice,chunkResult,selectTimedSegmentWindow,searchSourceText},{pool}]=await Promise.all([
   import('@modelcontextprotocol/server'),
   import('../dist/src/mcp/server.js'),
   import('../dist/src/db/pool.js')
@@ -80,6 +80,24 @@ assert.equal(timedPaged.segment_count,1);
 assert.equal(timedPaged.delivery_complete,false);
 assert.equal(timedPaged.next_start_seconds,20);
 
+const englishMatches=searchSourceText(
+  'Opening remarks. The founder explains the launch plan. Later, she says the company decided to leave the market because distribution costs became too high. Closing remarks.',
+  'quit leave market distribution costs',
+  3
+);
+assert.ok(englishMatches.length>=1);
+assert.match(englishMatches[0].snippet,/leave the market/i);
+
+const cjkMatches=searchSourceText(
+  '前面先介紹背景。中間開始討論離職原因，主要是因為產品方向和團隊目標不同。最後談到下一步規劃。',
+  '為什麼離職 產品方向',
+  3
+);
+assert.ok(cjkMatches.length>=1);
+assert.match(cjkMatches[0].snippet,/離職原因/);
+
+assert.deepEqual(searchSourceText('unrelated source text','quantum entanglement',5),[]);
+
 const handler=createMcpHandler(buildMcpServer);
 const authInfo={
   token:'test',clientId:'test',scopes:['link2ai:read'],
@@ -106,7 +124,7 @@ try{
   assert.match(initialized.result.instructions??'',/built-in browser\/fetch attempt fails/i);
 
   const listed=await call({jsonrpc:'2.0',id:2,method:'tools/list',params:{}});
-  assert.deepEqual(listed.result.tools.map(tool=>tool.name),['read_public_link','read_public_links','get_video_transcript','get_transcript_result','get_video_time_range','get_usage']);
+  assert.deepEqual(listed.result.tools.map(tool=>tool.name),['read_public_link','read_public_links','get_video_transcript','get_transcript_result','get_video_time_range','find_in_link','get_usage']);
   assert.match(listed.result.tools[0].description,/LaunchBrand/);
   assert.match(listed.result.tools[0].description,/built-in browser\/fetch fails/i);
   assert.match(listed.result.tools[0].description,/instead of asking the user to paste/i);
@@ -115,6 +133,7 @@ try{
   assert.match(listed.result.tools[2].description,/Prefer read_public_link/i);
   assert.match(listed.result.tools[3].description,/LaunchBrand/);
   assert.match(listed.result.tools[4].description,/timestamp range/i);
+  assert.match(listed.result.tools[5].description,/Locate likely relevant regions/i);
   assert.doesNotMatch(JSON.stringify(listed.result.tools),/\$\{env\(\)/);
   assert.deepEqual(listed.result.tools[0].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true});
   assert.deepEqual(listed.result.tools[1].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true});
@@ -122,15 +141,17 @@ try{
   assert.equal(listed.result.tools[3].annotations.readOnlyHint,true);
   assert.equal(listed.result.tools[4].annotations.readOnlyHint,true);
   assert.equal(listed.result.tools[5].annotations.readOnlyHint,true);
+  assert.equal(listed.result.tools[6].annotations.readOnlyHint,true);
   for(const tool of listed.result.tools){
     assert.deepEqual(tool.securitySchemes,[{type:'oauth2',scopes:['link2ai:read']}],tool.name+' must declare OAuth explicitly for ChatGPT plugin review');
     assert.ok(tool.outputSchema&&tool.outputSchema.type==='object',tool.name+' must publish an output schema');
   }
   assert.ok(listed.result.tools[0].outputSchema.properties.source_completeness,'read_public_link output schema must expose completeness');
   assert.ok(listed.result.tools[0].outputSchema.properties.continuation_required,'read_public_link output schema must expose pagination state');
-  assert.ok(listed.result.tools[5].outputSchema.properties.remaining_usage_units,'get_usage output schema must expose remaining units');
+  assert.ok(listed.result.tools[6].outputSchema.properties.remaining_usage_units,'get_usage output schema must expose remaining units');
   assert.ok(listed.result.tools[1].outputSchema.properties.results,'read_public_links must preserve per-source results');
   assert.ok(listed.result.tools[4].outputSchema.properties.timed_text,'get_video_time_range must expose timed source text');
+  assert.ok(listed.result.tools[5].outputSchema.properties.matches,'find_in_link must expose ranked source matches');
 
   // Assertions for the production selection contract: use Link2AI when the user's
   // question actually depends on supported link contents, while avoiding unrelated URLs.
@@ -143,6 +164,7 @@ try{
   assert.match(initialized.result.instructions??'',/turn count alone is never a reason to refresh/i);
   assert.match(initialized.result.instructions??'',/prefer read_public_links/i);
   assert.match(initialized.result.instructions??'',/get_video_time_range/i);
+  assert.match(initialized.result.instructions??'',/find_in_link/i);
   assert.match(listed.result.tools[0].description,/Do not call again merely because many turns passed/i);
   assert.ok(listed.result.tools[0].inputSchema.properties.refresh,'read_public_link must expose explicit refresh control');
 

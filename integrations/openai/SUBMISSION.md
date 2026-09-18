@@ -84,6 +84,16 @@ Reads a timestamp range from an existing processed video job.
 - Does not re-read or re-charge the source.
 - OAuth required: `link2ai:read`.
 
+### find_in_link
+Locates likely relevant text regions inside an existing processed source job.
+
+- readOnlyHint: true.
+- destructiveHint: false.
+- openWorldHint: false.
+- Does not re-read or re-charge the source.
+- Search results are locator hints, not semantic proof; broader context should be read before answering.
+- OAuth required: `link2ai:read`.
+
 ### get_usage
 Reads the connected user's Link2AI plan and processing-unit balance.
 

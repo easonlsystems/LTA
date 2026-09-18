@@ -82,6 +82,24 @@ const timeRangeOutputSchema=z.object({
   message:z.string().optional()
 });
 
+const sourceSearchOutputSchema=z.object({
+  status:z.enum(['completed','processing','payment_required','failed']),
+  job_id:z.string().uuid().optional(),
+  source_url:z.string().url().optional(),
+  source_key:z.string().optional(),
+  query:z.string().optional(),
+  matches:z.array(z.object({
+    offset:z.number().int().nonnegative(),
+    score:z.number().nonnegative(),
+    snippet:z.string()
+  })).optional(),
+  checkout_url:z.string().url().nullable().optional(),
+  error_code:z.string().nullable().optional(),
+  retry_after_seconds:z.number().nonnegative().optional(),
+  retryable:z.boolean().optional(),
+  message:z.string().optional()
+});
+
 const usageOutputSchema=z.object({
   plan:z.enum(['trial','basic','pro']),
   used_seconds:z.number().nonnegative(),
@@ -204,11 +222,68 @@ export function selectTimedSegmentWindow(
   return {timed_text:lines.join('\n'),segment_count:lines.length,delivery_complete:nextStart===null,next_start_seconds:nextStart};
 }
 
+function searchNormalize(value:string):string{
+  return value.normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
+}
+
+function searchTerms(query:string):string[]{
+  const normalized=searchNormalize(query);
+  const stop=new Set(['the','and','for','that','with','this','from','what','when','where','which','why','how','did','does','was','were','are','is','a','an','to','of','in','on','it','he','she','they','we','you']);
+  const terms=new Set<string>();
+  for(const token of normalized.match(/[\p{L}\p{N}]+/gu)??[]){
+    if(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(token)){
+      if(token.length<=12&&token.length>=2)terms.add(token);
+      for(let i=0;i<token.length-1;i++)terms.add(token.slice(i,i+2));
+    }else if(token.length>=2&&!stop.has(token)){
+      terms.add(token);
+    }
+  }
+  return [...terms].sort((a,b)=>b.length-a.length).slice(0,24);
+}
+
+export function searchSourceText(
+  text:string,
+  query:string,
+  maxMatches=5
+):Array<{offset:number;score:number;snippet:string}>{
+  const terms=searchTerms(query);
+  if(!text.trim()||!terms.length)return [];
+  const windowSize=3000;
+  const step=2500;
+  const matches:Array<{offset:number;score:number;snippet:string}>=[];
+  for(let offset=0;offset<text.length;offset+=step){
+    const chunk=unicodeSafeSlice(text,offset,windowSize);
+    const normalized=searchNormalize(chunk.text);
+    let score=0;
+    let matchedTerms=0;
+    for(const term of terms){
+      let from=0,count=0;
+      while(count<3){
+        const found=normalized.indexOf(term,from);
+        if(found<0)break;
+        count++;from=found+Math.max(1,term.length);
+      }
+      if(count){
+        matchedTerms++;
+        score+=count*Math.max(1,Math.min(5,term.length));
+      }
+    }
+    if(score>0){
+      score+=matchedTerms*2;
+      matches.push({offset:chunk.start,score,snippet:chunk.text});
+    }
+    if(chunk.end>=text.length)break;
+  }
+  return matches
+    .sort((a,b)=>b.score-a.score||a.offset-b.offset)
+    .slice(0,Math.max(1,Math.min(10,maxMatches)));
+}
+
 export function buildMcpServer(){
   const e=env();
   const redditReady=Boolean(e.REDDIT_CLIENT_ID?.trim()&&e.REDDIT_CLIENT_SECRET?.trim());
   const supportedSources=`${redditReady?'Reddit, ':''}YouTube/Shorts, TikTok, Instagram, X, Bluesky, GitHub Issue/PR, Hacker News, readable webpage/article, or text-layer PDF`;
-  const server=new McpServer({name:e.PUBLIC_BRAND_NAME,version:'1.8.0'},{instructions:`${e.PUBLIC_BRAND_NAME} is the source reader for supported public links. When the user provides a supported public ${supportedSources} link and asks a question that requires the contents of that link, use read_public_link before concluding that the source is inaccessible or asking the user to paste its contents. For two or more supported links that must be compared or synthesized, prefer read_public_links so source identities stay separate. If the connected AI's built-in browser/fetch attempt fails on a supported source, try ${e.PUBLIC_BRAND_NAME} rather than stopping at that failure. If a successful Link2AI result for the exact same source is already present and sufficient in the current conversation, reuse it instead of calling Link2AI again; turn count alone is never a reason to refresh. Call again when the earlier source text is no longer available/sufficient, and use refresh=true only when the user asks for current/updated state or the earlier result is stale, partial, or unverified. For timestamp-specific video questions, use get_video_time_range on the existing job rather than re-reading the video. Do not use ${e.PUBLIC_BRAND_NAME} for unrelated URLs, profiles, feeds, timelines, private/login-gated content, broad crawling, or when the user explicitly asks not to fetch external content.${redditReady?'':' Reddit is not currently advertised because this deployment does not have approved Reddit OAuth Data API credentials configured.'}`});
+  const server=new McpServer({name:e.PUBLIC_BRAND_NAME,version:'1.9.0'},{instructions:`${e.PUBLIC_BRAND_NAME} is the source reader for supported public links. When the user provides a supported public ${supportedSources} link and asks a question that requires the contents of that link, use read_public_link before concluding that the source is inaccessible or asking the user to paste its contents. For two or more supported links that must be compared or synthesized, prefer read_public_links so source identities stay separate. If the connected AI's built-in browser/fetch attempt fails on a supported source, try ${e.PUBLIC_BRAND_NAME} rather than stopping at that failure. If a successful Link2AI result for the exact same source is already present and sufficient in the current conversation, reuse it instead of calling Link2AI again; turn count alone is never a reason to refresh. Call again when the earlier source text is no longer available/sufficient, and use refresh=true only when the user asks for current/updated state or the earlier result is stale, partial, or unverified. For timestamp-specific video questions, use get_video_time_range on the existing job rather than re-reading the video. For a topic/detail/quote question about a long already-processed source when the relevant location is unclear, use find_in_link to locate likely transcript regions, then read surrounding context with get_transcript_result before answering; a search miss is not proof that the source never mentions the topic. Do not use ${e.PUBLIC_BRAND_NAME} for unrelated URLs, profiles, feeds, timelines, private/login-gated content, broad crawling, or when the user explicitly asks not to fetch external content.${redditReady?'':' Reddit is not currently advertised because this deployment does not have approved Reddit OAuth Data API credentials configured.'}`});
 
   const readPublicLinkConfig={
     title:'Read public link',
@@ -314,6 +389,31 @@ export function buildMcpServer(){
       status:'completed',job_id:result.job_id,source_url:result.source_url,source_key:result.source_key,
       requested_start_seconds:start_seconds,requested_end_seconds:end_seconds,...window,
       ...(window.segment_count?{}:{message:'No timestamped speech/caption segment overlaps the requested range.'})
+    };
+  }));
+
+  server.registerTool('find_in_link',{
+    title:'Find in processed link',
+    description:`Locate likely relevant regions inside an already processed Link2AI source without re-reading or re-charging it. Use this for long-source questions about a topic, detail, quote, name, or concept when the relevant location is unclear. Supply concise keywords/concepts and useful synonyms. This is lexical retrieval, not semantic proof: after a match, use get_transcript_result around the returned offset for broader context before answering, and do not treat zero matches as proof that the source never discusses the topic.`,
+    inputSchema:{
+      job_id:z.string().uuid(),
+      query:z.string().trim().min(2).max(500),
+      max_matches:z.number().int().min(1).max(10).optional()
+    },
+    outputSchema:sourceSearchOutputSchema.shape,
+    securitySchemes:LINK2AI_OAUTH_SECURITY,
+    _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
+    annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}
+  } as any,async(args:Record<string,unknown>,ctx:any)=>safeToolCall(async()=>{
+    const {job_id,query,max_matches}=args as {job_id:string;query:string;max_matches?:number};
+    const result=await getJobResult(userIdFromContext(ctx),job_id);
+    if(result.status!=='completed')return result as unknown as Record<string,unknown>;
+    const transcript=result.transcript??'';
+    const matches=searchSourceText(transcript,query,max_matches??5);
+    return {
+      status:'completed',job_id:result.job_id,source_url:result.source_url,source_key:result.source_key,
+      query,matches,
+      ...(matches.length?{}:{message:'No lexical match was found. Try broader concepts/synonyms or continue reading the source; this does not prove the topic is absent.'})
     };
   }));
 
