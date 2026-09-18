@@ -207,7 +207,7 @@ try{
   assert.equal(claudeInstall.origin,'https://claude.ai');
   assert.equal(claudeInstall.pathname,'/customize/connectors');
   assert.equal(claudeInstall.searchParams.get('modal'),'add-custom-connector');
-  assert.equal(claudeInstall.searchParams.get('connectorName'),'Link2AI');
+  assert.equal(claudeInstall.searchParams.get('connectorName'),'LaunchBrand');
   assert.equal(claudeInstall.searchParams.get('connectorUrl'),'https://link2ai.example/mcp');
 
   const analyticsWrite=await fetch(`http://127.0.0.1:${port}/api/analytics/event`,{
@@ -348,6 +348,17 @@ try{
   });
   assert.equal(unauthorized.status,401);
   assert.match(unauthorized.headers.get('www-authenticate')??'',/oauth-protected-resource\/mcp/);
+
+  const openaiResourceMetadata=await fetch(`http://127.0.0.1:${port}/.well-known/oauth-protected-resource/mcp/openai`,{headers:{host:'link2ai.example'}});
+  assert.equal(openaiResourceMetadata.status,200);
+  assert.equal((await openaiResourceMetadata.json()).resource,'https://link2ai.example/mcp/openai');
+
+  const unauthorizedOpenai=await fetch(`http://127.0.0.1:${port}/mcp/openai`,{
+    method:'POST',headers:{host:'link2ai.example','content-type':'application/json'},body:'{}'
+  });
+  assert.equal(unauthorizedOpenai.status,401);
+  assert.match(unauthorizedOpenai.headers.get('www-authenticate')??'',/oauth-protected-resource\/mcp\/openai/);
+
   console.log('runtime smoke tests PASS');
 }finally{
   child.kill();

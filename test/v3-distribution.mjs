@@ -15,7 +15,7 @@ const allowedManifestKeys=new Set(['$schema','name','version','description','aut
 for(const key of Object.keys(openaiPlugin))assert.ok(allowedManifestKeys.has(key),'unsupported portable plugin manifest key: '+key);
 assert.equal('skills' in openaiPlugin,false,'portable plugins discover skills from the fixed skills/ directory');
 assert.equal(openaiMcp.mcpServers.link2ai.type,'streamable-http');
-assert.equal(openaiMcp.mcpServers.link2ai.url,'https://api-production-0383e.up.railway.app/mcp');
+assert.equal(openaiMcp.mcpServers.link2ai.url,'https://api-production-0383e.up.railway.app/mcp/openai');
 
 assert.match(openaiSkill,/read_public_link/);
 assert.match(openaiSkill,/continuation_required/);
@@ -26,7 +26,9 @@ assert.match(openaiSkill,/Do not invoke Link2AI just because a URL appears/);
 
 assert.match(openaiSubmission,/Contains MCP/);
 assert.match(openaiSubmission,/Universal/);
-assert.match(openaiSubmission,/OPENAI_APPS_CHALLENGE/);
+assert.match(openaiSubmission,/\.well-known\/openai-apps-challenge/);
+assert.match(openaiSubmission,/\/mcp\/openai/);
+assert.match(openaiSubmission,/Bluesky.*GitHub.*Hacker News/s);
 assert.match(openaiSubmission,/reviewer email\/password/i);
 assert.match(openaiSubmission,/must not require MFA/i);
 assert.match(openaiSubmission,/security schemes, output schemas, and accurate annotations/i);

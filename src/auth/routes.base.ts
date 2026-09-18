@@ -127,14 +127,15 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     revocation_endpoint_auth_methods_supported: ['none']
   }));
 
-  const protectedResourceMetadata = async () => ({
-    resource: mcpResource(),
+  const protectedResourceMetadata = (resource=mcpResource()) => async () => ({
+    resource,
     authorization_servers: [env().PUBLIC_BASE_URL],
     scopes_supported: ['link2ai:read'],
     bearer_methods_supported: ['header']
   });
-  app.get('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadata);
-  app.get('/.well-known/oauth-protected-resource', protectedResourceMetadata);
+  app.get('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadata());
+  app.get('/.well-known/oauth-protected-resource/mcp/openai', protectedResourceMetadata(mcpResource('openai')));
+  app.get('/.well-known/oauth-protected-resource', protectedResourceMetadata());
 
   app.post('/oauth/register', async (req, reply) => {
     const b = req.body as any;

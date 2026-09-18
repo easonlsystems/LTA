@@ -12,15 +12,20 @@ const FOUNDER_STEPUP_COOKIE = 'link2ai_founder_stepup';
 
 export interface AuthUser { id: string; email: string | null; plan: 'trial'|'basic'|'pro'; }
 
-export function mcpResource(): string { return new URL('/mcp', env().PUBLIC_BASE_URL).toString(); }
+export type McpAudience='default'|'openai';
+
+export function mcpResource(audience:McpAudience='default'): string {
+  return new URL(audience==='openai'?'/mcp/openai':'/mcp', env().PUBLIC_BASE_URL).toString();
+}
 
 function normalizeResource(raw?: string): string {
-  const expected = mcpResource();
-  if (!raw) return expected; // Backward-compatible with older MCP clients; issued token is still audience-bound.
+  const fallback=mcpResource();
+  if (!raw) return fallback; // Backward-compatible with older MCP clients; issued token is still audience-bound.
   let actual: string;
   try { actual = new URL(raw).toString(); } catch { throw new Link2AIError('AUTH_REQUIRED','Invalid OAuth resource.',400); }
-  if (actual !== expected) throw new Link2AIError('AUTH_REQUIRED','OAuth resource does not match this MCP server.',400);
-  return expected;
+  const allowed=new Set([mcpResource(),mcpResource('openai')]);
+  if (!allowed.has(actual)) throw new Link2AIError('AUTH_REQUIRED','OAuth resource does not match a Link2AI MCP server.',400);
+  return actual;
 }
 
 function normalizeScope(raw?: string): string {
@@ -826,7 +831,7 @@ export async function exchangeRefreshToken(input:{refreshToken:string;clientId:s
 
 export type Link2AIAuthInfo = AuthInfo & { extra: { userId:string } };
 
-export async function authInfoFromBearer(authorization?: string): Promise<Link2AIAuthInfo | null> {
+export async function authInfoFromBearer(authorization?: string,expectedResource=mcpResource()): Promise<Link2AIAuthInfo | null> {
   if (!authorization?.startsWith('Bearer ')) return null;
   const token = authorization.slice(7).trim();
   if (!token) return null;
@@ -834,7 +839,7 @@ export async function authInfoFromBearer(authorization?: string): Promise<Link2A
     `SELECT t.user_id,t.client_id,t.scope,t.expires_at
      FROM oauth_access_tokens t JOIN users u ON u.id=t.user_id
      WHERE t.token_hash=$1 AND t.resource=$2 AND t.revoked_at IS NULL AND t.expires_at > now()
-       AND u.account_status <> 'disabled'`, [sha256(token),mcpResource()]
+       AND u.account_status <> 'disabled'`, [sha256(token),expectedResource]
   );
   if (!r.rowCount) return null;
   const row=r.rows[0];
@@ -845,7 +850,7 @@ export async function authInfoFromBearer(authorization?: string): Promise<Link2A
     clientId:row.client_id,
     scopes,
     expiresAt:Math.floor(new Date(row.expires_at).getTime()/1000),
-    resource:new URL(mcpResource()),
+    resource:new URL(expectedResource),
     extra:{userId:row.user_id}
   };
 }

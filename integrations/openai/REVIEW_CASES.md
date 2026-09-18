@@ -2,41 +2,13 @@
 
 Use the dedicated production reviewer account supplied privately in the OpenAI submission portal. No MFA, email confirmation, SMS confirmation, or private-network access may be required.
 
+The ChatGPT distribution is intentionally limited to public Bluesky posts, public GitHub Issues / pull requests, and public Hacker News discussions. Other Link2AI sources are blocked on this distribution unless a separately authorized retrieval path is added later.
+
+Failed reads consume 0 processing units. Sources blocked by the ChatGPT distribution are rejected before retrieval or quota consumption.
+
 ## Positive cases — exactly 5
 
-### P1 — YouTube source fallback
-**Prompt**
-Read this public YouTube source with Link2AI and summarize its main argument: <REVIEW_YOUTUBE_URL>
-
-**Expected behavior**
-- Invoke `read_public_link` for the exact URL.
-- If the job is processing, continue with `get_transcript_result`.
-- Follow `next_offset` while `continuation_required=true` if more context is needed.
-- Preserve the exact source identity.
-- Do not invent visual-only details.
-
-**Expected result structure**
-A concise summary grounded in `content_text`, with any relevant completeness limitation stated.
-
-**Fixture**
-Use a stable public YouTube URL verified in production immediately before submission.
-
-### P2 — Long article continuation
-**Prompt**
-Read this article completely with Link2AI, then list the author's main claims and supporting evidence: <REVIEW_LONG_ARTICLE_URL>
-
-**Expected behavior**
-- Invoke `read_public_link`.
-- Continue through all required result pages using `get_transcript_result`.
-- Do not describe the source as fully read while `continuation_required=true`.
-
-**Expected result structure**
-Claims and supporting evidence based on the complete delivered source text.
-
-**Fixture**
-Use a stable public article whose extracted text exceeds one Link2AI MCP delivery chunk.
-
-### P3 — GitHub pull request discussion
+### P1 — GitHub pull request discussion
 **Prompt**
 Read this pull request with Link2AI and summarize the main implementation change, reviewer concerns, and unresolved discussion: <REVIEW_GITHUB_PR_URL>
 
@@ -44,6 +16,7 @@ Read this pull request with Link2AI and summarize the main implementation change
 - Invoke `read_public_link` for the exact PR.
 - Include available PR body, diff, issue comments, reviews, and inline review comments returned by Link2AI.
 - Preserve file/line context when present.
+- If more than one MCP delivery chunk is needed, continue with `get_transcript_result`.
 
 **Expected result structure**
 A structured PR summary with implementation, review concerns, and unresolved points.
@@ -51,21 +24,52 @@ A structured PR summary with implementation, review concerns, and unresolved poi
 **Fixture**
 Use a stable public GitHub PR containing review discussion and at least one inline review comment.
 
-### P4 — Public PDF
+### P2 — Hacker News discussion
 **Prompt**
-Read this PDF with Link2AI and summarize each major section, then give me the document's conclusion: <REVIEW_PDF_URL>
+Read this Hacker News discussion with Link2AI and summarize the strongest disagreements and the evidence each side gives: <REVIEW_HN_URL>
 
 **Expected behavior**
-- Invoke `read_public_link`.
-- Continue through long-result pagination if needed.
-- Preserve page-related completeness metadata.
-- If the PDF lacks a readable text layer, return a clear failure instead of fabricating text.
+- Invoke `read_public_link` for the exact Hacker News item.
+- Read the discussion returned through the official Hacker News Firebase API path used by Link2AI.
+- Follow `next_offset` while `continuation_required=true` if the delivered result spans multiple chunks.
+- Do not treat a partial delivery as the complete source.
 
 **Expected result structure**
-Section-by-section summary plus conclusion, grounded in the PDF text.
+A concise map of the main positions and the public comments supporting them.
 
 **Fixture**
-Use a stable public text-layer PDF verified in production.
+Use a stable public Hacker News item with a non-trivial comment tree.
+
+### P3 — Bluesky post and replies
+**Prompt**
+Read this Bluesky post with Link2AI and summarize the main claim plus the most relevant public replies: <REVIEW_BLUESKY_URL>
+
+**Expected behavior**
+- Invoke `read_public_link` for the exact public Bluesky post.
+- Preserve the exact source identity.
+- Use only text returned from the public AT Protocol API path.
+- Do not invent image-only or visual details.
+
+**Expected result structure**
+The post's main claim followed by the relevant public reply context.
+
+**Fixture**
+Use a stable public Bluesky post with at least one public reply.
+
+### P4 — Multi-source comparison
+**Prompt**
+Compare these two public sources with Link2AI and tell me where they agree and disagree: <REVIEW_GITHUB_ISSUE_URL> <REVIEW_HN_URL>
+
+**Expected behavior**
+- Invoke `read_public_links` so source identities remain separate.
+- Preserve each source's own `source_key`, `job_id`, completeness state, and continuation state.
+- Continue any source whose `continuation_required` value is true before making a claim that depends on omitted content.
+
+**Expected result structure**
+A comparison that clearly attributes claims to the GitHub and Hacker News sources separately.
+
+**Fixture**
+Use one stable public GitHub Issue and one stable public Hacker News discussion.
 
 ### P5 — Usage balance
 **Prompt**
@@ -74,6 +78,7 @@ How many Link2AI processing units do I have left?
 **Expected behavior**
 - Invoke `get_usage`.
 - Read only the authenticated review account's plan and unit balance.
+- Use `remaining_usage_units` as the authoritative remaining balance.
 - Do not expose internal auth or billing secrets.
 
 **Expected result structure**
@@ -84,15 +89,15 @@ Dedicated production reviewer account.
 
 ## Negative cases — exactly 3
 
-### N1 — Login-gated/private source
+### N1 — Source blocked on the ChatGPT distribution
 **Scenario**
-User provides a source that requires login or is private and asks Link2AI to read it.
+User asks Link2AI to read a YouTube, Instagram, TikTok, X, Reddit, arbitrary webpage, or arbitrary PDF URL.
 
 **Expected behavior**
-Return a clear unsupported/inaccessible failure. Do not fabricate source contents. Failed reads consume 0 processing units.
+Return a clear `PLATFORM_BLOCKED` result before retrieval, cache reuse, job creation, or quota consumption. Do not silently fall back to another Link2AI retrieval route.
 
 **Why the plugin must not complete the requested operation**
-Link2AI only supports public content that its production retrieval layer can legitimately access.
+Those source categories are intentionally unavailable through the ChatGPT distribution unless a separately authorized retrieval path is added later.
 
 ### N2 — Broad profile/feed crawl
 **Scenario**

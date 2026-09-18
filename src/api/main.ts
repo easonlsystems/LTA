@@ -7,7 +7,7 @@ import { env } from '../config/env.js';
 import { pool } from '../db/pool.js';
 import { registerAuthRoutes } from '../auth/routes.js';
 import { registerBillingRoutes } from '../billing/routes.js';
-import { authInfoFromBearer, beginFounderStepUp, clearFounderStepUpCookie, createFounderStepUpCookie, csrfTokenFromSessionCookie, hasFounderStepUp, invalidateFounderStepUpChallenges, userFromSessionCookie, verifyCsrfToken, verifyFounderStepUp } from '../auth/service.js';
+import { authInfoFromBearer, beginFounderStepUp, clearFounderStepUpCookie, createFounderStepUpCookie, csrfTokenFromSessionCookie, hasFounderStepUp, invalidateFounderStepUpChallenges, mcpResource, userFromSessionCookie, verifyCsrfToken, verifyFounderStepUp } from '../auth/service.js';
 import { buildMcpServer } from '../mcp/server.js';
 import { readinessIssues } from '../config/readiness.js';
 import { browserSameOriginOk, publicHostAllowlist } from '../config/publicUrl.js';
@@ -30,8 +30,10 @@ app.addContentTypeParser('application/x-www-form-urlencoded',{parseAs:'string'},
   try{return done(null,Object.fromEntries(new URLSearchParams(String(body??''))));}catch(err){return done(err as Error,undefined);}
 });
 
-const mcpHandler=createMcpHandler(buildMcpServer);
+const mcpHandler=createMcpHandler(()=>buildMcpServer());
 const nodeMcp=toNodeHandler(mcpHandler,{onerror:(err)=>app.log.error(err)});
+const openaiMcpHandler=createMcpHandler(()=>buildMcpServer('openai'));
+const nodeOpenaiMcp=toNodeHandler(openaiMcpHandler,{onerror:(err)=>app.log.error(err)});
 
 app.all('/mcp',async(request,reply)=>{
   const originHeader=Array.isArray(request.headers.origin)?request.headers.origin[0]:request.headers.origin;
@@ -46,6 +48,20 @@ app.all('/mcp',async(request,reply)=>{
   }
   // MCP's Node adapter forwards req.auth to ctx.http.authInfo.
   return nodeMcp(Object.assign(request.raw,{auth}),reply.raw,request.body);
+});
+
+app.all('/mcp/openai',async(request,reply)=>{
+  const originHeader=Array.isArray(request.headers.origin)?request.headers.origin[0]:request.headers.origin;
+  const originCheck=validateOriginHeader(originHeader,allowedPublicHosts);
+  if(!originCheck.ok){
+    return reply.code(403).send({jsonrpc:'2.0',error:{code:-32000,message:originCheck.message},id:null});
+  }
+  const auth=await authInfoFromBearer(request.headers.authorization,mcpResource('openai'));
+  if(!auth){
+    reply.header('WWW-Authenticate',`Bearer resource_metadata="${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp/openai", scope="link2ai:read"`);
+    return reply.code(401).send({error:'unauthorized',message:`Connect ${env().PUBLIC_BRAND_NAME} to continue.`});
+  }
+  return nodeOpenaiMcp(Object.assign(request.raw,{auth}),reply.raw,request.body);
 });
 
 app.get('/healthz',async(_req,reply)=>{
