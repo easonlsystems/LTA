@@ -22,12 +22,6 @@ assert.match(mcpSource,/preferred Link2AI reader/,'MCP tool description should m
 assert.doesNotMatch(mcpSource,/Claude(?:'s)? built-in/,'MCP server instructions must stay host-neutral for V3 AI clients');
 assert.match(apiSource,/\/connect\/grok/,'V3 branch must expose the Grok acceptance route');
 assert.match(apiSource,/\/connect\/perplexity/,'V3 branch must expose the Perplexity acceptance route');
-assert.match(v3ConnectSource,/grok\.com\/connectors/,'Grok acceptance page must use the official connectors entry point');
-assert.match(v3ConnectSource,/Perplexity · V3 compatibility target/,'Perplexity must remain labeled as a compatibility target before live acceptance');
-assert.match(v3ConnectSource,/noindex,nofollow/,'Unverified V3 host setup pages must not be indexed as public support claims');
-assert.doesNotMatch(mcpSource,/Claude(?:'s)? built-in/,'MCP server instructions must stay host-neutral for V3 AI clients');
-assert.match(apiSource,/\/connect\/grok/,'V3 branch must expose the Grok acceptance route');
-assert.match(apiSource,/\/connect\/perplexity/,'V3 branch must expose the Perplexity acceptance route');
 assert.match(v3ConnectSource,/https:\/\/grok\.com\/connectors/,'Grok acceptance page must use the official connectors entry point');
 assert.match(v3ConnectSource,/Perplexity · V3 compatibility target/,'Perplexity must remain labeled as a compatibility target before live acceptance');
 assert.match(v3ConnectSource,/noindex,nofollow/,'Unverified V3 host setup pages must not be indexed as public support claims');
