@@ -22,7 +22,7 @@ async function rawPost(path,headers,body){
 }
 
 const child=spawn(process.execPath,['dist/src/api/main.js'],{
-  env:{...process.env,NODE_ENV:'production',PORT:String(port),DATABASE_URL:'postgres://127.0.0.1:1/link2ai',PUBLIC_BASE_URL:'https://link2ai.example',PUBLIC_BRAND_NAME:'LaunchBrand',RAILWAY_PUBLIC_DOMAIN:'internal.railway.local',APP_SECRET:'01234567890123456789012345678901',LEMONSQUEEZY_API_KEY:'lemon-secret-must-not-render',RESEND_API_KEY:'resend-secret-must-not-render',OPENAI_APPS_CHALLENGE:'review-challenge-token',REVIEWER_EMAIL:'reviewer@example.com',REVIEWER_PASSWORD:'this-is-a-long-review-password',FOUNDER_EMAIL:'founder@example.com'},
+  env:{...process.env,NODE_ENV:'production',PORT:String(port),DATABASE_URL:'postgres://127.0.0.1:1/link2ai',PUBLIC_BASE_URL:'https://link2ai.example',PUBLIC_BRAND_NAME:'LaunchBrand',RAILWAY_PUBLIC_DOMAIN:'internal.railway.local',APP_SECRET:'01234567890123456789012345678901',LEMONSQUEEZY_API_KEY:'lemon-secret-must-not-render',RESEND_API_KEY:'resend-secret-must-not-render',OPENAI_APPS_CHALLENGE:'review-challenge-token',REVIEWER_EMAIL:'reviewer@example.com',REVIEWER_PASSWORD:'this-is-a-long-review-password',FOUNDER_EMAIL:'founder@example.com',GOOGLE_CLIENT_ID:'google-client-id.apps.googleusercontent.com',GOOGLE_CLIENT_SECRET:'google-client-secret-must-not-render'},
   stdio:['ignore','pipe','pipe']
 });
 let output='';
@@ -71,7 +71,7 @@ try{
     if(route==='/sources'){assert.match(body,/Supported sources/);assert.match(body,/Video & social/);assert.match(body,/Reddit/);assert.match(body,/Paused until approved Reddit OAuth Data API credentials are configured/);}
     if(route==='/pricing'){assert.match(body,/Founding offer/);assert.match(body,/First 50 paid users get 50% more usage/);assert.match(body,/500 paid units \+ 250 founding bonus/);assert.match(body,/2,000 paid units \+ 1,000 founding bonus/);assert.match(body,/Unused paid units roll over while subscribed/);assert.match(body,/founding bonus resets each billing cycle and does not roll over/);assert.match(body,/No plan-specific video length limit/);assert.match(body,/What does 1 processing unit mean/);assert.match(body,/Units depend on content size, not platform/);}
     if(route==='/connect'){assert.match(body,/Open Claude Connectors Directory/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Always available/);assert.doesNotMatch(body,/Add custom connector|Tools already loaded|Register automatically/);}
-    assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render/);
+    assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render|google-client-secret-must-not-render/);
   }
 
   const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917-homeonly2`,{headers:{host:'link2ai.example'}});
@@ -216,19 +216,17 @@ try{
     body:'email=x%40example.com&password=not-a-real-password&return_to=%2Faccount',
     redirect:'manual'
   });
-  assert.equal(crossSiteLogin.status,403,'browser auth POSTs must reject cross-site origins before touching account state');
+  assert.equal(crossSiteLogin.status,404,'legacy password login must be closed once Google sign-in is configured');
 
-  // node:fetch intentionally overwrites the Host header, so use node:http here to
-  // exercise the real serving-host check instead of accidentally testing 127.0.0.1.
   const sameHostLogin=await rawPost('/auth/password/login',{
     host:'link2ai.example',origin:'https://link2ai.example','content-type':'application/x-www-form-urlencoded'
   },'email=x%40example.com&password=not-a-real-password&return_to=%2Faccount');
-  assert.notEqual(sameHostLogin.status,403,'same-host browser POSTs must not be rejected because PUBLIC_BASE_URL differs from the serving host');
+  assert.equal(sameHostLogin.status,404,'legacy password login must stay closed for same-origin requests too');
 
   const reverseProxyLogin=await rawPost('/auth/password/login',{
     host:'internal.railway.local',origin:'https://link2ai.example','content-type':'application/x-www-form-urlencoded'
   },'email=x%40example.com&password=not-a-real-password&return_to=%2Faccount');
-  assert.notEqual(reverseProxyLogin.status,403,'canonical public origin must not be rejected when a reverse proxy presents a different backend Host');
+  assert.equal(reverseProxyLogin.status,404,'legacy password login must stay closed behind the reverse proxy');
 
 
   const founder=await fetch(`http://127.0.0.1:${port}/founder`,{headers:{host:'link2ai.example'},redirect:'manual'});
@@ -302,26 +300,27 @@ try{
   assert.equal(login.status,200);
   const loginText=await login.text();
   assert.match(loginText,/Sign in to continue/);
-  assert.match(loginText,/auth\/password\/login/);
-  assert.match(loginText,/Create an account/);
+  assert.match(loginText,/Continue with Google/);
+  assert.match(loginText,/never sees or stores your Google password/);
+  assert.match(loginText,/auth\/google\/start/);
   assert.match(loginText,/OpenAI reviewer access/);
   assert.match(loginText,/10 processing units free/);
   assert.match(loginText,/Failed or unsupported reads use 0 units/);
-  assert.doesNotMatch(loginText,/3 links or 10 minutes free/);
-  assert.doesNotMatch(loginText,/Continue free/);
+  assert.doesNotMatch(loginText,/auth\/password\/login/);
   assert.doesNotMatch(loginText,/Send sign-in code/);
-  assert.doesNotMatch(loginText,/this-is-a-long-review-password/);
+  assert.doesNotMatch(loginText,/google-client-secret-must-not-render|this-is-a-long-review-password/);
 
   const signup=await fetch(`http://127.0.0.1:${port}/signup?return_to=%2Faccount`,{headers:{host:'link2ai.example'}});
   assert.equal(signup.status,200);
   const signupText=await signup.text();
   assert.match(signupText,/Create your Link2AI account/);
-  assert.match(signupText,/auth\/password\/register/);
-  assert.match(signupText,/At least 10 characters/);
+  assert.match(signupText,/Continue with Google/);
+  assert.match(signupText,/auth\/google\/start/);
+  assert.match(signupText,/verified email reconnects any existing Link2AI usage, plan and paid balance/);
   assert.match(signupText,/10 processing units free/);
-  assert.match(signupText,/Continue to Claude setup/);
   assert.match(signupText,/Failed \/ unsupported reads use 0 units/);
   assert.match(signupText,/product by Eason Systems/);
+  assert.doesNotMatch(signupText,/auth\/password\/register|At least 10 characters/);
 
   const oauthMetadata=await fetch(`http://127.0.0.1:${port}/.well-known/oauth-authorization-server`,{headers:{host:'link2ai.example'}});
   assert.equal(oauthMetadata.status,200);
