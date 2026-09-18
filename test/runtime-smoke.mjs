@@ -70,7 +70,7 @@ try{
     if(route==='/use-cases'){assert.match(body,/Use the link normally/);assert.match(body,/Summaries grounded in the source/);}
     if(route==='/sources'){assert.match(body,/Supported sources/);assert.match(body,/Video & social/);assert.match(body,/Reddit/);assert.match(body,/Paused until approved Reddit OAuth Data API credentials are configured/);}
     if(route==='/pricing'){assert.match(body,/Founding offer/);assert.match(body,/First 50 paid users get 50% more usage/);assert.match(body,/500 paid units \+ 250 founding bonus/);assert.match(body,/2,000 paid units \+ 1,000 founding bonus/);assert.match(body,/Unused paid units roll over while subscribed/);assert.match(body,/founding bonus resets each billing cycle and does not roll over/);assert.match(body,/No plan-specific video length limit/);assert.match(body,/What does 1 processing unit mean/);assert.match(body,/Units depend on content size, not platform/);}
-    if(route==='/connect'){assert.match(body,/Open Claude Connectors Directory/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Always available/);assert.doesNotMatch(body,/Add custom connector|Tools already loaded|Register automatically/);}
+    if(route==='/connect'){assert.match(body,/Add Link2AI to Claude/);assert.match(body,/custom-connector setup/);assert.match(body,/prefilled/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Always available/);assert.doesNotMatch(body,/available in Claude's Connectors Directory|Open Claude Connectors Directory|Use the published connector/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render|google-client-secret-must-not-render/);
   }
 
@@ -203,7 +203,12 @@ try{
   const connectStart=await fetch(`http://127.0.0.1:${port}/connect/start`,{headers:{host:'link2ai.example'},redirect:'manual'});
   assert.equal(connectStart.status,302);
   const connectLocation=connectStart.headers.get('location')??'';
-  assert.equal(connectLocation,'https://claude.ai/directory');
+  const claudeInstall=new URL(connectLocation);
+  assert.equal(claudeInstall.origin,'https://claude.ai');
+  assert.equal(claudeInstall.pathname,'/customize/connectors');
+  assert.equal(claudeInstall.searchParams.get('modal'),'add-custom-connector');
+  assert.equal(claudeInstall.searchParams.get('connectorName'),'Link2AI');
+  assert.equal(claudeInstall.searchParams.get('connectorUrl'),'https://link2ai.example/mcp');
 
   const analyticsWrite=await fetch(`http://127.0.0.1:${port}/api/analytics/event`,{
     method:'POST',headers:{host:'link2ai.example','content-type':'application/json'},body:'{"event":"connect_install_click"}'
