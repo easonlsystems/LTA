@@ -19,6 +19,7 @@ const [linkSource,limitsSource,mcpSource,mcpServiceSource,apiSource,authWrapperS
 ]);
 const authSource=authWrapperSource+'\n'+authBaseSource;
 const policySource=await readFile(new URL('../src/mcp/policy.ts',import.meta.url),'utf8');
+const xResolverSource=await readFile(new URL('../src/resolvers/xSyndication.ts',import.meta.url),'utf8');
 assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News must use the official Firebase API path');
 assert.doesNotMatch(linkSource,/hn\.algolia\.com/,'OpenAI-ready core must not depend on the community Algolia HN adapter');
 assert.match(policySource,/OPENAI_ALLOWED_PLATFORMS[^\n]*\['bluesky','github','hackernews'\]/,'ChatGPT distribution must default-deny every source outside the reviewed allowlist');
@@ -54,10 +55,12 @@ assert.doesNotMatch(limitsSource,/EXTRACTION_LIMITS/,'V3 must not impose product
 assert.doesNotMatch(plansSource,/MAX_PROCESSABLE_VIDEO_SECONDS|30\s*\*\s*60|120\s*\*\s*60/,'Plans must not impose product-defined per-video duration caps');
 assert.match(processorSource,/availableUsageUnits/,'Text extraction must derive its source budget from the user unit wallet');
 assert.match(processorSource,/caption_incomplete_fallback_asr/,'Known incomplete video captions must fall back to ASR instead of becoming a successful partial result');
-assert.match(processorSource,/probeXPostAttachedMedia/,'X posts must probe attached media before the text-only completion path');
+assert.match(processorSource,/probeXVideoMetadata/,'X posts must probe structured video metadata before the text-only completion path');
 assert.match(processorSource,/x_attached_media_detected/,'X attached media must enter the media pipeline and emit an explicit routing event');
 assert.match(processorSource,/prefetchedMetadata\?\?await resolver\.metadata\(parsed\)/,'X media metadata probe must feed the normal caption\/audio\/ASR pipeline');
-assert.match(linkSource,/xOembedHasAttachedMedia/,'X oEmbed parsing must expose attached-media detection');
+assert.match(xResolverSource,/cdn\.syndication\.twimg\.com\/tweet-result/,'X video detection must use the structured embed payload instead of guessing from oEmbed text');
+assert.match(xResolverSource,/mediaDetails|node\.video/,'X structured resolver must recognize explicit video metadata');
+assert.match(xResolverSource,/safeGetBuffer\(video\.videoUrl/,'X video resolver must fetch the resolved media track for downstream audio\/ASR');
 assert.match(mcpServiceSource,/!options\.refresh&&parsed\.platform!=='x'/,'MCP must bypass stale completed-result reuse for X during media-routing rollout');
 assert.match(processorSource,/const reuseCache=job\.platform!=='x'/,'Worker must bypass stale X transcript caches during media-routing rollout');
 assert.match(billingSource,/j\.error_code='QUOTA_EXCEEDED'/,'A successful top-up must resume quota-blocked jobs');

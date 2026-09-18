@@ -199,17 +199,6 @@ async function fetchXOEmbedData(input:ParsedMediaUrl):Promise<XOEmbedData>{
   return {html:String(data?.html??''),author_name:typeof data?.author_name==='string'?data.author_name:undefined};
 }
 
-export function xOembedHasAttachedMedia(html:string):boolean{
-  const visible=stripHtml(html);
-  return /\bpic\.(?:twitter|x)\.com\/[A-Za-z0-9_-]+/i.test(visible);
-}
-
-export async function probeXPostAttachedMedia(input:ParsedMediaUrl):Promise<boolean>{
-  if(input.platform!=='x')return false;
-  const data=await fetchXOEmbedData(input);
-  return xOembedHasAttachedMedia(data.html);
-}
-
 function xPostText(html:string):string{
   const p=/<p\b[^>]*>([\s\S]*?)<\/p>/i.exec(html)?.[1]??html;
   return stripHtml(p).replace(/\s+pic\.(?:twitter|x)\.com\/\S+$/i,'').trim();

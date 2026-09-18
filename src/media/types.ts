@@ -24,7 +24,7 @@ export interface TranscriptPayload {
 
 export interface MediaMetadata {
   platform: Platform;
-  resolver?: 'ytdlp' | 'external';
+  resolver?: 'ytdlp' | 'external' | 'x_syndication';
   canonicalMediaId: string;
   webpageUrl: string;
   originalLanguage?: string;
