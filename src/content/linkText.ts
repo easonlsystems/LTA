@@ -232,7 +232,7 @@ function collectBlueskyReplies(replies:unknown,out:BlueskyRendered,depth=0):void
     const text=cleanText(jsonString(record?.text),6000);
     if(text){
       const handle=jsonString(author?.handle)||jsonString(author?.displayName)||'unknown';
-      out.lines.push(`${depth?`${'↳'.repeat(depth)} `:''}'}- @${handle}: ${text}`);
+      out.lines.push(`${depth?`${'↳'.repeat(depth)} `:''}- @${handle}: ${text}`);
       out.count++;
     }
     collectBlueskyReplies(node?.replies,out,depth+1);
