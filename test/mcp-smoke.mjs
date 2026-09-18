@@ -127,6 +127,7 @@ assert.ok(longVideoMap.effective_window_seconds>=1170,'video map should widen wi
 assert.ok(longVideoMap.sections.length<=10);
 
 const handler=createMcpHandler(buildMcpServer);
+const openaiHandler=createMcpHandler(()=>buildMcpServer('openai'));
 const authInfo={
   token:'test',clientId:'test',scopes:['link2ai:read'],
   extra:{userId:'00000000-0000-4000-8000-000000000000'}
@@ -142,6 +143,19 @@ async function call(body){
   const text=await response.text();
   const line=text.split(/\r?\n/).find(value=>value.startsWith('data: '));
   assert.ok(line,'MCP response must contain an SSE data event');
+  return JSON.parse(line.slice(6));
+}
+
+async function callOpenai(body){
+  const response=await openaiHandler.fetch(new Request('http://localhost/mcp/openai',{
+    method:'POST',
+    headers:{'content-type':'application/json','accept':'application/json, text/event-stream'},
+    body:JSON.stringify(body)
+  }),{authInfo,parsedBody:body});
+  assert.equal(response.status,200);
+  const text=await response.text();
+  const line=text.split(/\r?\n/).find(value=>value.startsWith('data: '));
+  assert.ok(line,'OpenAI MCP response must contain an SSE data event');
   return JSON.parse(line.slice(6));
 }
 
@@ -189,6 +203,25 @@ try{
   assert.ok(listed.result.tools[5].outputSchema.properties.matches.items.properties.start_seconds,'video source search must expose time ranges');
   assert.ok(listed.result.tools[6].outputSchema.properties.sections,'get_video_map must expose timeline sections');
 
+  const openaiInitialized=await callOpenai({jsonrpc:'2.0',id:20,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'openai-audit',version:'1'}}});
+  assert.match(openaiInitialized.result.instructions??'',/ChatGPT distribution intentionally blocks/i);
+  assert.doesNotMatch(openaiInitialized.result.instructions??'',/use get_video_time_range|use get_video_map/i);
+
+  const openaiListed=await callOpenai({jsonrpc:'2.0',id:21,method:'tools/list',params:{}});
+  assert.deepEqual(openaiListed.result.tools.map(tool=>tool.name),['read_public_link','read_public_links','get_transcript_result','find_in_link','get_usage']);
+  assert.doesNotMatch(JSON.stringify(openaiListed.result.tools),/get_video_transcript|get_video_time_range|get_video_map/);
+  assert.match(openaiListed.result.tools[0].description,/Bluesky posts, GitHub Issues \/ pull requests, and Hacker News discussions/i);
+  for(const tool of openaiListed.result.tools){
+    assert.deepEqual(tool.securitySchemes,[{type:'oauth2',scopes:['link2ai:read']}],tool.name+' must declare OAuth explicitly on the ChatGPT endpoint');
+    assert.ok(tool.outputSchema&&tool.outputSchema.type==='object',tool.name+' must publish an output schema on the ChatGPT endpoint');
+  }
+
+  const blockedOpenai=await callOpenai({jsonrpc:'2.0',id:22,method:'tools/call',params:{name:'read_public_link',arguments:{url:'https://www.youtube.com/watch?v=dQw4w9WgXcQ'}}});
+  assert.equal(blockedOpenai.result.isError,true);
+  const blockedOpenaiPayload=JSON.parse(blockedOpenai.result.content[0].text.split('\n').at(-1));
+  assert.equal(blockedOpenaiPayload.error_code,'PLATFORM_BLOCKED');
+  assert.match(blockedOpenaiPayload.message,/not available through the ChatGPT distribution/i);
+
   // Assertions for the production selection contract: use Link2AI when the user's
   // question actually depends on supported link contents, while avoiding unrelated URLs.
   const get_video_transcript_desc=listed.result.tools[2].description;
@@ -225,7 +258,7 @@ try{
   assert.doesNotMatch(failed.result.content[0].text,/ECONNREFUSED|127\.0\.0\.1|postgres/i);
   console.log('MCP smoke tests PASS');
 }finally{
-  await handler.close();
+  await Promise.all([handler.close(),openaiHandler.close()]);
   await pool.end();
 }
 
