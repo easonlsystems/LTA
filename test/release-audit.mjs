@@ -53,4 +53,8 @@ assert.match(mcpSource,/find_in_link/,'V3 must expose read-only search over proc
 assert.match(mcpSource,/get_video_map/,'V3 must expose a whole-video timeline map for broad questions');
 assert.match(mcpSource,/video matches include timestamps|start_seconds/,'Video source search must preserve time ranges for follow-up context');
 assert.match(mcpSource,/search miss is not proof|zero matches as proof/i,'Source search must not turn lexical misses into false absence claims');
+assert.doesNotMatch(mcpSource,/checkout_url/,'Public MCP schemas must not expose checkout URLs for digital subscriptions or credits');
+assert.doesNotMatch(mcpServiceSource,/createCheckoutSession|createTopupCheckoutSession|checkout_url:row\.checkout_url/,'MCP service must not create or return purchase flows');
+assert.doesNotMatch(processorSource,/createCheckoutSession|createTopupCheckoutSession|paymentUrl\(/,'Worker must not create purchase sessions when quota is exceeded');
+
 console.log('release audit tests PASS');
