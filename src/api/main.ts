@@ -823,6 +823,22 @@ app.get('/founder',async(req,reply)=>{
       GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 12`,[founderEmail])
   ]);
 
+  const productFunnelResult=await pool.query<{
+    connect_cta_click:string;connection_started:string;connection_success:string;
+    connector_enabled:string;first_link_attempt:string;first_successful_read:string;
+  }>(`SELECT
+      COUNT(DISTINCT user_id) FILTER(WHERE event_name='connect_cta_click')::text AS connect_cta_click,
+      COUNT(DISTINCT user_id) FILTER(WHERE event_name='connection_started')::text AS connection_started,
+      COUNT(DISTINCT user_id) FILTER(WHERE event_name='connection_success')::text AS connection_success,
+      COUNT(DISTINCT user_id) FILTER(WHERE event_name='connector_enabled')::text AS connector_enabled,
+      COUNT(DISTINCT user_id) FILTER(WHERE event_name='first_link_attempt')::text AS first_link_attempt,
+      COUNT(DISTINCT user_id) FILTER(WHERE event_name='first_successful_read')::text AS first_successful_read
+    FROM product_activation_events e
+    JOIN users u ON u.id=e.user_id
+    WHERE COALESCE(e.distribution_profile,'default')='default'
+      AND COALESCE(lower(u.email),'')<>$1
+      AND COALESCE(u.analytics_excluded,false)=false`,[founderEmail]);
+
   const m=summaryResult.rows[0];
   const accounts=founderNum(m?.accounts_total),connected=founderNum(m?.connected_total),activated=founderNum(m?.activated_total),paid=founderNum(m?.paid_total);
   const links=founderNum(m?.links_total),seconds=founderNum(m?.seconds_total);
@@ -832,6 +848,13 @@ app.get('/founder',async(req,reply)=>{
   const activation=activationResult.rows[0];
   const externalVisitorsAll=founderNum(activation?.external_visitors_all),activationVisitors=founderNum(activation?.activation_visitors),ctaStarts=founderNum(activation?.cta_starts),signupViews=founderNum(activation?.signup_views),signupSubmits=founderNum(activation?.signup_submits),signupFailures=founderNum(activation?.signup_failures),externalSignups=founderNum(activation?.external_signups),connectClicks=founderNum(activation?.connect_clicks),externalConnected=founderNum(activation?.external_connected),externalActivated=founderNum(activation?.external_activated),externalPaid=founderNum(activation?.external_paid);
   const activationStarted=founderTime(activation?.activation_started_at);
+  const productFunnel=productFunnelResult.rows[0];
+  const productConnectCta=founderNum(productFunnel?.connect_cta_click);
+  const productConnectionStarted=founderNum(productFunnel?.connection_started);
+  const productConnectionSuccess=founderNum(productFunnel?.connection_success);
+  const productConnectorEnabled=founderNum(productFunnel?.connector_enabled);
+  const productFirstLinkAttempt=founderNum(productFunnel?.first_link_attempt);
+  const productFirstSuccessfulRead=founderNum(productFunnel?.first_successful_read);
   const sourceRows=sourceResult.rows.map(row=>`<tr><td class="fd-source">${founderEscape(row.source)}</td><td>${founderNum(row.visitors)}</td><td>${founderNum(row.signups)}</td><td>${founderPct(founderNum(row.signups),Math.max(founderNum(row.visitors),1))}</td></tr>`).join('')||'<tr><td colspan="4">尚無外部來源資料。</td></tr>';
   const renderedAt=founderTime(new Date().toISOString());
   const trackingStarted=founderTime(a?.tracking_started_at);
@@ -859,6 +882,7 @@ app.get('/founder',async(req,reply)=>{
       <div class="fd-card"><div class="fd-label">已處理內容</div><div class="fd-measure"><div class="fd-value">${founderUnits(seconds)}</div><div class="fd-unitline">processing units</div></div><div class="fd-note">近 7 天 ${founderUnits(m?.seconds_7d)} units</div></div>
     </section>
     <section><div class="fd-label" style="margin-bottom:8px">外部啟用漏斗 · 排除 Founder / 內部測試 · 自 ${activationStarted} 起</div><div class="fd-funnel activation"><div class="fd-step"><b>${activationVisitors}</b><span>可比較外部訪客</span></div><div class="fd-step"><b>${ctaStarts}</b><span>點主 CTA · ${founderPct(ctaStarts,Math.max(activationVisitors,1))}</span></div><div class="fd-step"><b>${signupViews}</b><span>看註冊頁 · ${founderPct(signupViews,Math.max(activationVisitors,1))}</span></div><div class="fd-step"><b>${signupSubmits}</b><span>送出註冊 · ${founderPct(signupSubmits,Math.max(signupViews,1))}</span></div><div class="fd-step"><b>${externalSignups}</b><span>完成註冊 · ${founderPct(externalSignups,Math.max(signupSubmits,1))}</span></div><div class="fd-step"><b>${externalConnected}</b><span>AI connected · ${founderPct(externalConnected,Math.max(externalSignups,1))}</span></div><div class="fd-step"><b>${externalActivated}</b><span>首次成功 read · ${founderPct(externalActivated,Math.max(externalConnected,1))}</span></div><div class="fd-step"><b>${externalPaid}</b><span>付費 · ${founderPct(externalPaid,Math.max(externalActivated,1))}</span></div></div><div class="fd-note">舊 Railway 回補流量仍保留在總訪客與熱門頁面，但不混進這條新漏斗的轉換率；這樣接下來累積到約 100 個 relevant external visitors 時才可直接比較。</div></section>
+    <section><div class="fd-label" style="margin-bottom:8px">Claude 連線 → 首次成功讀取 · 新 activation 埋點</div><div class="fd-funnel activation"><div class="fd-step"><b>${productConnectCta}</b><span>Connect CTA</span></div><div class="fd-step"><b>${productConnectionStarted}</b><span>OAuth started · ${founderPct(productConnectionStarted,Math.max(productConnectCta,1))}</span></div><div class="fd-step"><b>${productConnectionSuccess}</b><span>Connected · ${founderPct(productConnectionSuccess,Math.max(productConnectionStarted,1))}</span></div><div class="fd-step"><b>${productConnectorEnabled}</b><span>Connector usable* · ${founderPct(productConnectorEnabled,Math.max(productConnectionSuccess,1))}</span></div><div class="fd-step"><b>${productFirstLinkAttempt}</b><span>First link attempt · ${founderPct(productFirstLinkAttempt,Math.max(productConnectorEnabled,1))}</span></div><div class="fd-step"><b>${productFirstSuccessfulRead}</b><span>First successful read · ${founderPct(productFirstSuccessfulRead,Math.max(productFirstLinkAttempt,1))}</span></div></div><div class="fd-note">* Claude 不提供「使用者剛剛切開 connector toggle」的 server-side webhook，因此 connector usable 是在第一個已驗證 Link2AI tool call 抵達後推定；它可以區分「已授權但從未真正用到」與「connector 已經在對話中可被呼叫」。這組資料從本版上線後開始累積，不回推舊使用者。</div></section>
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>流量來源</h2><div class="fd-note">UTM source 優先；沒有 UTM 時只保存 referrer hostname，不保存完整 referrer URL、IP 或 User-Agent。</div></div><span class="fd-label">external only</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:620px"><thead><tr><th>來源</th><th>訪客</th><th>註冊</th><th>註冊率</th></tr></thead><tbody>${sourceRows}</tbody></table></div></section>
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>熱門網站頁面</h2><div class="fd-note">最近 7 天 · 匿名第一方統計</div></div><span class="fd-label">不儲存 IP</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:520px"><thead><tr><th>頁面</th><th>不重複訪客</th><th>瀏覽次數</th></tr></thead><tbody>${topPages}</tbody></table></div></section>
     <section><div class="fd-label" style="margin-bottom:8px">產品轉換漏斗</div><div class="fd-funnel"><div class="fd-step"><b>${accounts}</b><span>帳號</span></div><div class="fd-step"><b>${connected}</b><span>已連接 AI · ${founderPct(connected,accounts)}</span></div><div class="fd-step"><b>${activated}</b><span>首次成功連結 · ${founderPct(activated,accounts)}</span></div><div class="fd-step"><b>${paid}</b><span>付費 · 佔已啟用使用者 ${founderPct(paid,Math.max(activated,1))}</span></div></div></section>
