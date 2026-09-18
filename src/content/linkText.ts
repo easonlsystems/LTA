@@ -25,15 +25,16 @@ export interface LinkTextPayload{
 
 export interface TextExtractionBudget{maxUsageUnits:number;}
 
-function quotaBudgetError(budget:TextExtractionBudget,context:string):Link2AIError{
+function quotaBudgetError(budget:TextExtractionBudget,context:string,requiredUsageUnits?:number):Link2AIError{
+  const exact=Number.isFinite(requiredUsageUnits)&&Number(requiredUsageUnits)>budget.maxUsageUnits?Math.ceil(Number(requiredUsageUnits)):undefined;
   return new Link2AIError(
     'QUOTA_EXCEEDED',
-    `This source is larger than your remaining ${budget.maxUsageUnits} processing units. Add processing units and try again; Link2AI will not return an intentionally partial source.`,
+    `This source needs more than your remaining ${budget.maxUsageUnits} processing units. Add processing units and try again; Link2AI will not return an intentionally partial source.`,
     402,false,{
       cause_code:'source_exceeds_remaining_units',
       context,
       remaining_usage_units:budget.maxUsageUnits,
-      required_usage_units_at_least:budget.maxUsageUnits+1
+      ...(exact?{required_usage_units:exact,required_usage_units_at_least:exact}:{required_usage_units_at_least:budget.maxUsageUnits+1})
     }
   );
 }
@@ -46,7 +47,8 @@ function assertCharsWithinBudget(characters:number,budget:TextExtractionBudget|u
 
 function assertTextWithinBudget(text:string,budget:TextExtractionBudget|undefined,context:string):void{
   if(!budget)return;
-  if(textUsageUnits(estimateTokens(text))>budget.maxUsageUnits)throw quotaBudgetError(budget,context);
+  const requiredUnits=textUsageUnits(estimateTokens(text));
+  if(requiredUnits>budget.maxUsageUnits)throw quotaBudgetError(budget,context,requiredUnits);
 }
 
 function sourceByteBudget(_budget:TextExtractionBudget|undefined,_floorBytes:number):{maxBytes:number;quotaBounded:boolean}{
@@ -238,19 +240,13 @@ async function safeJsonArrayPages(url:string,description:string,budget?:TextExtr
   const items:unknown[]=[];
   const perPage=100;
   let page=1;
-  let observedTextChars=0;
   while(true){
     const u=new URL(url);
     u.searchParams.set('per_page',String(perPage));
     u.searchParams.set('page',String(page));
     const value=await safeJson(u.toString(),description,API_PAGE_BYTES,budget);
     if(!Array.isArray(value))throw new Link2AIError('EXTRACTION_FAILED',`${description} returned an invalid list.`,502,true);
-    for(const raw of value){
-      const item=jsonObject(raw);
-      observedTextChars+=Array.from(jsonString(item?.body)).length+Array.from(jsonString(item?.title)).length+256;
-      assertCharsWithinBudget(observedTextChars,budget,`${description.toLowerCase().replace(/\s+/g,'_')}_content`);
-      items.push(raw);
-    }
+    items.push(...value);
     if(value.length<perPage)break;
     page++;
   }
