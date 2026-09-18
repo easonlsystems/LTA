@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { parseMediaUrl } from '../media/url.js';
-import { extractTextLink, resolveRedditSharePost } from '../content/linkText.js';
+import { extractTextLink, probeXPostAttachedMedia, resolveRedditSharePost } from '../content/linkText.js';
 import { fetchBestCaption } from '../media/captions.js';
 import { normalizeAudioForAsr, probeMediaDurationSeconds } from '../media/audio.js';
 import { ResolverOrchestrator } from '../resolvers/orchestrator.js';
@@ -47,10 +47,24 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
   const heartbeat=setInterval(()=>void heartbeatJob(job.id).catch(()=>{}),60_000);
   try{
     let parsed=parseMediaUrl(job.normalized_url);
+    let prefetchedMetadata:MediaMetadata|undefined;
     if(parsed.platform==='reddit'&&parsed.canonicalMediaId.startsWith('share_')){
       parsed=await resolveRedditSharePost(parsed);
       await setJobMetadata(job.id,parsed.canonicalMediaId,0);
       logEvent('reddit_share_resolved',{job_id:job.id,platform:'reddit',canonical_media_id:parsed.canonicalMediaId});
+    }
+
+    // X status URLs do not encode whether a post contains media. The official oEmbed
+    // markup does preserve the pic.twitter.com / pic.x.com attachment marker, so probe
+    // that first. If media is attached, require the media pipeline to succeed; never
+    // silently downgrade a video/image attachment to a text-only "completed" post.
+    if(parsed.platform==='x'&&parsed.kind==='post'&&await probeXPostAttachedMedia(parsed)){
+      prefetchedMetadata=await resolver.metadata(parsed);
+      parsed={...parsed,kind:'media'};
+      logEvent('x_attached_media_detected',{
+        job_id:job.id,platform:'x',canonical_media_id:parsed.canonicalMediaId,
+        resolver:prefetchedMetadata.resolver??'unknown',duration_seconds:prefetchedMetadata.durationSeconds||null
+      });
     }
 
     if(parsed.kind!=='media'){
@@ -111,7 +125,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     let directCaption:{language:string;transcript:string;segments:TranscriptSegment[]}|null=null;
     let metadata:MediaMetadata;
     try{
-      metadata=await resolver.metadata(parsed);
+      metadata=prefetchedMetadata??await resolver.metadata(parsed);
     }catch(metadataError){
       if(parsed.platform!=='youtube')throw metadataError;
       try{
