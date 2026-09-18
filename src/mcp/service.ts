@@ -1,6 +1,7 @@
 import { env } from '../config/env.js';
 import { pool } from '../db/pool.js';
 import { parseMediaUrl } from '../media/url.js';
+import { assertPlatformAllowedForProfile, parseAllowedMediaUrl, type DistributionProfile } from './policy.js';
 import { asLink2AIError, Link2AIError } from '../util/errors.js';
 import { reserveQuota, finalizeQuota, getUsageSnapshot } from '../quota/service.js';
 import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limits.js';
@@ -37,15 +38,16 @@ export interface ToolJobResult {
   content_sections_truncated?:string[];
 }
 
-export async function startTranscriptJob(userId:string,url:string,options:{refresh?:boolean}={}):Promise<ToolJobResult>{
-  const parsed=parseMediaUrl(url);
+export async function startTranscriptJob(userId:string,url:string,options:{refresh?:boolean;profile?:DistributionProfile}={}):Promise<ToolJobResult>{
+  const profile=options.profile??'default';
+  const parsed=parseAllowedMediaUrl(url,profile);
   const active=await pool.query<{id:string}>(
     `SELECT j.id FROM transcript_jobs j WHERE j.user_id=$1 AND j.platform=$2
      AND (j.canonical_media_id=$3 OR j.normalized_url=$4)
      AND j.status IN ('queued','processing','awaiting_payment') ORDER BY j.created_at DESC LIMIT 1`,
     [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl]
   );
-  if(active.rowCount)return await waitForJob(userId,active.rows[0].id,env().MCP_INLINE_WAIT_MS);
+  if(active.rowCount)return await waitForJob(userId,active.rows[0].id,env().MCP_INLINE_WAIT_MS,profile);
 
   // A model may call the same read tool more than once while answering. Reuse a still-cached successful result
   // for this user so retries/follow-ups do not consume quota twice. Explicit refresh bypasses successful-result
@@ -58,7 +60,7 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
        ORDER BY j.completed_at DESC LIMIT 1`,
       [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl]
     );
-    if(completed.rowCount)return await getJobResult(userId,completed.rows[0].id);
+    if(completed.rowCount)return await getJobResult(userId,completed.rows[0].id,profile);
   }
 
   const plan=await planForUser(userId);
@@ -75,7 +77,7 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
        AND status IN ('queued','processing','awaiting_payment') ORDER BY created_at DESC LIMIT 1`,
       [userId,parsed.platform,parsed.normalizedUrl]
     );
-    if(concurrent.rowCount)return await waitForJob(userId,concurrent.rows[0].id,env().MCP_INLINE_WAIT_MS);
+    if(concurrent.rowCount)return await waitForJob(userId,concurrent.rows[0].id,env().MCP_INLINE_WAIT_MS,profile);
     throw new Link2AIError('INTERNAL_ERROR','Could not create transcript job.',500,true);
   }
   const jobId=job.rows[0].id;
@@ -91,30 +93,30 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
       await reserveQuota(userId,jobId,units,(cached.source==='post'||cached.source==='page')?undefined:cached.duration_seconds);
       await finalizeQuota(userId,jobId);
       await markCompleted(jobId,cached.id,cached.duration_seconds);
-      return await getJobResult(userId,jobId);
+      return await getJobResult(userId,jobId,profile);
     }catch(e){
       const err=asLink2AIError(e);
       if(err.code==='QUOTA_EXCEEDED'){
         await markAwaitingPayment(jobId,err.code,err.message,null);
-        return await getJobResult(userId,jobId);
+        return await getJobResult(userId,jobId,profile);
       }
       throw e;
     }
   }
-  return await waitForJob(userId,jobId,env().MCP_INLINE_WAIT_MS);
+  return await waitForJob(userId,jobId,env().MCP_INLINE_WAIT_MS,profile);
 }
 
-export async function waitForJob(userId:string,jobId:string,maxWaitMs:number):Promise<ToolJobResult>{
+export async function waitForJob(userId:string,jobId:string,maxWaitMs:number,profile:DistributionProfile='default'):Promise<ToolJobResult>{
   const started=Date.now();
   while(Date.now()-started<maxWaitMs){
-    const r=await getJobResult(userId,jobId);
+    const r=await getJobResult(userId,jobId,profile);
     if(r.status!=='processing')return r;
     await new Promise(resolve=>setTimeout(resolve,750));
   }
   return {status:'processing',job_id:jobId,message:'The link is still being prepared. Call get_transcript_result with this job_id.',retry_after_seconds:3};
 }
 
-export async function getJobResult(userId:string,jobId:string):Promise<ToolJobResult>{
+export async function getJobResult(userId:string,jobId:string,profile:DistributionProfile='default'):Promise<ToolJobResult>{
   const r=await pool.query<any>(
     `SELECT j.*, c.title,c.creator,c.caption,c.language AS cache_language,c.transcript,c.segments,c.source AS transcript_source,c.duration_seconds AS cache_duration,
        c.created_at AS source_fetched_at,c.expires_at AS cache_expires_at,
@@ -124,6 +126,7 @@ export async function getJobResult(userId:string,jobId:string):Promise<ToolJobRe
   );
   if(!r.rowCount)throw new Link2AIError('JOB_NOT_FOUND','Link-reading job not found.',404);
   const row=r.rows[0];
+  assertPlatformAllowedForProfile(row.platform,profile);
   if(row.status==='completed'&&!row.transcript){
     return {status:'failed',job_id:row.id,error_code:'TRANSCRIPT_EXPIRED',message:'This temporary result has expired. Call Read link content with the original link to read it again.'};
   }
