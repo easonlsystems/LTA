@@ -162,7 +162,7 @@ export function buildMcpServer(){
     _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true}
   } as any;
-  const readPublicLink=async({url}:{url:string},ctx:Link2AIHandlerContext)=>safeToolCall(async()=>chunkResult(await startTranscriptJob(userIdFromContext(ctx),url)));
+  const readPublicLink=async(args:Record<string,unknown>,ctx:any)=>{const {url}=args as {url:string};return safeToolCall(async()=>chunkResult(await startTranscriptJob(userIdFromContext(ctx),url)));};
 
   server.registerTool('read_public_link',readPublicLinkConfig,readPublicLink);
 
@@ -175,7 +175,7 @@ export function buildMcpServer(){
     securitySchemes:LINK2AI_OAUTH_SECURITY,
     _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true}
-  } as any,async({url}:{url:string},ctx:Link2AIHandlerContext)=>safeToolCall(async()=>chunkResult(await startTranscriptJob(userIdFromContext(ctx),url))));
+  } as any,async(args:Record<string,unknown>,ctx:any)=>{const {url}=args as {url:string};return safeToolCall(async()=>chunkResult(await startTranscriptJob(userIdFromContext(ctx),url)));});
 
   server.registerTool('get_transcript_result',{
     title:'Get link result',
@@ -189,7 +189,7 @@ export function buildMcpServer(){
     securitySchemes:LINK2AI_OAUTH_SECURITY,
     _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}
-  } as any,async({job_id,offset,max_chars}:{job_id:string;offset?:number;max_chars?:number},ctx:Link2AIHandlerContext)=>safeToolCall(async()=>chunkResult(await getJobResult(userIdFromContext(ctx),job_id),offset??0,max_chars??MAX_CHARS)));
+  } as any,async(args:Record<string,unknown>,ctx:any)=>{const {job_id,offset,max_chars}=args as {job_id:string;offset?:number;max_chars?:number};return safeToolCall(async()=>chunkResult(await getJobResult(userIdFromContext(ctx),job_id),offset??0,max_chars??MAX_CHARS));});
 
   server.registerTool('get_usage',{
     title:`Check ${env().PUBLIC_BRAND_NAME} usage`,
@@ -199,7 +199,7 @@ export function buildMcpServer(){
     securitySchemes:LINK2AI_OAUTH_SECURITY,
     _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}
-  } as any,async(_args:Record<string,never>,ctx:Link2AIHandlerContext)=>safeToolCall(async()=>await usageForTool(userIdFromContext(ctx)) as unknown as Record<string,unknown>));
+  } as any,async(_args:Record<string,unknown>,ctx:any)=>safeToolCall(async()=>await usageForTool(userIdFromContext(ctx)) as unknown as Record<string,unknown>));
 
   return server;
 }
