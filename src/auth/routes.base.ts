@@ -8,6 +8,7 @@ import {
   userFromSessionCookie, verifyCsrfToken, verifyEmailLogin, verifyPasswordLogin, verifyReviewerLogin, claimTrialDevice, trialDeviceCookieName, clearFounderStepUpCookie
 } from './service.js';
 import { linkWebsiteVisitorToUser, trackWebsiteEvent, trackWebsiteVisit } from '../analytics/visitors.js';
+import { recordActivationEvent } from '../analytics/product.js';
 
 function escapeHtml(v: unknown): string {
   return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]!));
@@ -339,6 +340,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       if(!csrf)return reply.code(401).send('Sign in to connect this service.');
       const client=await getOAuthClient(request.clientId,request.redirectUri);
       if(!client)return reply.code(400).send('Unknown OAuth client or redirect URI.');
+      await recordActivationEvent(user.id,'connection_started',{
+        distributionProfile:request.resource===mcpResource('openai')?'openai':'default',
+        metadata:{client_name:client.client_name}
+      });
       return reply.type('text/html').send(html(`<span class="step">Permission</span><h1>Connect ${escapeHtml(client.client_name)}</h1><p>Allow <strong style="color:#17151f">${escapeHtml(client.client_name)}</strong> to ask ${escapeHtml(env().PUBLIC_BRAND_NAME)} for AI-readable content behind supported public links and to check your ${escapeHtml(env().PUBLIC_BRAND_NAME)} usage.</p><p class="muted">This does not give the AI client access to your email or payment details, and it does not let ${escapeHtml(env().PUBLIC_BRAND_NAME)} post, like, follow, edit or delete anything on the source platform.</p><form method="post" action="/oauth/authorize">${authorizeHidden(request,csrf)}<button>Connect and return</button></form>`));
     }catch(e){return oauthError(reply,e);}
   });
