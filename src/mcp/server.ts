@@ -576,7 +576,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
     securitySchemes:LINK2AI_OAUTH_SECURITY,
     _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}
-  } as any,async(_args:Record<string,unknown>,ctx:any)=>safeToolCall(async()=>await usageForTool(userIdFromContext(ctx)) as unknown as Record<string,unknown>));
+  } as any,async(_args:Record<string,unknown>,ctx:any)=>safeToolCall(async()=>await usageForTool(userIdFromContext(ctx),profile) as unknown as Record<string,unknown>));
 
   // @modelcontextprotocol/server 2.0.0 serializes auth schemes only inside
   // tool._meta. ChatGPT public-plugin review requires the canonical root-level
