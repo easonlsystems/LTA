@@ -65,16 +65,20 @@ const batchLinkResultOutputSchema=z.object({
 });
 
 const timeRangeOutputSchema=z.object({
-  status:z.literal('completed'),
-  job_id:z.string().uuid(),
+  status:z.enum(['completed','processing','payment_required','failed']),
+  job_id:z.string().uuid().optional(),
   source_url:z.string().url().optional(),
   source_key:z.string().optional(),
-  requested_start_seconds:z.number().nonnegative(),
-  requested_end_seconds:z.number().positive(),
-  segment_count:z.number().int().nonnegative(),
-  timed_text:z.string(),
-  delivery_complete:z.boolean(),
+  requested_start_seconds:z.number().nonnegative().optional(),
+  requested_end_seconds:z.number().positive().optional(),
+  segment_count:z.number().int().nonnegative().optional(),
+  timed_text:z.string().optional(),
+  delivery_complete:z.boolean().optional(),
   next_start_seconds:z.number().nonnegative().nullable().optional(),
+  checkout_url:z.string().url().nullable().optional(),
+  error_code:z.string().nullable().optional(),
+  retry_after_seconds:z.number().nonnegative().optional(),
+  retryable:z.boolean().optional(),
   message:z.string().optional()
 });
 
