@@ -1,7 +1,6 @@
 import { env } from '../config/env.js';
 import { pool } from '../db/pool.js';
 import { parseMediaUrl } from '../media/url.js';
-import { canPurchaseTopup, createCheckoutSession, createTopupCheckoutSession } from '../billing/lemon.js';
 import { asLink2AIError, Link2AIError } from '../util/errors.js';
 import { reserveQuota, finalizeQuota, getUsageSnapshot } from '../quota/service.js';
 import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limits.js';
@@ -24,7 +23,6 @@ export interface ToolJobResult {
   transcript?: string;
   segments?: Array<{start:number;end:number;text:string}>;
   transcript_source?: string;
-  checkout_url?: string|null;
   error_code?: string|null;
   message?: string;
   retry_after_seconds?: number;
@@ -37,20 +35,6 @@ export interface ToolJobResult {
   pages_available?:number|null;
   pages_extracted?:number|null;
   content_sections_truncated?:string[];
-}
-
-async function checkoutForError(userId:string,jobId:string,duration:number|undefined,details?:Record<string,unknown>):Promise<string|null>{
-  const plan=await planForUser(userId);
-  if(plan!=='trial'&&await canPurchaseTopup(userId)){
-    const remaining=Math.max(0,Number(details?.remaining_usage_units??0)||0);
-    const requiredAtLeast=Math.max(remaining+1,Number(details?.required_usage_units_at_least??0)||0);
-    const deficit=Math.max(1,requiredAtLeast-remaining);
-    return await createTopupCheckoutSession(userId,deficit>500?'1500':'500');
-  }
-  if(plan==='pro')return null;
-  const requiredUnits=Math.max(1,Number(details?.required_usage_units??details?.required_usage_units_at_least??0)||1);
-  const target=plan==='trial'&&requiredUnits<=500?'basic':'pro';
-  return await createCheckoutSession(userId,target,jobId);
 }
 
 export async function startTranscriptJob(userId:string,url:string,options:{refresh?:boolean}={}):Promise<ToolJobResult>{
@@ -111,8 +95,7 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
     }catch(e){
       const err=asLink2AIError(e);
       if(err.code==='QUOTA_EXCEEDED'){
-        const checkout=await checkoutForError(userId,jobId,cached.duration_seconds,err.details as Record<string,unknown>|undefined);
-        await markAwaitingPayment(jobId,err.code,err.message,checkout);
+        await markAwaitingPayment(jobId,err.code,err.message,null);
         return await getJobResult(userId,jobId);
       }
       throw e;
@@ -156,7 +139,7 @@ export async function getJobResult(userId:string,jobId:string):Promise<ToolJobRe
       items_available:row.items_available,items_extracted:row.items_extracted,pages_available:row.pages_available,pages_extracted:row.pages_extracted,content_sections_truncated:row.content_sections_truncated??[]
     };
   }
-  if(row.status==='awaiting_payment')return {status:'payment_required',job_id:row.id,duration_seconds:row.duration_seconds??undefined,checkout_url:row.checkout_url,error_code:row.error_code,message:row.error_message};
+  if(row.status==='awaiting_payment')return {status:'payment_required',job_id:row.id,duration_seconds:row.duration_seconds??undefined,error_code:row.error_code,message:row.error_message};
   if(row.status==='failed')return {status:'failed',job_id:row.id,error_code:row.error_code,message:row.error_message};
   return {status:'processing',job_id:row.id,message:`${env().PUBLIC_BRAND_NAME} is reading this link.`,retry_after_seconds:3};
 }
