@@ -234,7 +234,7 @@ function jsonNumber(value:unknown):number|undefined{
 function jsonBoolean(value:unknown):boolean|undefined{return typeof value==='boolean'?value:undefined;}
 
 async function safeJson(url:string,description:string,maxBytes=API_PAGE_BYTES,budget?:TextExtractionBudget):Promise<unknown>{
-  const response=budget?await safeGetForBudget(url,{floorBytes:maxBytes,timeoutMs:15_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/json'},budget,`${description.toLowerCase().replace(/\\s+/g,'_')}_response`):await safeGetBuffer(url,{maxBytes,timeoutMs:15_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/json'});
+  const response=budget?await safeGetForBudget(url,{floorBytes:maxBytes,timeoutMs:15_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/json'},budget,`${description.toLowerCase().replace(/\s+/g,'_')}_response`):await safeGetBuffer(url,{maxBytes,timeoutMs:15_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/json'});
   const ct=(response.contentType??'').toLowerCase();
   if(ct&&!ct.includes('json')&&!ct.includes('javascript')&&!ct.includes('text/plain'))throw new Link2AIError('EXTRACTION_FAILED',`${description} returned a non-JSON response.`,502,true);
   try{return JSON.parse(response.bytes.toString('utf8'));}
@@ -275,7 +275,7 @@ function collectBlueskyReplies(replies:unknown,out:BlueskyRendered,depth=0):void
   if(!Array.isArray(replies))return;
   for(const raw of replies){
     const node=jsonObject(raw);const post=jsonObject(node?.post);const record=jsonObject(post?.record);const author=jsonObject(post?.author);
-    const text=cleanText(jsonString(record?.text),6000);
+    const text=cleanText(jsonString(record?.text));
     if(text){
       const handle=jsonString(author?.handle)||jsonString(author?.displayName)||'unknown';
       out.lines.push(`${depth?`${'↳'.repeat(depth)} `:''}- @${handle}: ${text}`);
@@ -297,12 +297,12 @@ export function parseBlueskyThread(input:ParsedMediaUrl,payload:unknown,budget?:
   const embed=jsonObject(post?.embed);const external=jsonObject(embed?.external);
   if(external){
     const card=[jsonString(external.title),jsonString(external.description),jsonString(external.uri)].filter(Boolean).join('\n');
-    if(card)sections.push(`External card:\n${cleanText(card,4000)}`);
+    if(card)sections.push(`External card:\n${cleanText(card)}`);
   }
   const quoted=jsonObject(embed?.record);const quotedValue=jsonObject(quoted?.value);const quotedAuthor=jsonObject(quoted?.author);
-  if(quotedValue&&jsonString(quotedValue.text))sections.push(`Quoted post${jsonString(quotedAuthor?.handle)?` by @${jsonString(quotedAuthor?.handle)}`:''}:\n${cleanText(jsonString(quotedValue.text),5000)}`);
+  if(quotedValue&&jsonString(quotedValue.text))sections.push(`Quoted post${jsonString(quotedAuthor?.handle)?` by @${jsonString(quotedAuthor?.handle)}`:''}:\n${cleanText(jsonString(quotedValue.text))}`);
   const parent=jsonObject(thread?.parent);const parentPost=jsonObject(parent?.post);const parentRecord=jsonObject(parentPost?.record);
-  if(parentRecord&&jsonString(parentRecord.text))sections.push(`Direct parent/replied-to post:\n${cleanText(jsonString(parentRecord.text),5000)}`);
+  if(parentRecord&&jsonString(parentRecord.text))sections.push(`Direct parent/replied-to post:\n${cleanText(jsonString(parentRecord.text))}`);
   const replies:BlueskyRendered={lines:[],count:0};collectBlueskyReplies(thread?.replies,replies,0);
   if(replies.lines.length)sections.push(`Public replies (${replies.lines.length} entries):\n${replies.lines.join('\n')}`);
   const repliesAvailable=jsonNumber(post?.replyCount);const repliesTruncated=repliesAvailable!==undefined&&replies.count<repliesAvailable;
