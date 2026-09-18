@@ -286,10 +286,12 @@ async function fetchGitHubDiscussion(input:ParsedMediaUrl):Promise<LinkTextPaylo
   const maxItems=EXTRACTION_LIMITS[isPr?'github_pr':'github_issue'].hardItems;
   const commentsPage=await safeJsonArrayPages(`${apiBase}/issues/${number}/comments`,'GitHub comments',maxItems);
   const reviewsPage=isPr?await safeJsonArrayPages(`${apiBase}/pulls/${number}/reviews`,'GitHub reviews',maxItems):{items:[] as unknown[],truncated:false};
-  const combined=[...commentsPage.items,...reviewsPage.items]
+  const reviewCommentsPage=isPr?await safeJsonArrayPages(`${apiBase}/pulls/${number}/comments`,'GitHub inline review comments',maxItems):{items:[] as unknown[],truncated:false};
+  const allFetched=[...commentsPage.items,...reviewsPage.items,...reviewCommentsPage.items];
+  const combined=allFetched
     .sort((a,b)=>Date.parse(jsonString(jsonObject(a)?.created_at)||jsonString(jsonObject(a)?.submitted_at)||'')-Date.parse(jsonString(jsonObject(b)?.created_at)||jsonString(jsonObject(b)?.submitted_at)||''))
     .slice(0,maxItems);
-  const sourceTruncated=commentsPage.truncated||reviewsPage.truncated||(commentsPage.items.length+reviewsPage.items.length)>maxItems;
+  const sourceTruncated=commentsPage.truncated||reviewsPage.truncated||reviewCommentsPage.truncated||allFetched.length>maxItems;
   let diff='';if(isPr){const response=await safeGetBuffer(`${apiBase}/pulls/${number}`,{maxBytes:5_000_000,timeoutMs:15_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/vnd.github.v3.diff'});diff=response.bytes.toString('utf8');}
   return parseGitHubDiscussion(input,item,combined,[],diff,sourceTruncated);
 }
