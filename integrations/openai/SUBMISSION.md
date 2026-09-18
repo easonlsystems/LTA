@@ -109,3 +109,21 @@ Reads the connected user's Link2AI plan and processing-unit balance.
 - Privacy / Terms / Support pages return 200.
 - At least one real production E2E is recorded for each currently advertised source category before claiming that category in review material.
 - Reddit remains unadvertised until production has approved Reddit OAuth Data API credentials.
+
+
+## Final directory-only requirements
+
+OpenAI's final remote-MCP directory submission also requires:
+- a square `interface.logo` asset;
+- a square `interface.composerIcon` asset;
+- exactly five positive and three negative review cases (see `REVIEW_CASES.md`);
+- a reviewer-accessible demo video URL (see `DEMO_VIDEO.md`);
+- release notes (see `RELEASE_NOTES.md`);
+- a category and availability countries/regions selected in the portal;
+- the public developer identity/listing metadata to match the identity actually verified in OpenAI Platform.
+
+### Current blockers before final submit
+1. Publisher verification is still in review.
+2. The repository currently has no Link2AI logo/composer icon asset. Do not invent or submit placeholder branding without approval.
+3. The demo video cannot be recorded until the ChatGPT review connection/submission draft is available.
+4. The domain challenge token is issued by the submission portal and must be configured only after the portal provides it.
