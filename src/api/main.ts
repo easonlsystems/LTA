@@ -30,7 +30,7 @@ app.addContentTypeParser('application/x-www-form-urlencoded',{parseAs:'string'},
   try{return done(null,Object.fromEntries(new URLSearchParams(String(body??''))));}catch(err){return done(err as Error,undefined);}
 });
 
-const mcpHandler=createMcpHandler(buildMcpServer);
+const mcpHandler=createMcpHandler(()=>buildMcpServer());
 const nodeMcp=toNodeHandler(mcpHandler,{onerror:(err)=>app.log.error(err)});
 const openaiMcpHandler=createMcpHandler(()=>buildMcpServer('openai'));
 const nodeOpenaiMcp=toNodeHandler(openaiMcpHandler,{onerror:(err)=>app.log.error(err)});
