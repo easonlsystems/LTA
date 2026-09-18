@@ -270,7 +270,7 @@ export async function completeGoogleSignIn(input:{code:string;state:string;cooki
     const byEmail=await accountClient.query<AuthUser & {account_status:string;google_sub:string|null}>(
       'SELECT id,email,plan,account_status,google_sub FROM users WHERE lower(email)=lower($1) FOR UPDATE',[email]
     );
-    if(byEmail.rowCount>1)throw new Link2AIError('AUTH_REQUIRED','This account needs support before Google sign-in can be linked.',409);
+    if(Number(byEmail.rowCount??0)>1)throw new Link2AIError('AUTH_REQUIRED','This account needs support before Google sign-in can be linked.',409);
     const current=input.currentUserId
       ? await accountClient.query<AuthUser & {account_status:string;google_sub:string|null}>(
           'SELECT id,email,plan,account_status,google_sub FROM users WHERE id=$1 FOR UPDATE',[input.currentUserId]
