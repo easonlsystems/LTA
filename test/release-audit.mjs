@@ -23,6 +23,10 @@ const xResolverSource=await readFile(new URL('../src/resolvers/xSyndication.ts',
 const xResolverPureSource=await readFile(new URL('../src/resolvers/xSyndicationPure.ts',import.meta.url),'utf8');
 const activationSource=await readFile(new URL('../src/analytics/product.ts',import.meta.url),'utf8');
 const activationMigration=await readFile(new URL('../sql/006_activation_funnel.sql',import.meta.url),'utf8');
+const providerChainSource=await readFile(new URL('../src/resolvers/providerChain.ts',import.meta.url),'utf8');
+const providerTelemetrySource=await readFile(new URL('../src/resolvers/providerTelemetry.ts',import.meta.url),'utf8');
+const orchestratorSource=await readFile(new URL('../src/resolvers/orchestrator.ts',import.meta.url),'utf8');
+const providerHealthMigration=await readFile(new URL('../sql/007_provider_health.sql',import.meta.url),'utf8');
 assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News must use the official Firebase API path');
 assert.doesNotMatch(linkSource,/hn\.algolia\.com/,'OpenAI-ready core must not depend on the community Algolia HN adapter');
 assert.match(policySource,/OPENAI_ALLOWED_PLATFORMS[^\n]*\['bluesky','github','hackernews'\]/,'ChatGPT distribution must default-deny every source outside the reviewed allowlist');
@@ -77,6 +81,17 @@ assert.match(xResolverPureSource,/mediaDetails|node\.video/,'X structured resolv
 assert.match(xResolverSource,/safeGetBuffer\(video\.videoUrl/,'X video resolver must fetch the resolved media track for downstream audio\/ASR');
 assert.match(mcpServiceSource,/!options\.refresh&&parsed\.platform!=='x'/,'MCP must bypass stale completed-result reuse for X during media-routing rollout');
 assert.match(processorSource,/const reuseCache=job\.platform!=='x'/,'Worker must bypass stale X transcript caches during media-routing rollout');
+assert.match(providerChainSource,/runProviderChain/,'Media providers must use one explicit failover-chain implementation');
+assert.match(providerChainSource,/shouldTryExternalFallback/,'Provider failover must stop on definitive access errors');
+assert.match(providerChainSource,/source_provider_failover/,'Provider transitions must emit explicit failover telemetry');
+assert.match(orchestratorSource,/name:'x_syndication'[\s\S]*name:'ytdlp'/,'X audio must preserve structured-X then yt-dlp failover order');
+assert.match(orchestratorSource,/MEDIA_PROVIDER_URL/,'Managed external provider must remain an optional route, not a required recurring dependency');
+assert.match(linkSource,/name:'gallery_dl'[\s\S]*name:'public_page'/,'Instagram and TikTok text posts must use an explicit primary-to-page fallback chain');
+assert.match(processorSource,/provider:'youtube_transcript'/,'YouTube transcript fallback must report provider health separately from yt-dlp');
+assert.match(providerTelemetrySource,/provider_health_hourly/,'Provider outcomes must feed rolling health telemetry');
+assert.doesNotMatch(providerTelemetrySource,/source_url|normalized_url|canonical_media_id|content_text|transcript/,'Provider health telemetry must not persist source URLs, identifiers, or source content');
+assert.match(providerHealthMigration,/PRIMARY KEY\(bucket_start,platform,operation,provider\)/,'Provider health storage must use bounded hourly aggregates instead of unbounded per-request rows');
+assert.match(processorSource,/if\(reserved\)\{await releaseQuota\(job\.id\)/,'Failed provider\/extraction paths must release reserved quota before retry or failure');
 assert.match(billingSource,/j\.error_code='QUOTA_EXCEEDED'/,'A successful top-up must resume quota-blocked jobs');
 assert.doesNotMatch(apiSource,/supports videos up to 30 minutes|supports videos up to 120 minutes|very large sources may return partial context/i,'Published copy must match the unit-bounded full-source policy');
 assert.match(mcpServiceSource,/if\(!options\.refresh(?:&&parsed\.platform!=='x')?\)[\s\S]*j\.status='completed'[\s\S]*c\.expires_at>now\(\)/,'Normal non-X same-source reads must reuse a still-valid completed user result');
