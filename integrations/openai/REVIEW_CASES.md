@@ -4,6 +4,8 @@ Use the dedicated production reviewer account supplied privately in the OpenAI s
 
 The ChatGPT distribution is intentionally limited to public Bluesky posts, public GitHub Issues / pull requests, and public Hacker News discussions. Other Link2AI sources are blocked on this distribution unless a separately authorized retrieval path is added later.
 
+Failed reads consume 0 processing units. Sources blocked by the ChatGPT distribution are rejected before retrieval or quota consumption.
+
 ## Positive cases — exactly 5
 
 ### P1 — GitHub pull request discussion
