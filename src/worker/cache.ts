@@ -34,9 +34,9 @@ export interface CacheRow {
 export async function findCache(platform: string, canonicalId: string, language: string): Promise<CacheRow | null> {
   const params: unknown[] = [platform, canonicalId];
   const clauses=['platform=$1','canonical_media_id=$2','expires_at > now()'];
-  if (language !== 'auto') { params.push(language); clauses.push('language=
+  if (language !== 'auto') { params.push(language); clauses.push('language=$'+params.length); }
   const epoch=cacheProvenanceEpoch(platform);
-  if(epoch){params.push(epoch);clauses.push('created_at >= 
+  if(epoch){params.push(epoch);clauses.push('created_at >= $'+params.length+'::timestamptz');}
   const r = await pool.query<CacheRow>(
     `SELECT * FROM transcript_cache WHERE ${clauses.join(' AND ')}
      ORDER BY created_at DESC LIMIT 1`, params
@@ -47,7 +47,7 @@ export async function findCache(platform: string, canonicalId: string, language:
 export async function findUserCompletedCache(userId:string,platform:string,canonicalId:string):Promise<CacheRow|null>{
   const params:unknown[]=[userId,platform,canonicalId];
   const epoch=cacheProvenanceEpoch(platform);
-  const provenanceClause=epoch?(params.push(epoch),' AND c.created_at >= 
+  const provenanceClause=epoch?(params.push(epoch),' AND c.created_at >= $'+params.length+'::timestamptz'):'';
   const r=await pool.query<CacheRow>(
     `SELECT c.* FROM transcript_jobs j JOIN transcript_cache c ON c.id=j.transcript_cache_id
      WHERE j.user_id=$1 AND j.platform=$2 AND j.canonical_media_id=$3
@@ -57,7 +57,6 @@ export async function findUserCompletedCache(userId:string,platform:string,canon
   );
   return r.rows[0]??null;
 }
-
 export async function saveCache(payload: TranscriptPayload): Promise<CacheRow> {
   const r = await pool.query<CacheRow>(
     `INSERT INTO transcript_cache(platform,canonical_media_id,language,title,creator,caption,duration_seconds,transcript,segments,source,expires_at,truncated,truncation_reason,extracted_token_estimate,usage_units,items_available,items_extracted,pages_available,pages_extracted,content_sections_truncated)
