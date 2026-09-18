@@ -202,7 +202,7 @@ export async function beginGoogleSignIn(returnTo:string):Promise<{authorizationU
   return {authorizationUrl:authorizationUrl.toString(),state};
 }
 
-export async function completeGoogleSignIn(input:{code:string;state:string;cookieState:string}):Promise<{user:AuthUser;sessionToken:string;returnTo:string}>{
+export async function completeGoogleSignIn(input:{code:string;state:string;cookieState:string;currentUserId?:string}):Promise<{user:AuthUser;sessionToken:string;returnTo:string}>{
   const clientId=env().GOOGLE_CLIENT_ID;
   const clientSecret=env().GOOGLE_CLIENT_SECRET;
   if(!clientId||!clientSecret)throw new Link2AIError('INTERNAL_ERROR','Google sign-in is not configured.',503);
@@ -271,6 +271,11 @@ export async function completeGoogleSignIn(input:{code:string;state:string;cooki
       'SELECT id,email,plan,account_status,google_sub FROM users WHERE lower(email)=lower($1) FOR UPDATE',[email]
     );
     if(byEmail.rowCount>1)throw new Link2AIError('AUTH_REQUIRED','This account needs support before Google sign-in can be linked.',409);
+    const current=input.currentUserId
+      ? await accountClient.query<AuthUser & {account_status:string;google_sub:string|null}>(
+          'SELECT id,email,plan,account_status,google_sub FROM users WHERE id=$1 FOR UPDATE',[input.currentUserId]
+        )
+      : null;
 
     let user:AuthUser & {account_status:string};
     if(bySub.rowCount){
@@ -293,6 +298,14 @@ export async function completeGoogleSignIn(input:{code:string;state:string;cooki
       const updated=await accountClient.query<AuthUser & {account_status:string}>(
         'UPDATE users SET google_sub=$2,email=$3,updated_at=now() WHERE id=$1 RETURNING id,email,plan,account_status',
         [existing.id,googleSub,email]
+      );
+      user=updated.rows[0];
+    }else if(current?.rowCount&&current.rows[0].email===null){
+      const existing=current.rows[0];
+      if(existing.account_status==='disabled')throw new Link2AIError('AUTH_REQUIRED','This account is disabled.',403);
+      const updated=await accountClient.query<AuthUser & {account_status:string}>(
+        'UPDATE users SET email=$2,google_sub=$3,updated_at=now() WHERE id=$1 RETURNING id,email,plan,account_status',
+        [existing.id,email,googleSub]
       );
       user=updated.rows[0];
     }else{
