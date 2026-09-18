@@ -71,6 +71,9 @@ Reads timestamped transcript/caption segments from an already processed video jo
 ### find_in_link
 Searches an already processed source for likely relevant transcript/text regions without re-reading or re-charging it. It is a locator rather than semantic proof; Grok should read surrounding context before answering and must not treat a search miss as proof of absence.
 
+### get_video_map
+Returns a compact timeline map for an already processed video, covering the full available timeline with time ranges, transcript excerpts, and deterministic keywords. It is a navigation aid; Grok should read exact relevant ranges before making detailed claims.
+
 ### get_usage
 Returns the connected Link2AI account's plan and processing-unit balance.
 
@@ -140,7 +143,8 @@ Catalog publication is not considered complete until a normal Grok consumer acco
 8. reuse the same source in follow-up questions without unnecessary reprocessing or double charging;
 9. compare multiple links without collapsing source attribution;
 10. answer timestamp-specific video questions from the existing processed job without re-reading the video;
-11. locate relevant regions inside long processed sources before loading broader context, without reprocessing the source.
+11. locate relevant regions inside long processed sources before loading broader context, without reprocessing the source;
+12. inspect a compact full-video timeline map for broad whole-video questions, then load exact time ranges for evidence.
 
 ## Distribution status
 

@@ -89,9 +89,33 @@ const sourceSearchOutputSchema=z.object({
   source_key:z.string().optional(),
   query:z.string().optional(),
   matches:z.array(z.object({
-    offset:z.number().int().nonnegative(),
+    offset:z.number().int().nonnegative().optional(),
+    start_seconds:z.number().nonnegative().optional(),
+    end_seconds:z.number().nonnegative().optional(),
     score:z.number().nonnegative(),
     snippet:z.string()
+  })).optional(),
+  checkout_url:z.string().url().nullable().optional(),
+  error_code:z.string().nullable().optional(),
+  retry_after_seconds:z.number().nonnegative().optional(),
+  retryable:z.boolean().optional(),
+  message:z.string().optional()
+});
+
+const videoMapOutputSchema=z.object({
+  status:z.enum(['completed','processing','payment_required','failed']),
+  job_id:z.string().uuid().optional(),
+  source_url:z.string().url().optional(),
+  source_key:z.string().optional(),
+  duration_seconds:z.number().nonnegative().optional(),
+  requested_window_seconds:z.number().int().positive().optional(),
+  effective_window_seconds:z.number().int().positive().optional(),
+  section_count:z.number().int().nonnegative().optional(),
+  sections:z.array(z.object({
+    start_seconds:z.number().nonnegative(),
+    end_seconds:z.number().nonnegative(),
+    excerpt:z.string(),
+    keywords:z.array(z.string())
   })).optional(),
   checkout_url:z.string().url().nullable().optional(),
   error_code:z.string().nullable().optional(),
@@ -241,6 +265,25 @@ function searchTerms(query:string):string[]{
   return [...terms].sort((a,b)=>b.length-a.length).slice(0,24);
 }
 
+function scoreSearchText(value:string,terms:string[]):number{
+  const normalized=searchNormalize(value);
+  let score=0;
+  let matchedTerms=0;
+  for(const term of terms){
+    let from=0,count=0;
+    while(count<3){
+      const found=normalized.indexOf(term,from);
+      if(found<0)break;
+      count++;from=found+Math.max(1,term.length);
+    }
+    if(count){
+      matchedTerms++;
+      score+=count*Math.max(1,Math.min(5,term.length));
+    }
+  }
+  return score>0?score+matchedTerms*2:0;
+}
+
 export function searchSourceText(
   text:string,
   query:string,
@@ -253,25 +296,8 @@ export function searchSourceText(
   const matches:Array<{offset:number;score:number;snippet:string}>=[];
   for(let offset=0;offset<text.length;offset+=step){
     const chunk=unicodeSafeSlice(text,offset,windowSize);
-    const normalized=searchNormalize(chunk.text);
-    let score=0;
-    let matchedTerms=0;
-    for(const term of terms){
-      let from=0,count=0;
-      while(count<3){
-        const found=normalized.indexOf(term,from);
-        if(found<0)break;
-        count++;from=found+Math.max(1,term.length);
-      }
-      if(count){
-        matchedTerms++;
-        score+=count*Math.max(1,Math.min(5,term.length));
-      }
-    }
-    if(score>0){
-      score+=matchedTerms*2;
-      matches.push({offset:chunk.start,score,snippet:chunk.text});
-    }
+    const score=scoreSearchText(chunk.text,terms);
+    if(score>0)matches.push({offset:chunk.start,score,snippet:chunk.text});
     if(chunk.end>=text.length)break;
   }
   return matches
@@ -279,11 +305,101 @@ export function searchSourceText(
     .slice(0,Math.max(1,Math.min(10,maxMatches)));
 }
 
+export function searchVideoSegments(
+  segments:Array<{start:number;end:number;text:string}>,
+  query:string,
+  maxMatches=5
+):Array<{start_seconds:number;end_seconds:number;score:number;snippet:string}>{
+  const terms=searchTerms(query);
+  if(!segments.length||!terms.length)return [];
+  const buckets=new Map<number,{start:number;end:number;texts:string[]}>();
+  const bucketSeconds=90;
+  for(const segment of segments){
+    const key=Math.floor(Math.max(0,segment.start)/bucketSeconds);
+    const bucket=buckets.get(key)??{start:segment.start,end:segment.end,texts:[]};
+    bucket.start=Math.min(bucket.start,segment.start);
+    bucket.end=Math.max(bucket.end,segment.end);
+    bucket.texts.push(segment.text);
+    buckets.set(key,bucket);
+  }
+  return [...buckets.values()]
+    .map(bucket=>{
+      const snippet=bucket.texts.join(' ').replace(/\s+/g,' ').trim();
+      return {start_seconds:bucket.start,end_seconds:bucket.end,score:scoreSearchText(snippet,terms),snippet};
+    })
+    .filter(match=>match.score>0)
+    .sort((a,b)=>b.score-a.score||a.start_seconds-b.start_seconds)
+    .slice(0,Math.max(1,Math.min(10,maxMatches)));
+}
+
+function keywordCandidates(text:string):string[]{
+  const normalized=searchNormalize(text);
+  const stop=new Set(['the','and','for','that','with','this','from','what','when','where','which','why','how','did','does','was','were','are','is','a','an','to','of','in','on','it','he','she','they','we','you','but','not','have','has','had','can','will','would','could','should','just','about','into','than','then','there','their']);
+  const out:string[]=[];
+  for(const token of normalized.match(/[\p{L}\p{N}]+/gu)??[]){
+    if(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(token)){
+      for(let i=0;i<token.length-1;i++)out.push(token.slice(i,i+2));
+    }else if(token.length>=3&&!stop.has(token)){
+      out.push(token);
+    }
+  }
+  return out;
+}
+
+function topKeywords(text:string,limit=8):string[]{
+  const counts=new Map<string,number>();
+  for(const token of keywordCandidates(text))counts.set(token,(counts.get(token)??0)+1);
+  return [...counts.entries()]
+    .sort((a,b)=>b[1]-a[1]||b[0].length-a[0].length||a[0].localeCompare(b[0]))
+    .slice(0,limit)
+    .map(([token])=>token);
+}
+
+function compactExcerpt(text:string,maxChars=420):string{
+  const clean=text.replace(/\s+/g,' ').trim();
+  if(clean.length<=maxChars)return clean;
+  const half=Math.floor((maxChars-5)/2);
+  return clean.slice(0,half).trimEnd()+' … '+clean.slice(-half).trimStart();
+}
+
+export function buildVideoMap(
+  segments:Array<{start:number;end:number;text:string}>,
+  requestedWindowSeconds=180,
+  maxWindows=80
+):{effective_window_seconds:number;sections:Array<{start_seconds:number;end_seconds:number;excerpt:string;keywords:string[]}>}{
+  if(!segments.length)return {effective_window_seconds:Math.max(30,Math.floor(requestedWindowSeconds)),sections:[]};
+  const duration=Math.max(...segments.map(segment=>segment.end));
+  const requested=Math.max(30,Math.floor(requestedWindowSeconds));
+  const cap=Math.max(1,Math.min(120,maxWindows));
+  const effective=Math.max(requested,Math.ceil(duration/cap));
+  const buckets=new Map<number,{start:number;end:number;texts:string[]}>();
+  for(const segment of segments){
+    const key=Math.floor(Math.max(0,segment.start)/effective);
+    const bucket=buckets.get(key)??{start:segment.start,end:segment.end,texts:[]};
+    bucket.start=Math.min(bucket.start,segment.start);
+    bucket.end=Math.max(bucket.end,segment.end);
+    bucket.texts.push(segment.text);
+    buckets.set(key,bucket);
+  }
+  const sections=[...buckets.values()]
+    .sort((a,b)=>a.start-b.start)
+    .map(bucket=>{
+      const text=bucket.texts.join(' ').replace(/\s+/g,' ').trim();
+      return {
+        start_seconds:bucket.start,
+        end_seconds:bucket.end,
+        excerpt:compactExcerpt(text),
+        keywords:topKeywords(text,8)
+      };
+    });
+  return {effective_window_seconds:effective,sections};
+}
+
 export function buildMcpServer(){
   const e=env();
   const redditReady=Boolean(e.REDDIT_CLIENT_ID?.trim()&&e.REDDIT_CLIENT_SECRET?.trim());
   const supportedSources=`${redditReady?'Reddit, ':''}YouTube/Shorts, TikTok, Instagram, X, Bluesky, GitHub Issue/PR, Hacker News, readable webpage/article, or text-layer PDF`;
-  const server=new McpServer({name:e.PUBLIC_BRAND_NAME,version:'1.9.0'},{instructions:`${e.PUBLIC_BRAND_NAME} is the source reader for supported public links. When the user provides a supported public ${supportedSources} link and asks a question that requires the contents of that link, use read_public_link before concluding that the source is inaccessible or asking the user to paste its contents. For two or more supported links that must be compared or synthesized, prefer read_public_links so source identities stay separate. If the connected AI's built-in browser/fetch attempt fails on a supported source, try ${e.PUBLIC_BRAND_NAME} rather than stopping at that failure. If a successful Link2AI result for the exact same source is already present and sufficient in the current conversation, reuse it instead of calling Link2AI again; turn count alone is never a reason to refresh. Call again when the earlier source text is no longer available/sufficient, and use refresh=true only when the user asks for current/updated state or the earlier result is stale, partial, or unverified. For timestamp-specific video questions, use get_video_time_range on the existing job rather than re-reading the video. For a topic/detail/quote question about a long already-processed source when the relevant location is unclear, use find_in_link to locate likely transcript regions, then read surrounding context with get_transcript_result before answering; a search miss is not proof that the source never mentions the topic. Do not use ${e.PUBLIC_BRAND_NAME} for unrelated URLs, profiles, feeds, timelines, private/login-gated content, broad crawling, or when the user explicitly asks not to fetch external content.${redditReady?'':' Reddit is not currently advertised because this deployment does not have approved Reddit OAuth Data API credentials configured.'}`});
+  const server=new McpServer({name:e.PUBLIC_BRAND_NAME,version:'1.10.0'},{instructions:`${e.PUBLIC_BRAND_NAME} is the source reader for supported public links. When the user provides a supported public ${supportedSources} link and asks a question that requires the contents of that link, use read_public_link before concluding that the source is inaccessible or asking the user to paste its contents. For two or more supported links that must be compared or synthesized, prefer read_public_links so source identities stay separate. If the connected AI's built-in browser/fetch attempt fails on a supported source, try ${e.PUBLIC_BRAND_NAME} rather than stopping at that failure. If a successful Link2AI result for the exact same source is already present and sufficient in the current conversation, reuse it instead of calling Link2AI again; turn count alone is never a reason to refresh. Call again when the earlier source text is no longer available/sufficient, and use refresh=true only when the user asks for current/updated state or the earlier result is stale, partial, or unverified. For timestamp-specific video questions, use get_video_time_range on the existing job rather than re-reading the video. For a topic/detail/quote question about a long already-processed source when the relevant location is unclear, use find_in_link to locate likely transcript regions, then read surrounding context before answering; video matches include timestamps. For broad questions that may depend on the whole video, use get_video_map to inspect coverage across the full timeline, then read the relevant time ranges. A search miss is not proof that the source never mentions the topic. Do not use ${e.PUBLIC_BRAND_NAME} for unrelated URLs, profiles, feeds, timelines, private/login-gated content, broad crawling, or when the user explicitly asks not to fetch external content.${redditReady?'':' Reddit is not currently advertised because this deployment does not have approved Reddit OAuth Data API credentials configured.'}`});
 
   const readPublicLinkConfig={
     title:'Read public link',
@@ -409,11 +525,42 @@ export function buildMcpServer(){
     const result=await getJobResult(userIdFromContext(ctx),job_id);
     if(result.status!=='completed')return result as unknown as Record<string,unknown>;
     const transcript=result.transcript??'';
-    const matches=searchSourceText(transcript,query,max_matches??5);
+    const videoSegments=result.transcript_source!=='post'&&result.transcript_source!=='page'?(result.segments??[]):[];
+    const matches=videoSegments.length
+      ? searchVideoSegments(videoSegments,query,max_matches??5)
+      : searchSourceText(transcript,query,max_matches??5);
     return {
       status:'completed',job_id:result.job_id,source_url:result.source_url,source_key:result.source_key,
       query,matches,
-      ...(matches.length?{}:{message:'No lexical match was found. Try broader concepts/synonyms or continue reading the source; this does not prove the topic is absent.'})
+      ...(matches.length?{}:{message:'No lexical match was found. Try broader concepts/synonyms, inspect the video map, or continue reading the source; this does not prove the topic is absent.'})
+    };
+  }));
+
+  server.registerTool('get_video_map',{
+    title:'Map processed video',
+    description:`Return a compact timeline map for an already processed Link2AI video without re-reading or re-charging it. Use this for broad whole-video questions or when the relevant part is unclear. Each section includes a time range, compact transcript excerpt, and deterministic keywords. This is a navigation aid, not a replacement for reading the exact relevant time range with get_video_time_range before making detailed claims.`,
+    inputSchema:{
+      job_id:z.string().uuid(),
+      window_seconds:z.number().int().min(30).max(1800).optional().describe('Preferred timeline window size; Link2AI may enlarge it so the whole video fits in the map'),
+      max_windows:z.number().int().min(10).max(120).optional().describe('Maximum number of timeline sections to return')
+    },
+    outputSchema:videoMapOutputSchema.shape,
+    securitySchemes:LINK2AI_OAUTH_SECURITY,
+    _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
+    annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}
+  } as any,async(args:Record<string,unknown>,ctx:any)=>safeToolCall(async()=>{
+    const {job_id,window_seconds,max_windows}=args as {job_id:string;window_seconds?:number;max_windows?:number};
+    const result=await getJobResult(userIdFromContext(ctx),job_id);
+    if(result.status!=='completed')return result as unknown as Record<string,unknown>;
+    if(result.transcript_source==='post'||result.transcript_source==='page')throw new Link2AIError('TIMELINE_UNAVAILABLE','This source is not a timed video transcript.',422,false);
+    const segments=result.segments??[];
+    if(!segments.length)throw new Link2AIError('TIMELINE_UNAVAILABLE','This video result does not contain timestamped transcript segments.',422,false);
+    const map=buildVideoMap(segments,window_seconds??180,max_windows??80);
+    return {
+      status:'completed',job_id:result.job_id,source_url:result.source_url,source_key:result.source_key,
+      duration_seconds:result.duration_seconds??Math.max(...segments.map(segment=>segment.end)),
+      requested_window_seconds:window_seconds??180,effective_window_seconds:map.effective_window_seconds,
+      section_count:map.sections.length,sections:map.sections
     };
   }));
 

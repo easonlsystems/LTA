@@ -94,6 +94,17 @@ Locates likely relevant text regions inside an existing processed source job.
 - Search results are locator hints, not semantic proof; broader context should be read before answering.
 - OAuth required: `link2ai:read`.
 
+### get_video_map
+Returns a compact timeline map for an already processed video.
+
+- readOnlyHint: true.
+- destructiveHint: false.
+- openWorldHint: false.
+- Does not re-read or re-charge the source.
+- Covers the full available timeline by widening windows when needed.
+- Navigation aid only; detailed claims should use exact time-range context.
+- OAuth required: `link2ai:read`.
+
 ### get_usage
 Reads the connected user's Link2AI plan and processing-unit balance.
 
