@@ -839,6 +839,22 @@ app.get('/founder',async(req,reply)=>{
       AND COALESCE(lower(u.email),'')<>$1
       AND COALESCE(u.analytics_excluded,false)=false`,[founderEmail]);
 
+  const providerHealthResult=await pool.query<{
+    platform:string;operation:string;provider:string;attempts:string;successes:string;failures:string;
+    retryable_failures:string;avg_duration_ms:string;last_error_code:string|null;
+  }>(`SELECT
+      platform,operation,provider,
+      SUM(attempts)::text AS attempts,
+      SUM(successes)::text AS successes,
+      SUM(failures)::text AS failures,
+      SUM(retryable_failures)::text AS retryable_failures,
+      CASE WHEN SUM(attempts)>0 THEN ROUND(SUM(total_duration_ms)::numeric/SUM(attempts))::text ELSE '0' END AS avg_duration_ms,
+      (array_agg(last_error_code ORDER BY bucket_start DESC) FILTER(WHERE last_error_code IS NOT NULL))[1] AS last_error_code
+    FROM provider_health_hourly
+    WHERE bucket_start>=date_trunc('hour',now()-interval '24 hours')
+    GROUP BY platform,operation,provider
+    ORDER BY platform,operation,provider`);
+
   const m=summaryResult.rows[0];
   const accounts=founderNum(m?.accounts_total),connected=founderNum(m?.connected_total),activated=founderNum(m?.activated_total),paid=founderNum(m?.paid_total);
   const links=founderNum(m?.links_total),seconds=founderNum(m?.seconds_total);
@@ -855,6 +871,11 @@ app.get('/founder',async(req,reply)=>{
   const productConnectorEnabled=founderNum(productFunnel?.connector_enabled);
   const productFirstLinkAttempt=founderNum(productFunnel?.first_link_attempt);
   const productFirstSuccessfulRead=founderNum(productFunnel?.first_successful_read);
+  const providerHealthRows=providerHealthResult.rows.map(row=>{
+    const attempts=founderNum(row.attempts),successes=founderNum(row.successes),failures=founderNum(row.failures);
+    const health=attempts>0?Math.round(successes/attempts*100):0;
+    return `<tr><td>${founderEscape(row.platform)}</td><td>${founderEscape(row.operation)}</td><td class="fd-email">${founderEscape(row.provider)}</td><td>${attempts}</td><td><span class="fd-status ${health>=90?'ok':health>=60?'wait':'bad'}">${health}%</span></td><td>${failures}</td><td>${founderNum(row.retryable_failures)}</td><td>${founderNum(row.avg_duration_ms)} ms</td><td>${founderEscape(row.last_error_code??'—')}</td></tr>`;
+  }).join('')||'<tr><td colspan="9">最近 24 小時尚無 provider attempts。</td></tr>';
   const sourceRows=sourceResult.rows.map(row=>`<tr><td class="fd-source">${founderEscape(row.source)}</td><td>${founderNum(row.visitors)}</td><td>${founderNum(row.signups)}</td><td>${founderPct(founderNum(row.signups),Math.max(founderNum(row.visitors),1))}</td></tr>`).join('')||'<tr><td colspan="4">尚無外部來源資料。</td></tr>';
   const renderedAt=founderTime(new Date().toISOString());
   const trackingStarted=founderTime(a?.tracking_started_at);
@@ -883,6 +904,7 @@ app.get('/founder',async(req,reply)=>{
     </section>
     <section><div class="fd-label" style="margin-bottom:8px">外部啟用漏斗 · 排除 Founder / 內部測試 · 自 ${activationStarted} 起</div><div class="fd-funnel activation"><div class="fd-step"><b>${activationVisitors}</b><span>可比較外部訪客</span></div><div class="fd-step"><b>${ctaStarts}</b><span>點主 CTA · ${founderPct(ctaStarts,Math.max(activationVisitors,1))}</span></div><div class="fd-step"><b>${signupViews}</b><span>看註冊頁 · ${founderPct(signupViews,Math.max(activationVisitors,1))}</span></div><div class="fd-step"><b>${signupSubmits}</b><span>送出註冊 · ${founderPct(signupSubmits,Math.max(signupViews,1))}</span></div><div class="fd-step"><b>${externalSignups}</b><span>完成註冊 · ${founderPct(externalSignups,Math.max(signupSubmits,1))}</span></div><div class="fd-step"><b>${externalConnected}</b><span>AI connected · ${founderPct(externalConnected,Math.max(externalSignups,1))}</span></div><div class="fd-step"><b>${externalActivated}</b><span>首次成功 read · ${founderPct(externalActivated,Math.max(externalConnected,1))}</span></div><div class="fd-step"><b>${externalPaid}</b><span>付費 · ${founderPct(externalPaid,Math.max(externalActivated,1))}</span></div></div><div class="fd-note">舊 Railway 回補流量仍保留在總訪客與熱門頁面，但不混進這條新漏斗的轉換率；這樣接下來累積到約 100 個 relevant external visitors 時才可直接比較。</div></section>
     <section><div class="fd-label" style="margin-bottom:8px">Claude 連線 → 首次成功讀取 · 新 activation 埋點</div><div class="fd-funnel activation"><div class="fd-step"><b>${productConnectCta}</b><span>Connect CTA</span></div><div class="fd-step"><b>${productConnectionStarted}</b><span>OAuth started · ${founderPct(productConnectionStarted,Math.max(productConnectCta,1))}</span></div><div class="fd-step"><b>${productConnectionSuccess}</b><span>Connected · ${founderPct(productConnectionSuccess,Math.max(productConnectionStarted,1))}</span></div><div class="fd-step"><b>${productConnectorEnabled}</b><span>Connector usable* · ${founderPct(productConnectorEnabled,Math.max(productConnectionSuccess,1))}</span></div><div class="fd-step"><b>${productFirstLinkAttempt}</b><span>First link attempt · ${founderPct(productFirstLinkAttempt,Math.max(productConnectorEnabled,1))}</span></div><div class="fd-step"><b>${productFirstSuccessfulRead}</b><span>First successful read · ${founderPct(productFirstSuccessfulRead,Math.max(productFirstLinkAttempt,1))}</span></div></div><div class="fd-note">* Claude 不提供「使用者剛剛切開 connector toggle」的 server-side webhook，因此 connector usable 是在第一個已驗證 Link2AI tool call 抵達後推定；它可以區分「已授權但從未真正用到」與「connector 已經在對話中可被呼叫」。這組資料從本版上線後開始累積，不回推舊使用者。</div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><div><h2>Source provider health</h2><div class="fd-note">最近 24 小時 · 每個 provider attempt 都會記成功／失敗、延遲與錯誤類型；不保存來源 URL 或內容。</div></div><span class="fd-label">rolling 24h</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:980px"><thead><tr><th>平台</th><th>操作</th><th>Provider</th><th>Attempts</th><th>成功率</th><th>失敗</th><th>可重試失敗</th><th>平均延遲</th><th>最近錯誤</th></tr></thead><tbody>${providerHealthRows}</tbody></table></div></section>
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>流量來源</h2><div class="fd-note">UTM source 優先；沒有 UTM 時只保存 referrer hostname，不保存完整 referrer URL、IP 或 User-Agent。</div></div><span class="fd-label">external only</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:620px"><thead><tr><th>來源</th><th>訪客</th><th>註冊</th><th>註冊率</th></tr></thead><tbody>${sourceRows}</tbody></table></div></section>
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>熱門網站頁面</h2><div class="fd-note">最近 7 天 · 匿名第一方統計</div></div><span class="fd-label">不儲存 IP</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:520px"><thead><tr><th>頁面</th><th>不重複訪客</th><th>瀏覽次數</th></tr></thead><tbody>${topPages}</tbody></table></div></section>
     <section><div class="fd-label" style="margin-bottom:8px">產品轉換漏斗</div><div class="fd-funnel"><div class="fd-step"><b>${accounts}</b><span>帳號</span></div><div class="fd-step"><b>${connected}</b><span>已連接 AI · ${founderPct(connected,accounts)}</span></div><div class="fd-step"><b>${activated}</b><span>首次成功連結 · ${founderPct(activated,accounts)}</span></div><div class="fd-step"><b>${paid}</b><span>付費 · 佔已啟用使用者 ${founderPct(paid,Math.max(activated,1))}</span></div></div></section>
