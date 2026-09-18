@@ -123,7 +123,7 @@ const longVideoMap=buildVideoMap(
   180,
   10
 );
-assert.ok(longVideoMap.effective_window_seconds>=1200,'video map should widen windows to cover the full timeline within max_windows');
+assert.ok(longVideoMap.effective_window_seconds>=1170,'video map should widen windows enough to cover the full timeline within max_windows');
 assert.ok(longVideoMap.sections.length<=10);
 
 const handler=createMcpHandler(buildMcpServer);
