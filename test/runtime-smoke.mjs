@@ -303,7 +303,7 @@ try{
   assert.match(loginText,/Continue with Google/);
   assert.match(loginText,/never sees or stores your Google password/);
   assert.match(loginText,/auth\/google\/start/);
-  assert.match(loginText,/OpenAI reviewer access/);
+  assert.match(loginText,/Integration reviewer access/);
   assert.match(loginText,/10 processing units free/);
   assert.match(loginText,/Failed or unsupported reads use 0 units/);
   assert.doesNotMatch(loginText,/auth\/password\/login/);

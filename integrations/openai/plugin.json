@@ -1,0 +1,21 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "link2ai",
+  "version": "3.0.0",
+  "description": "Read supported public links when the source content is not reliably available to the AI.",
+  "author": {
+    "name": "Eason Systems",
+    "url": "https://api-production-0383e.up.railway.app/"
+  },
+  "homepage": "https://api-production-0383e.up.railway.app/",
+  "keywords": [
+    "public-links",
+    "source-reading",
+    "youtube",
+    "social-media",
+    "github",
+    "web",
+    "pdf",
+    "research"
+  ]
+}
