@@ -6,6 +6,7 @@ import { recordProviderOutcome, type ProviderOperation, type ProviderOutcomeInpu
 export interface ProviderAttempt<T>{
   name:string;
   run:()=>Promise<T>;
+  shouldFailover?:(error:unknown)=>boolean;
 }
 
 export interface ProviderChainInput<T>{
@@ -42,7 +43,8 @@ export async function runProviderChain<T>(input:ProviderChainInput<T>):Promise<T
         outcome:'failed',durationMs:Date.now()-started,error,attemptIndex:i
       });
       const next=input.attempts[i+1];
-      if(!next||!shouldFailover(error))throw error;
+      const attemptShouldFailover=attempt.shouldFailover??shouldFailover;
+      if(!next||!attemptShouldFailover(error))throw error;
       const mapped=asLink2AIError(error);
       logEvent('source_provider_failover',{
         platform:input.platform,operation:input.operation,
