@@ -49,4 +49,6 @@ assert.match(mcpServiceSource,/options\.refresh\?null:await findCache/,'Explicit
 assert.match(mcpSource,/read_public_links/,'V3 must expose a first-class multi-link reader');
 assert.match(mcpSource,/turn count alone is never a reason to refresh/i,'Host instructions must not use conversation length as a refresh policy');
 assert.match(mcpSource,/get_video_time_range/,'V3 must expose timed lookup for processed video jobs');
+assert.match(mcpSource,/find_in_link/,'V3 must expose read-only search over processed source context');
+assert.match(mcpSource,/search miss is not proof|zero matches as proof/i,'Source search must not turn lexical misses into false absence claims');
 console.log('release audit tests PASS');
