@@ -4,6 +4,7 @@ import { Link2AIError } from '../util/errors.js';
 import { env } from '../config/env.js';
 import { clipExternalText, METADATA_LIMITS } from '../media/text.js';
 import { parseMediaUrl, type ParsedMediaUrl } from '../media/url.js';
+import { runProviderChain } from '../resolvers/providerChain.js';
 import { boundExtractedText, estimateTokens, textUsageUnits, type CompletenessMetadata, type TextContentClass } from './limits.js';
 
 const API_PAGE_BYTES=3_000_000;
@@ -648,22 +649,27 @@ function collectGalleryCandidates(node:unknown,out:{texts:string[];creators:stri
   for(const v of Object.values(obj))if(v&&typeof v==='object')collectGalleryCandidates(v,out);
 }
 
-async function fetchGalleryPost(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload|null>{
+async function fetchGalleryPost(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
   let result;
   try{
     result=await runProcess('gallery-dl',['--no-input','--no-colors','--simulate','--dump-json',input.normalizedUrl],{timeoutMs:30_000,maxOutputBytes:sourceByteBudget(budget,8_000_000).maxBytes});
-  }catch{return null;}
-  if(result.code!==0||!result.stdout.trim())return null;
+  }catch{
+    throw new Link2AIError('EXTRACTION_FAILED','The primary social-post provider did not return readable content.',502,true,{cause_code:'gallery_dl_process_failed'});
+  }
+  if(result.code!==0||!result.stdout.trim()){
+    throw new Link2AIError('EXTRACTION_FAILED','The primary social-post provider did not return readable content.',502,true,{cause_code:'gallery_dl_empty'});
+  }
   let data:unknown;
   try{data=JSON.parse(result.stdout);}catch{
     // Newer gallery-dl can emit JSONL; tolerate that mode too.
-    try{data=result.stdout.split(/\r?\n/).filter(Boolean).map(line=>JSON.parse(line));}catch{return null;}
+    try{data=result.stdout.split(/\r?\n/).filter(Boolean).map(line=>JSON.parse(line));}
+    catch{throw new Link2AIError('EXTRACTION_FAILED','The primary social-post provider returned invalid metadata.',502,true,{cause_code:'gallery_dl_invalid_json'});}
   }
   const found={texts:[] as string[],creators:[] as string[],titles:[] as string[]};
   collectGalleryCandidates(data,found);
   const unique=[...new Set(found.texts.map(v=>cleanText(v)).filter(Boolean))];
   const text=unique.sort((a,b)=>b.length-a.length)[0]??'';
-  if(!text)return null;
+  if(!text)throw new Link2AIError('EXTRACTION_FAILED','The primary social-post provider did not expose readable post text.',502,true,{cause_code:'gallery_dl_no_text'});
   const creator=[...new Set(found.creators.map(v=>cleanText(v,METADATA_LIMITS.creator)).filter(Boolean))][0];
   const title=[...new Set(found.titles.map(v=>cleanText(v,METADATA_LIMITS.title)).filter(Boolean))][0];
   return complete({platform:input.platform,canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title,creator,caption:clipExternalText(text,METADATA_LIMITS.description),language:'und',text,source:'post'},'social',{},budget);
@@ -678,8 +684,13 @@ export async function extractTextLink(input:ParsedMediaUrl,budget?:TextExtractio
   if(input.platform==='hackernews')return await fetchHackerNewsItem(input,budget);
   if(input.platform==='pdf')return await fetchPdf(input,budget);
   if(input.platform==='instagram'||input.platform==='tiktok'){
-    const gallery=await fetchGalleryPost(input,budget);
-    if(gallery)return gallery;
+    return await runProviderChain<LinkTextPayload>({
+      platform:input.platform,operation:'text',
+      attempts:[
+        {name:'gallery_dl',run:()=>fetchGalleryPost(input,budget)},
+        {name:'public_page',run:()=>fetchPage(input,budget)}
+      ]
+    });
   }
   return await fetchPage(input,budget);
 }
