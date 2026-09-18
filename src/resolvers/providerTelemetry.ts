@@ -1,4 +1,3 @@
-import { pool } from '../db/pool.js';
 import { asLink2AIError } from '../util/errors.js';
 import { logEvent } from '../util/log.js';
 
@@ -37,7 +36,20 @@ export async function recordProviderOutcome(input:ProviderOutcomeInput):Promise<
     ...(err?{retryable}: {})
   });
 
-  void pool.query(
+  const params=[
+    clean(input.platform,48),
+    input.operation,
+    clean(input.provider,64),
+    input.outcome==='success'?1:0,
+    input.outcome==='failed'?1:0,
+    input.outcome==='failed'&&retryable?1:0,
+    durationMs,
+    errorCode,
+    causeCode
+  ];
+  // Delay loading the database module until a real provider attempt occurs. This keeps
+  // parsers and pure tests independent of production DB/env configuration.
+  void import('../db/pool.js').then(({pool})=>pool.query(
     `INSERT INTO provider_health_hourly(
        bucket_start,platform,operation,provider,attempts,successes,failures,retryable_failures,total_duration_ms,last_error_code,last_cause_code
      ) VALUES(
@@ -52,18 +64,8 @@ export async function recordProviderOutcome(input:ProviderOutcomeInput):Promise<
        last_error_code=COALESCE(EXCLUDED.last_error_code,provider_health_hourly.last_error_code),
        last_cause_code=COALESCE(EXCLUDED.last_cause_code,provider_health_hourly.last_cause_code),
        updated_at=now()`,
-    [
-      clean(input.platform,48),
-      input.operation,
-      clean(input.provider,64),
-      input.outcome==='success'?1:0,
-      input.outcome==='failed'?1:0,
-      input.outcome==='failed'&&retryable?1:0,
-      durationMs,
-      errorCode,
-      causeCode
-    ]
-  ).catch(()=>{
+    params
+  )).catch(()=>{
     // Provider telemetry must never block source extraction or failover.
   });
 }
