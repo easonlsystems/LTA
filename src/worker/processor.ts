@@ -11,7 +11,7 @@ import type { MediaMetadata, TranscriptSegment } from '../media/types.js';
 import { transcribeAudio } from '../transcription/router.js';
 import { availableUsageUnits, reserveQuota, finalizeQuota, releaseQuota } from '../quota/service.js';
 import { saveCache, findCache, findUserCompletedCache } from './cache.js';
-import { asLink2AIError } from '../util/errors.js';
+import { asLink2AIError, Link2AIError } from '../util/errors.js';
 import { canPurchaseTopup, createCheckoutSession, createTopupCheckoutSession } from '../billing/lemon.js';
 import { logEvent, logErrorEvent } from '../util/log.js';
 import { deferJob, deferJobToRegion, heartbeatJob, markAwaitingPayment, markCompleted, markFailed, markRetry, planForUser, setJobMetadata, type JobRow } from './jobs.js';
