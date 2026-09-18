@@ -13,6 +13,7 @@ import { readinessIssues } from '../config/readiness.js';
 import { browserSameOriginOk, publicHostAllowlist } from '../config/publicUrl.js';
 import { getUsageSnapshot } from '../quota/service.js';
 import { trackWebsiteEvent, trackWebsiteVisit } from '../analytics/visitors.js';
+import { recordActivationEvent } from '../analytics/product.js';
 
 const allowedPublicHosts=publicHostAllowlist(env().PUBLIC_BASE_URL,[process.env.RAILWAY_PUBLIC_DOMAIN??'']);
 const redditOAuthReady=Boolean(env().REDDIT_CLIENT_ID&&env().REDDIT_CLIENT_SECRET);
@@ -352,6 +353,8 @@ app.get('/start',async(req,reply)=>{
 });
 app.get('/connect/start',async(req,reply)=>{
   await trackWebsiteEvent(req,'connect_install_click','/connect');
+  const current=await userFromSessionCookie(req.headers.cookie).catch(()=>null);
+  if(current?.id)await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude'}});
   return reply.redirect(claudeInstallUrl());
 });
 
