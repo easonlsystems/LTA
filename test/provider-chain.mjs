@@ -58,6 +58,24 @@ const {pool}=await import('../dist/src/db/pool.js');
 }
 
 {
+  let fallbackCalled=false;
+  const result=await runProviderChain({
+    platform:'x',operation:'audio',
+    attempts:[
+      {
+        name:'structured',
+        run:async()=>{throw new Link2AIError('DOWNLOAD_TOO_LARGE','full mp4 too large',413,false);},
+        shouldFailover:error=>error instanceof Link2AIError&&error.code==='DOWNLOAD_TOO_LARGE'
+      },
+      {name:'audio_only',run:async()=>{fallbackCalled=true;return 'audio-only.mp3';}}
+    ],
+    telemetry:async()=>{}
+  });
+  assert.equal(result,'audio-only.mp3');
+  assert.equal(fallbackCalled,true,'provider-specific failover rules must allow a cheaper/narrower fallback route');
+}
+
+{
   await assert.rejects(
     runProviderChain({
       platform:'x',operation:'audio',
