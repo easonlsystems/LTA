@@ -7,10 +7,6 @@ export interface PlanLimits {
   priority: number;
 }
 
-// This is an operational guardrail, not a pricing-plan limit. Paid plans are
-// constrained by available processing units rather than a separate video-length cap.
-export const MAX_PROCESSABLE_VIDEO_SECONDS = 8 * 60 * 60;
-
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   trial: {
     secondsPerPeriod: 10 * 60,
