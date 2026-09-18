@@ -6,6 +6,7 @@ import { reserveQuota, finalizeQuota, getUsageSnapshot } from '../quota/service.
 import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limits.js';
 import { findCache } from '../worker/cache.js';
 import { planForUser, priorityForPlan, markAwaitingPayment, markCompleted, setJobMetadata } from '../worker/jobs.js';
+import { recordActivationEvent } from '../analytics/product.js';
 
 export interface ToolJobResult {
   status: 'processing'|'completed'|'payment_required'|'failed';
@@ -40,6 +41,14 @@ export interface ToolJobResult {
 export async function startTranscriptJob(userId:string,url:string,options:{refresh?:boolean;profile?:DistributionProfile}={}):Promise<ToolJobResult>{
   const profile=options.profile??'default';
   const parsed=parseAllowedMediaUrl(url,profile);
+  await recordActivationEvent(userId,'connector_enabled',{
+    platform:parsed.platform,distributionProfile:profile,
+    metadata:{inferred_from:'authenticated_link_tool_call'}
+  });
+  await recordActivationEvent(userId,'first_link_attempt',{
+    platform:parsed.platform,distributionProfile:profile,
+    metadata:{refresh:Boolean(options.refresh)}
+  });
   const active=await pool.query<{id:string}>(
     `SELECT j.id FROM transcript_jobs j WHERE j.user_id=$1 AND j.platform=$2
      AND (j.canonical_media_id=$3 OR j.normalized_url=$4)
@@ -130,6 +139,14 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
     return {status:'failed',job_id:row.id,error_code:'TRANSCRIPT_EXPIRED',message:'This temporary result has expired. Call Read link content with the original link to read it again.'};
   }
   if(row.status==='completed'){
+    await recordActivationEvent(userId,'connector_enabled',{
+      platform:row.platform,distributionProfile:profile,
+      metadata:{inferred_from:'authenticated_result_tool_call'}
+    });
+    await recordActivationEvent(userId,'first_successful_read',{
+      platform:row.platform,distributionProfile:profile,
+      metadata:{job_id:row.id,source:row.transcript_source??'unknown'}
+    });
     const returnedUsageUnits=Number(row.usage_units??0)>0?Number(row.usage_units):(row.transcript_source==='post'||row.transcript_source==='page'?textUsageUnits(estimateTokens(row.transcript)):videoUsageUnits(Number(row.cache_duration??row.duration_seconds??0)));
     return {
       status:'completed',job_id:row.id,platform:row.platform,source_url:row.source_url,source_key:`${row.platform}:${row.canonical_media_id}`,
@@ -146,7 +163,8 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
   return {status:'processing',job_id:row.id,message:`${env().PUBLIC_BRAND_NAME} is reading this link.`,retry_after_seconds:3};
 }
 
-export async function usageForTool(userId:string){
+export async function usageForTool(userId:string,profile:DistributionProfile='default'){
+  await recordActivationEvent(userId,'connector_enabled',{distributionProfile:profile,metadata:{inferred_from:'usage_tool_call'}});
   const usage=await getUsageSnapshot(userId);
   return {
     plan:usage.plan,

@@ -20,6 +20,9 @@ const [linkSource,limitsSource,mcpSource,mcpServiceSource,apiSource,authWrapperS
 const authSource=authWrapperSource+'\n'+authBaseSource;
 const policySource=await readFile(new URL('../src/mcp/policy.ts',import.meta.url),'utf8');
 const xResolverSource=await readFile(new URL('../src/resolvers/xSyndication.ts',import.meta.url),'utf8');
+const xResolverPureSource=await readFile(new URL('../src/resolvers/xSyndicationPure.ts',import.meta.url),'utf8');
+const activationSource=await readFile(new URL('../src/analytics/product.ts',import.meta.url),'utf8');
+const activationMigration=await readFile(new URL('../sql/006_activation_funnel.sql',import.meta.url),'utf8');
 assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News must use the official Firebase API path');
 assert.doesNotMatch(linkSource,/hn\.algolia\.com/,'OpenAI-ready core must not depend on the community Algolia HN adapter');
 assert.match(policySource,/OPENAI_ALLOWED_PLATFORMS[^\n]*\['bluesky','github','hackernews'\]/,'ChatGPT distribution must default-deny every source outside the reviewed allowlist');
@@ -40,6 +43,17 @@ assert.match(apiSource,/connectorName/,'Claude install URL must prefill the conn
 assert.match(apiSource,/connectorUrl/,'Claude install URL must prefill the MCP endpoint');
 assert.doesNotMatch(apiSource,/function claudeInstallUrl\(\)\{return 'https:\/\/claude\.ai\/directory'/,'Claude onboarding must not regress to the generic directory homepage');
 assert.match(apiSource,/Always available/,'Onboarding must document current Claude Tool access mode');
+assert.match(apiSource,/\+ → Connectors → Link2AI/,'Post-connect onboarding must show the Claude-side connector activation step');
+assert.match(apiSource,/normal message box/,'Onboarding must tell users where to paste the public link');
+assert.match(apiSource,/Repeat in each conversation where you want Link2AI/,'Onboarding must state the current per-conversation activation behavior');
+assert.match(apiSource,/Connected ✓ One Claude-side step remains/,'Connected state must not imply that Claude-side activation is already finished');
+assert.match(authBaseSource,/connection_started/,'OAuth authorization flow must record a connection-start milestone');
+assert.match(authServiceSource,/connection_success/,'OAuth token exchange must record a successful connection milestone');
+assert.match(mcpServiceSource,/first_link_attempt/,'MCP service must record the first real link attempt');
+assert.match(mcpServiceSource,/first_successful_read/,'MCP service must record the first successful source read');
+assert.match(mcpServiceSource,/connector_enabled/,'MCP service must record an inferred connector-usable milestone');
+assert.match(activationSource,/ON CONFLICT DO NOTHING/,'Activation milestone writes must be idempotent and non-blocking');
+assert.match(activationMigration,/product_activation_events/,'Activation milestones need persistent user-level storage');
 assert.match(apiSource,/browserSameOriginOk/,'Founder browser POSTs must use the serving-host same-origin helper');
 assert.match(authSource,/browserSameOriginOk/,'Auth browser POSTs must use the serving-host same-origin helper');
 assert.match(authWrapperSource,/registerAdminRoutes/,'Auth route registration must include the private admin app routes');
@@ -59,7 +73,7 @@ assert.match(processorSource,/probeXVideoMetadata/,'X posts must probe structure
 assert.match(processorSource,/x_attached_media_detected/,'X attached media must enter the media pipeline and emit an explicit routing event');
 assert.match(processorSource,/prefetchedMetadata\?\?await resolver\.metadata\(parsed\)/,'X media metadata probe must feed the normal caption\/audio\/ASR pipeline');
 assert.match(xResolverSource,/cdn\.syndication\.twimg\.com\/tweet-result/,'X video detection must use the structured embed payload instead of guessing from oEmbed text');
-assert.match(xResolverSource,/mediaDetails|node\.video/,'X structured resolver must recognize explicit video metadata');
+assert.match(xResolverPureSource,/mediaDetails|node\.video/,'X structured resolver must recognize explicit video metadata');
 assert.match(xResolverSource,/safeGetBuffer\(video\.videoUrl/,'X video resolver must fetch the resolved media track for downstream audio\/ASR');
 assert.match(mcpServiceSource,/!options\.refresh&&parsed\.platform!=='x'/,'MCP must bypass stale completed-result reuse for X during media-routing rollout');
 assert.match(processorSource,/const reuseCache=job\.platform!=='x'/,'Worker must bypass stale X transcript caches during media-routing rollout');

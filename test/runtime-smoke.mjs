@@ -200,6 +200,14 @@ try{
   assert.equal(start.status,302);
   assert.equal(start.headers.get('location'),'/signup?return_to=%2Fconnect');
 
+  const connectPage=await fetch(`http://127.0.0.1:${port}/connect`,{headers:{host:'link2ai.example'}});
+  assert.equal(connectPage.status,200);
+  const connectPageText=await connectPage.text();
+  assert.match(connectPageText,/\+ → Connectors → Link2AI/,'post-connect page must show the exact Claude activation path');
+  assert.match(connectPageText,/normal message box/,'post-connect page must say where to paste the source link');
+  assert.match(connectPageText,/Repeat in each conversation where you want Link2AI/,'post-connect page must disclose per-conversation activation');
+  assert.match(connectPageText,/Connected ✓ One Claude-side step remains/,'Connected must not be presented as the end of setup');
+
   const connectStart=await fetch(`http://127.0.0.1:${port}/connect/start`,{headers:{host:'link2ai.example'},redirect:'manual'});
   assert.equal(connectStart.status,302);
   const connectLocation=connectStart.headers.get('location')??'';
