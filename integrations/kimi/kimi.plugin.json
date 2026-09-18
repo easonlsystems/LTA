@@ -1,0 +1,29 @@
+{
+  "name": "link2ai",
+  "version": "3.0.0",
+  "description": "Read supported public links and bring the actual source content into Kimi.",
+  "keywords": [
+    "public-links",
+    "youtube",
+    "social-media",
+    "github",
+    "web",
+    "pdf",
+    "source-context"
+  ],
+  "author": "Eason Systems",
+  "homepage": "https://api-production-0383e.up.railway.app/",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Link2AI",
+    "shortDescription": "Read public links Kimi cannot reliably access",
+    "longDescription": "Bring AI-readable source context from supported public videos, social posts, developer discussions, webpages and text-layer PDFs into Kimi without manual copy-paste.",
+    "developerName": "Eason Systems",
+    "websiteURL": "https://api-production-0383e.up.railway.app/"
+  },
+  "mcpServers": {
+    "link2ai": {
+      "url": "https://api-production-0383e.up.railway.app/mcp"
+    }
+  }
+}
