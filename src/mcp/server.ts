@@ -159,8 +159,9 @@ export function buildMcpServer(){
     inputSchema:{url:z.string().url().describe('Supported public link whose contents are needed to answer the user')},
     outputSchema:linkResultOutputSchema.shape,
     securitySchemes:LINK2AI_OAUTH_SECURITY,
+    _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true}
-  } as const;
+  } as any;
   const readPublicLink=async({url}:{url:string},ctx:Link2AIHandlerContext)=>safeToolCall(async()=>chunkResult(await startTranscriptJob(userIdFromContext(ctx),url)));
 
   server.registerTool('read_public_link',readPublicLinkConfig,readPublicLink);
@@ -172,8 +173,9 @@ export function buildMcpServer(){
     inputSchema:{url:z.string().url().describe('Supported public link to read')},
     outputSchema:linkResultOutputSchema.shape,
     securitySchemes:LINK2AI_OAUTH_SECURITY,
+    _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true}
-  },async({url},ctx)=>safeToolCall(async()=>chunkResult(await startTranscriptJob(userIdFromContext(ctx),url))));
+  } as any,async({url}:{url:string},ctx:Link2AIHandlerContext)=>safeToolCall(async()=>chunkResult(await startTranscriptJob(userIdFromContext(ctx),url))));
 
   server.registerTool('get_transcript_result',{
     title:'Get link result',
@@ -185,8 +187,9 @@ export function buildMcpServer(){
     },
     outputSchema:linkResultOutputSchema.shape,
     securitySchemes:LINK2AI_OAUTH_SECURITY,
+    _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}
-  },async({job_id,offset,max_chars},ctx)=>safeToolCall(async()=>chunkResult(await getJobResult(userIdFromContext(ctx),job_id),offset??0,max_chars??MAX_CHARS)));
+  } as any,async({job_id,offset,max_chars}:{job_id:string;offset?:number;max_chars?:number},ctx:Link2AIHandlerContext)=>safeToolCall(async()=>chunkResult(await getJobResult(userIdFromContext(ctx),job_id),offset??0,max_chars??MAX_CHARS)));
 
   server.registerTool('get_usage',{
     title:`Check ${env().PUBLIC_BRAND_NAME} usage`,
@@ -194,8 +197,9 @@ export function buildMcpServer(){
     inputSchema:{},
     outputSchema:usageOutputSchema.shape,
     securitySchemes:LINK2AI_OAUTH_SECURITY,
+    _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}
-  },async(_args,ctx)=>safeToolCall(async()=>await usageForTool(userIdFromContext(ctx)) as unknown as Record<string,unknown>));
+  } as any,async(_args:Record<string,never>,ctx:Link2AIHandlerContext)=>safeToolCall(async()=>await usageForTool(userIdFromContext(ctx)) as unknown as Record<string,unknown>));
 
   return server;
 }
