@@ -5,7 +5,7 @@ process.env.PUBLIC_BASE_URL='http://localhost:3000';
 process.env.APP_SECRET='01234567890123456789012345678901';
 process.env.PUBLIC_BRAND_NAME='LaunchBrand';
 
-const [{createMcpHandler},{buildMcpServer,unicodeSafeSlice,chunkResult},{pool}]=await Promise.all([
+const [{createMcpHandler},{buildMcpServer,unicodeSafeSlice,chunkResult,selectTimedSegmentWindow},{pool}]=await Promise.all([
   import('@modelcontextprotocol/server'),
   import('../dist/src/mcp/server.js'),
   import('../dist/src/db/pool.js')
@@ -59,6 +59,27 @@ assert.equal(unverifiedVideo.source_completeness,'unverified');
 assert.equal(unverifiedVideo.timeline_coverage_verified,false);
 assert.equal(unverifiedVideo.content_complete,false);
 
+const timed=selectTimedSegmentWindow([
+  {start:0,end:10,text:'intro'},
+  {start:2220,end:2240,text:'target section one'},
+  {start:2240,end:2260,text:'target section two'},
+  {start:2600,end:2610,text:'outside range'}
+],2220,2520);
+assert.equal(timed.segment_count,2);
+assert.match(timed.timed_text,/37:00–37:20/);
+assert.match(timed.timed_text,/target section two/);
+assert.doesNotMatch(timed.timed_text,/outside range/);
+assert.equal(timed.delivery_complete,true);
+assert.equal(timed.next_start_seconds,null);
+
+const timedPaged=selectTimedSegmentWindow([
+  {start:10,end:20,text:'a'.repeat(80)},
+  {start:20,end:30,text:'b'.repeat(80)}
+],0,60,100);
+assert.equal(timedPaged.segment_count,1);
+assert.equal(timedPaged.delivery_complete,false);
+assert.equal(timedPaged.next_start_seconds,20);
+
 const handler=createMcpHandler(buildMcpServer);
 const authInfo={
   token:'test',clientId:'test',scopes:['link2ai:read'],
@@ -85,38 +106,59 @@ try{
   assert.match(initialized.result.instructions??'',/built-in browser\/fetch attempt fails/i);
 
   const listed=await call({jsonrpc:'2.0',id:2,method:'tools/list',params:{}});
-  assert.deepEqual(listed.result.tools.map(tool=>tool.name),['read_public_link','get_video_transcript','get_transcript_result','get_usage']);
+  assert.deepEqual(listed.result.tools.map(tool=>tool.name),['read_public_link','read_public_links','get_video_transcript','get_transcript_result','get_video_time_range','get_usage']);
   assert.match(listed.result.tools[0].description,/LaunchBrand/);
   assert.match(listed.result.tools[0].description,/built-in browser\/fetch fails/i);
   assert.match(listed.result.tools[0].description,/instead of asking the user to paste/i);
-  assert.match(listed.result.tools[1].description,/Prefer read_public_link/i);
-  assert.match(listed.result.tools[2].description,/LaunchBrand/);
+  assert.match(listed.result.tools[1].description,/multiple supported public links/i);
+  assert.match(listed.result.tools[1].description,/comparison|synthesis/i);
+  assert.match(listed.result.tools[2].description,/Prefer read_public_link/i);
+  assert.match(listed.result.tools[3].description,/LaunchBrand/);
+  assert.match(listed.result.tools[4].description,/timestamp range/i);
   assert.doesNotMatch(JSON.stringify(listed.result.tools),/\$\{env\(\)/);
   assert.deepEqual(listed.result.tools[0].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true});
   assert.deepEqual(listed.result.tools[1].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true});
-  assert.equal(listed.result.tools[2].annotations.readOnlyHint,true);
+  assert.deepEqual(listed.result.tools[2].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true});
   assert.equal(listed.result.tools[3].annotations.readOnlyHint,true);
+  assert.equal(listed.result.tools[4].annotations.readOnlyHint,true);
+  assert.equal(listed.result.tools[5].annotations.readOnlyHint,true);
   for(const tool of listed.result.tools){
     assert.deepEqual(tool.securitySchemes,[{type:'oauth2',scopes:['link2ai:read']}],tool.name+' must declare OAuth explicitly for ChatGPT plugin review');
     assert.ok(tool.outputSchema&&tool.outputSchema.type==='object',tool.name+' must publish an output schema');
   }
   assert.ok(listed.result.tools[0].outputSchema.properties.source_completeness,'read_public_link output schema must expose completeness');
   assert.ok(listed.result.tools[0].outputSchema.properties.continuation_required,'read_public_link output schema must expose pagination state');
-  assert.ok(listed.result.tools[3].outputSchema.properties.remaining_usage_units,'get_usage output schema must expose remaining units');
+  assert.ok(listed.result.tools[5].outputSchema.properties.remaining_usage_units,'get_usage output schema must expose remaining units');
+  assert.ok(listed.result.tools[1].outputSchema.properties.results,'read_public_links must preserve per-source results');
+  assert.ok(listed.result.tools[4].outputSchema.properties.timed_text,'get_video_time_range must expose timed source text');
 
   // Assertions for the production selection contract: use Link2AI when the user's
   // question actually depends on supported link contents, while avoiding unrelated URLs.
-  const get_video_transcript_desc=listed.result.tools[1].description;
+  const get_video_transcript_desc=listed.result.tools[2].description;
   assert.match(get_video_transcript_desc,/request depends on reading or analyzing the contents of a supported public link/i,'Description must tell the connected AI when Link2AI is the relevant reader');
   assert.match(get_video_transcript_desc,/load\/call Link2AI rather than assuming the link is inaccessible/i,'Description must prefer Link2AI when supported source content is required');
   assert.match(get_video_transcript_desc,/Do not use it for unrelated URLs/i,'Description must still reject unrelated URL use');
   assert.doesNotMatch(get_video_transcript_desc,/Reddit/i,'Without approved Reddit OAuth credentials, MCP must not advertise Reddit as live');
   assert.doesNotMatch(listed.result.tools[0].description,/Reddit/i,'Primary tool must also hide unavailable Reddit support');
+  assert.match(initialized.result.instructions??'',/turn count alone is never a reason to refresh/i);
+  assert.match(initialized.result.instructions??'',/prefer read_public_links/i);
+  assert.match(initialized.result.instructions??'',/get_video_time_range/i);
+  assert.match(listed.result.tools[0].description,/Do not call again merely because many turns passed/i);
+  assert.ok(listed.result.tools[0].inputSchema.properties.refresh,'read_public_link must expose explicit refresh control');
 
   // Assertion for explicit opt-out wording
   assert.match(get_video_transcript_desc,/explicitly.*(?:request|requests).*NOT.*(?:use|call)|(?:user|user's).*explicitly.*(?:avoid|not|don't).*(?:fetch|external)/i,'Description must respect explicit user request not to use the tool');
 
-  const failed=await call({jsonrpc:'2.0',id:3,method:'tools/call',params:{name:'get_usage',arguments:{}}});
+  const batch=await call({jsonrpc:'2.0',id:3,method:'tools/call',params:{name:'read_public_links',arguments:{urls:['https://www.youtube.com/watch?v=dQw4w9WgXcQ','https://www.youtube.com/watch?v=dQw4w9WgXcQ']}}});
+  assert.equal(batch.result.isError??false,false,'batch-level call should survive per-source failures');
+  const batchPayload=JSON.parse(batch.result.content[0].text.split('\n').at(-1));
+  assert.equal(batchPayload.status,'batch');
+  assert.equal(batchPayload.source_count,2);
+  assert.equal(batchPayload.unique_source_count,1,'duplicate canonical sources in one batch should be collapsed');
+  assert.equal(batchPayload.results.length,1);
+  assert.equal(batchPayload.results[0].status,'failed','one failed source must be represented inside the batch result');
+
+  const failed=await call({jsonrpc:'2.0',id:4,method:'tools/call',params:{name:'get_usage',arguments:{}}});
   assert.equal(failed.result.isError,true);
   const payload=JSON.parse(failed.result.content[0].text.split('\n').at(-1));
   assert.equal(payload.error_code,'INTERNAL_ERROR');

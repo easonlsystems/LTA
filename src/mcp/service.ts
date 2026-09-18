@@ -13,6 +13,9 @@ export interface ToolJobResult {
   job_id: string;
   platform?: string;
   source_url?: string;
+  source_key?: string;
+  source_fetched_at?: string|null;
+  cache_expires_at?: string|null;
   creator?: string|null;
   title?: string|null;
   caption?: string|null;
@@ -50,7 +53,7 @@ async function checkoutForError(userId:string,jobId:string,duration:number|undef
   return await createCheckoutSession(userId,target,jobId);
 }
 
-export async function startTranscriptJob(userId:string,url:string):Promise<ToolJobResult>{
+export async function startTranscriptJob(userId:string,url:string,options:{refresh?:boolean}={}):Promise<ToolJobResult>{
   const parsed=parseMediaUrl(url);
   const active=await pool.query<{id:string}>(
     `SELECT j.id FROM transcript_jobs j WHERE j.user_id=$1 AND j.platform=$2
@@ -61,15 +64,18 @@ export async function startTranscriptJob(userId:string,url:string):Promise<ToolJ
   if(active.rowCount)return await waitForJob(userId,active.rows[0].id,env().MCP_INLINE_WAIT_MS);
 
   // A model may call the same read tool more than once while answering. Reuse a still-cached successful result
-  // for this user so retries do not consume quota twice.
-  const completed=await pool.query<{id:string}>(
-    `SELECT j.id FROM transcript_jobs j JOIN transcript_cache c ON c.id=j.transcript_cache_id
-     WHERE j.user_id=$1 AND j.platform=$2 AND (j.canonical_media_id=$3 OR j.normalized_url=$4)
-       AND j.status='completed' AND c.expires_at>now()
-     ORDER BY j.completed_at DESC LIMIT 1`,
-    [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl]
-  );
-  if(completed.rowCount)return await getJobResult(userId,completed.rows[0].id);
+  // for this user so retries/follow-ups do not consume quota twice. Explicit refresh bypasses successful-result
+  // reuse and the shared cache, but still reuses any in-flight job to avoid duplicate concurrent processing.
+  if(!options.refresh){
+    const completed=await pool.query<{id:string}>(
+      `SELECT j.id FROM transcript_jobs j JOIN transcript_cache c ON c.id=j.transcript_cache_id
+       WHERE j.user_id=$1 AND j.platform=$2 AND (j.canonical_media_id=$3 OR j.normalized_url=$4)
+         AND j.status='completed' AND c.expires_at>now()
+       ORDER BY j.completed_at DESC LIMIT 1`,
+      [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl]
+    );
+    if(completed.rowCount)return await getJobResult(userId,completed.rows[0].id);
+  }
 
   const plan=await planForUser(userId);
   const job=await pool.query<{id:string}>(
@@ -90,8 +96,8 @@ export async function startTranscriptJob(userId:string,url:string):Promise<ToolJ
   }
   const jobId=job.rows[0].id;
 
-  // Fast path: avoid queue/extraction when this canonical media is already cached.
-  const cached=await findCache(parsed.platform,parsed.canonicalMediaId,'auto');
+  // Fast path: avoid queue/extraction when this canonical media is already cached. Explicit refresh bypasses it.
+  const cached=options.refresh?null:await findCache(parsed.platform,parsed.canonicalMediaId,'auto');
   if(cached){
     // Persist duration before quota evaluation so a payment-blocked cached job can be
     // resumed correctly after entitlement changes.
@@ -128,6 +134,7 @@ export async function waitForJob(userId:string,jobId:string,maxWaitMs:number):Pr
 export async function getJobResult(userId:string,jobId:string):Promise<ToolJobResult>{
   const r=await pool.query<any>(
     `SELECT j.*, c.title,c.creator,c.caption,c.language AS cache_language,c.transcript,c.segments,c.source AS transcript_source,c.duration_seconds AS cache_duration,
+       c.created_at AS source_fetched_at,c.expires_at AS cache_expires_at,
        c.truncated,c.truncation_reason,c.extracted_token_estimate,c.usage_units,c.items_available,c.items_extracted,c.pages_available,c.pages_extracted,c.content_sections_truncated
      FROM transcript_jobs j LEFT JOIN transcript_cache c ON c.id=j.transcript_cache_id
      WHERE j.id=$1 AND j.user_id=$2`,[jobId,userId]
@@ -140,7 +147,9 @@ export async function getJobResult(userId:string,jobId:string):Promise<ToolJobRe
   if(row.status==='completed'){
     const returnedUsageUnits=Number(row.usage_units??0)>0?Number(row.usage_units):(row.transcript_source==='post'||row.transcript_source==='page'?textUsageUnits(estimateTokens(row.transcript)):videoUsageUnits(Number(row.cache_duration??row.duration_seconds??0)));
     return {
-      status:'completed',job_id:row.id,platform:row.platform,source_url:row.source_url,title:row.title,creator:row.creator,
+      status:'completed',job_id:row.id,platform:row.platform,source_url:row.source_url,source_key:`${row.platform}:${row.canonical_media_id}`,
+      source_fetched_at:row.source_fetched_at?new Date(row.source_fetched_at).toISOString():null,cache_expires_at:row.cache_expires_at?new Date(row.cache_expires_at).toISOString():null,
+      title:row.title,creator:row.creator,
       caption:row.caption,duration_seconds:row.cache_duration??row.duration_seconds,language:row.cache_language??'und',
       transcript:row.transcript,segments:row.segments??[],transcript_source:row.transcript_source,
       truncated:Boolean(row.truncated),truncation_reason:row.truncation_reason,extracted_token_estimate:Number(row.extracted_token_estimate??0)||estimateTokens(row.transcript),usage_units:returnedUsageUnits,

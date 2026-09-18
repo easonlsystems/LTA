@@ -56,6 +56,14 @@ Starts or reuses a Link2AI source-reading job for an exact supported public URL.
 - openWorldHint: true — it accesses a user-specified public internet source.
 - OAuth required: `link2ai:read`.
 
+### read_public_links
+Starts or reuses multiple source-reading jobs for a comparison/synthesis request while keeping each source result separate.
+
+- readOnlyHint: false — it can create jobs and consume Link2AI processing units.
+- destructiveHint: false.
+- openWorldHint: true.
+- OAuth required: `link2ai:read`.
+
 ### get_video_transcript
 Compatibility alias for existing Link2AI clients. Same side-effect and security classification as `read_public_link`.
 
@@ -65,6 +73,15 @@ Reads the current state/content of an existing user-owned Link2AI job.
 - readOnlyHint: true.
 - destructiveHint: false.
 - openWorldHint: false.
+- OAuth required: `link2ai:read`.
+
+### get_video_time_range
+Reads a timestamp range from an existing processed video job.
+
+- readOnlyHint: true.
+- destructiveHint: false.
+- openWorldHint: false.
+- Does not re-read or re-charge the source.
 - OAuth required: `link2ai:read`.
 
 ### get_usage
