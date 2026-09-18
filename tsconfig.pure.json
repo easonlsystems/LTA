@@ -21,6 +21,7 @@
     "src/config/publicUrl.ts",
     "src/resolvers/fallback.ts",
     "src/resolvers/identity.ts",
+    "src/resolvers/xSyndicationPure.ts",
     "src/transcription/format.ts",
     "src/auth/clientMetadata.ts",
     "src/billing/order.ts",
