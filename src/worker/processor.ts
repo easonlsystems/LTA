@@ -47,6 +47,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
   const heartbeat=setInterval(()=>void heartbeatJob(job.id).catch(()=>{}),60_000);
   try{
     let parsed=parseMediaUrl(job.normalized_url);
+    const reuseCache=job.platform!=='x';
     let prefetchedMetadata:MediaMetadata|undefined;
     if(parsed.platform==='reddit'&&parsed.canonicalMediaId.startsWith('share_')){
       parsed=await resolveRedditSharePost(parsed);
@@ -71,14 +72,14 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       await setJobMetadata(job.id,parsed.canonicalMediaId,0);
       job.duration_seconds=0;
 
-      const userExisting=await findUserCompletedCache(job.user_id,job.platform,parsed.canonicalMediaId);
+      const userExisting=reuseCache?await findUserCompletedCache(job.user_id,job.platform,parsed.canonicalMediaId):null;
       if(userExisting){
         await markCompleted(job.id,userExisting.id,0);
         logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'user_cache',content_kind:parsed.kind,duration_seconds:0,processing_ms:Date.now()-startedAt});
         return;
       }
 
-      const existing=await findCache(job.platform,parsed.canonicalMediaId,job.language);
+      const existing=reuseCache?await findCache(job.platform,parsed.canonicalMediaId,job.language):null;
       if(existing){
         await reserveQuota(job.user_id,job.id,cachedUsageUnits(existing));reserved=true;
         await finalizeQuota(job.user_id,job.id);reserved=false;
@@ -100,7 +101,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
         return;
       }
 
-      const afterClaimCache=await findCache(job.platform,parsed.canonicalMediaId,job.language);
+      const afterClaimCache=reuseCache?await findCache(job.platform,parsed.canonicalMediaId,job.language):null;
       if(afterClaimCache){
         await reserveQuota(job.user_id,job.id,cachedUsageUnits(afterClaimCache));reserved=true;
         await finalizeQuota(job.user_id,job.id);reserved=false;
@@ -163,7 +164,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     // already paid quota for that video while its transcript is still cached, reuse it
     // without charging the same person twice. A cached duration also safely repairs
     // platform metadata that omitted duration (currently common on some Instagram reels).
-    const userExisting=await findUserCompletedCache(job.user_id,job.platform,metadata.canonicalMediaId);
+    const userExisting=reuseCache?await findUserCompletedCache(job.user_id,job.platform,metadata.canonicalMediaId):null;
     if(userExisting){
       if(metadata.durationSeconds<=0)await applyDuration(userExisting.duration_seconds);
       await markCompleted(job.id,userExisting.id,metadata.durationSeconds);
@@ -173,7 +174,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
 
     // Look up shared cache before reservation so a missing platform duration can be
     // recovered from a previous successful transcript. New users are still charged.
-    const existing=await findCache(job.platform,metadata.canonicalMediaId,job.language);
+    const existing=reuseCache?await findCache(job.platform,metadata.canonicalMediaId,job.language):null;
     if(existing){
       if(metadata.durationSeconds<=0)await applyDuration(existing.duration_seconds);
       await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);
@@ -202,7 +203,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
 
     // Re-check after winning the claim: another job may have finished between our first
     // cache lookup and claim acquisition.
-    const afterClaimCache=await findCache(job.platform,metadata.canonicalMediaId,job.language);
+    const afterClaimCache=reuseCache?await findCache(job.platform,metadata.canonicalMediaId,job.language):null;
     if(afterClaimCache){
       if(metadata.durationSeconds<=0)await applyDuration(afterClaimCache.duration_seconds);
       if(!reserved){await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);reserved=true;}
