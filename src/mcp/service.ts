@@ -4,7 +4,7 @@ import { assertPlatformAllowedForProfile, parseAllowedMediaUrl, type Distributio
 import { asLink2AIError, Link2AIError } from '../util/errors.js';
 import { reserveQuota, finalizeQuota, getUsageSnapshot } from '../quota/service.js';
 import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limits.js';
-import { cacheProvenanceEpoch, findCache } from '../worker/cache.js';
+import { findCache } from '../worker/cache.js';
 import { planForUser, priorityForPlan, markAwaitingPayment, markCompleted, setJobMetadata } from '../worker/jobs.js';
 
 export interface ToolJobResult {
@@ -51,15 +51,13 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
   // A model may call the same read tool more than once while answering. Reuse a still-cached successful result
   // for this user so retries/follow-ups do not consume quota twice. Explicit refresh bypasses successful-result
   // reuse and the shared cache, but still reuses any in-flight job to avoid duplicate concurrent processing.
-  if(!options.refresh){
-    const provenanceEpoch=cacheProvenanceEpoch(parsed.platform);
+  if(!options.refresh&&parsed.platform!=='x'){
     const completed=await pool.query<{id:string}>(
       `SELECT j.id FROM transcript_jobs j JOIN transcript_cache c ON c.id=j.transcript_cache_id
        WHERE j.user_id=$1 AND j.platform=$2 AND (j.canonical_media_id=$3 OR j.normalized_url=$4)
          AND j.status='completed' AND c.expires_at>now()
-         AND ($5::timestamptz IS NULL OR c.created_at >= $5::timestamptz)
        ORDER BY j.completed_at DESC LIMIT 1`,
-      [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl,provenanceEpoch]
+      [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl]
     );
     if(completed.rowCount)return await getJobResult(userId,completed.rows[0].id,profile);
   }
