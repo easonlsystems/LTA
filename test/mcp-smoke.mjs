@@ -5,7 +5,7 @@ process.env.PUBLIC_BASE_URL='http://localhost:3000';
 process.env.APP_SECRET='01234567890123456789012345678901';
 process.env.PUBLIC_BRAND_NAME='LaunchBrand';
 
-const [{createMcpHandler},{buildMcpServer,unicodeSafeSlice},{pool}]=await Promise.all([
+const [{createMcpHandler},{buildMcpServer,unicodeSafeSlice,chunkResult},{pool}]=await Promise.all([
   import('@modelcontextprotocol/server'),
   import('../dist/src/mcp/server.js'),
   import('../dist/src/db/pool.js')
@@ -15,6 +15,49 @@ const unicodeChunk=unicodeSafeSlice(`a😀b`,0,2);
 assert.equal(unicodeChunk.text,'a');
 assert.equal(unicodeChunk.end,1);
 assert.equal(unicodeSafeSlice(`a😀b`,2,2).text,'😀');
+
+const longSource='a'.repeat(120_000);
+const firstChunk=chunkResult({
+  status:'completed',job_id:'00000000-0000-4000-8000-000000000001',platform:'web',
+  source_url:'https://example.com/article',language:'en',transcript_source:'page',
+  transcript:longSource,segments:[],truncated:false,extracted_token_estimate:30_000,usage_units:12
+});
+assert.equal(firstChunk.continuation_required,true);
+assert.equal(firstChunk.delivery_complete,false);
+assert.equal(firstChunk.content_complete,false);
+assert.equal(firstChunk.next_offset,50_000);
+assert.equal(firstChunk.remaining_characters,70_000);
+assert.match(firstChunk.continuation_notice,/More source text remains/);
+
+const finalChunk=chunkResult({
+  status:'completed',job_id:'00000000-0000-4000-8000-000000000001',platform:'web',
+  source_url:'https://example.com/article',language:'en',transcript_source:'page',
+  transcript:longSource,segments:[],truncated:false,extracted_token_estimate:30_000,usage_units:12
+},100_000,50_000);
+assert.equal(finalChunk.continuation_required,false);
+assert.equal(finalChunk.delivery_complete,true);
+assert.equal(finalChunk.content_complete,true);
+
+const partialChunk=chunkResult({
+  status:'completed',job_id:'00000000-0000-4000-8000-000000000002',platform:'pdf',
+  source_url:'https://example.com/report.pdf',language:'en',transcript_source:'page',
+  transcript:'partial pdf',segments:[],truncated:true,truncation_reason:'safe_content_limit',
+  extracted_token_estimate:3,usage_units:1,pages_available:400,pages_extracted:250,
+  content_sections_truncated:['pages']
+});
+assert.equal(partialChunk.source_completeness,'partial');
+assert.equal(partialChunk.content_complete,false);
+assert.match(partialChunk.limitation_notice,/250 of 400 pages/);
+
+const unverifiedVideo=chunkResult({
+  status:'completed',job_id:'00000000-0000-4000-8000-000000000003',platform:'youtube',
+  source_url:'https://www.youtube.com/watch?v=test',language:'en',transcript_source:'asr',
+  transcript:'spoken words',segments:[],duration_seconds:600,truncated:false,
+  extracted_token_estimate:3,usage_units:10
+});
+assert.equal(unverifiedVideo.source_completeness,'unverified');
+assert.equal(unverifiedVideo.timeline_coverage_verified,false);
+assert.equal(unverifiedVideo.content_complete,false);
 
 const handler=createMcpHandler(buildMcpServer);
 const authInfo={
