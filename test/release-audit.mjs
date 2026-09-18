@@ -20,6 +20,7 @@ const [linkSource,limitsSource,mcpSource,mcpServiceSource,apiSource,authWrapperS
 const authSource=authWrapperSource+'\n'+authBaseSource;
 const policySource=await readFile(new URL('../src/mcp/policy.ts',import.meta.url),'utf8');
 const xResolverSource=await readFile(new URL('../src/resolvers/xSyndication.ts',import.meta.url),'utf8');
+const xResolverPureSource=await readFile(new URL('../src/resolvers/xSyndicationPure.ts',import.meta.url),'utf8');
 const activationSource=await readFile(new URL('../src/analytics/product.ts',import.meta.url),'utf8');
 const activationMigration=await readFile(new URL('../sql/006_activation_funnel.sql',import.meta.url),'utf8');
 assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News must use the official Firebase API path');
@@ -72,7 +73,7 @@ assert.match(processorSource,/probeXVideoMetadata/,'X posts must probe structure
 assert.match(processorSource,/x_attached_media_detected/,'X attached media must enter the media pipeline and emit an explicit routing event');
 assert.match(processorSource,/prefetchedMetadata\?\?await resolver\.metadata\(parsed\)/,'X media metadata probe must feed the normal caption\/audio\/ASR pipeline');
 assert.match(xResolverSource,/cdn\.syndication\.twimg\.com\/tweet-result/,'X video detection must use the structured embed payload instead of guessing from oEmbed text');
-assert.match(xResolverSource,/mediaDetails|node\.video/,'X structured resolver must recognize explicit video metadata');
+assert.match(xResolverPureSource,/mediaDetails|node\.video/,'X structured resolver must recognize explicit video metadata');
 assert.match(xResolverSource,/safeGetBuffer\(video\.videoUrl/,'X video resolver must fetch the resolved media track for downstream audio\/ASR');
 assert.match(mcpServiceSource,/!options\.refresh&&parsed\.platform!=='x'/,'MCP must bypass stale completed-result reuse for X during media-routing rollout');
 assert.match(processorSource,/const reuseCache=job\.platform!=='x'/,'Worker must bypass stale X transcript caches during media-routing rollout');
