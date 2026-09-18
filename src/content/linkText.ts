@@ -359,8 +359,68 @@ export function parseHackerNewsItem(input:ParsedMediaUrl,payload:unknown,budget?
   const itemsAvailable=jsonNumber(item.children_count);const hnTruncated=itemsAvailable!==undefined&&rendered.count<itemsAvailable;return complete({platform:'hackernews',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title:clipExternalText(title,METADATA_LIMITS.title),creator:clipExternalText(jsonString(item.author),METADATA_LIMITS.creator),caption:clipExternalText(body,METADATA_LIMITS.description),language:'und',text:cleanText(sections.filter(Boolean).join('\n\n')),source:'post'},'discussion',{itemsAvailable,itemsExtracted:rendered.count,truncated:hnTruncated,contentSectionsTruncated:hnTruncated?['upstream_comments']:undefined},budget);
 }
 
+function hackerNewsOfficialItem(value:unknown,children:unknown[]):JsonObject{
+  const item=jsonObject(value);
+  if(!item)throw new Link2AIError('EXTRACTION_FAILED','Hacker News returned malformed item data.',502,true);
+  const seconds=jsonNumber(item.time);
+  return {
+    id:jsonNumber(item.id),
+    title:jsonString(item.title),
+    author:jsonString(item.by),
+    points:jsonNumber(item.score),
+    created_at:seconds!==undefined?new Date(seconds*1000).toISOString():'',
+    url:jsonString(item.url),
+    text:jsonString(item.text),
+    children,
+    children_count:jsonNumber(item.descendants)
+  };
+}
+
+async function fetchHackerNewsOfficialTree(itemId:string,budget?:TextExtractionBudget):Promise<unknown>{
+  const endpoint=(id:number|string)=>`https://hacker-news.firebaseio.com/v0/item/${id}.json`;
+  const rootValue=await safeJson(endpoint(itemId),'Hacker News official API',API_PAGE_BYTES,budget);
+  const root=jsonObject(rootValue);
+  if(!root||jsonNumber(root.id)!==Number(itemId))throw new Link2AIError('EXTRACTION_FAILED','Hacker News did not expose this item through its official API.',422,false);
+
+  const rawById=new Map<number,JsonObject>();
+  const childrenById=new Map<number,number[]>();
+  const rootId=Number(itemId);
+  rawById.set(rootId,root);
+  const rootKids=Array.isArray(root.kids)?root.kids.map(jsonNumber).filter((v):v is number=>v!==undefined):[];
+  childrenById.set(rootId,rootKids);
+
+  const seen=new Set<number>([rootId]);
+  const queue:number[]=[];
+  for(const id of rootKids){if(!seen.has(id)){seen.add(id);queue.push(id);}}
+  const batchSize=16;
+  while(queue.length){
+    const ids=queue.splice(0,batchSize);
+    const values=await Promise.all(ids.map(id=>safeJson(endpoint(id),'Hacker News official API',API_PAGE_BYTES,budget)));
+    for(let i=0;i<ids.length;i++){
+      const id=ids[i];
+      const item=jsonObject(values[i]);
+      if(!item||jsonNumber(item.id)!==id)continue;
+      rawById.set(id,item);
+      const kids=Array.isArray(item.kids)?item.kids.map(jsonNumber).filter((v):v is number=>v!==undefined):[];
+      childrenById.set(id,kids);
+      for(const kid of kids){if(!seen.has(kid)){seen.add(kid);queue.push(kid);}}
+    }
+  }
+
+  const building=new Set<number>();
+  const build=(id:number):JsonObject|null=>{
+    const item=rawById.get(id);if(!item)return null;
+    if(building.has(id))return null;
+    building.add(id);
+    const children=(childrenById.get(id)??[]).map(build).filter((v):v is JsonObject=>Boolean(v));
+    building.delete(id);
+    return hackerNewsOfficialItem(item,children);
+  };
+  return build(rootId)??hackerNewsOfficialItem(root,[]);
+}
+
 async function fetchHackerNewsItem(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
-  return parseHackerNewsItem(input,await safeJson(`https://hn.algolia.com/api/v1/items/${input.canonicalMediaId}`,'Hacker News',API_PAGE_BYTES,budget),budget);
+  return parseHackerNewsItem(input,await fetchHackerNewsOfficialTree(input.canonicalMediaId,budget),budget);
 }
 
 export async function parsePdfBuffer(input:ParsedMediaUrl,bytes:Buffer,contentType:string|null,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
