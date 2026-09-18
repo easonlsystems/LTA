@@ -23,7 +23,7 @@ assert.doesNotMatch(mcpSource,/Claude(?:'s)? built-in/,'MCP server instructions 
 assert.match(apiSource,/\/connect\/grok/,'V3 branch must expose the Grok acceptance route');
 assert.match(apiSource,/\/connect\/perplexity/,'V3 branch must expose the Perplexity acceptance route');
 assert.match(v3ConnectSource,/https:\/\/grok\.com\/connectors/,'Grok acceptance page must use the official connectors entry point');
-assert.match(v3ConnectSource,/Perplexity · V3 compatibility target/,'Perplexity must remain labeled as a compatibility target before live acceptance');
+assert.match(v3ConnectSource,/badge: 'V3 compatibility target'/,'Perplexity must remain labeled as a compatibility target before live acceptance');
 assert.match(v3ConnectSource,/noindex,nofollow/,'Unverified V3 host setup pages must not be indexed as public support claims');
 assert.match(apiSource,/https:\/\/claude\.ai\/directory/,'Published onboarding must use the Claude directory');
 assert.match(apiSource,/Always available/,'Onboarding must document current Claude Tool access mode');
