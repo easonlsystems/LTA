@@ -57,10 +57,16 @@ Normal users sign in to Link2AI with Google. A dedicated no-MFA reviewer login e
 ## Tools
 
 ### read_public_link
-Starts or reuses a source-reading job for an exact supported public URL.
+Starts or reuses a source-reading job for one exact supported public URL. A normal call reuses a still-valid prior result for the same user/source; `refresh=true` is reserved for explicit freshness/update requests.
+
+### read_public_links
+Starts or reuses multiple exact public-source jobs for comparison or synthesis while preserving each source identity, job id, completeness state, and continuation offset independently.
 
 ### get_transcript_result
 Continues a processing job and paginates long source content.
+
+### get_video_time_range
+Reads timestamped transcript/caption segments from an already processed video job without re-reading or re-charging the source.
 
 ### get_usage
 Returns the connected Link2AI account's plan and processing-unit balance.
@@ -128,7 +134,9 @@ Catalog publication is not considered complete until a normal Grok consumer acco
 5. receive the correct source identity and source content;
 6. continue long results until required context is delivered;
 7. receive a clear quota/payment-required result when full processing exceeds the Link2AI balance;
-8. avoid double charging on cache/retry paths.
+8. reuse the same source in follow-up questions without unnecessary reprocessing or double charging;
+9. compare multiple links without collapsing source attribution;
+10. answer timestamp-specific video questions from the existing processed job without re-reading the video.
 
 ## Distribution status
 
