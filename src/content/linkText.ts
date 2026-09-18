@@ -4,7 +4,7 @@ import { Link2AIError } from '../util/errors.js';
 import { env } from '../config/env.js';
 import { clipExternalText, METADATA_LIMITS } from '../media/text.js';
 import { parseMediaUrl, type ParsedMediaUrl } from '../media/url.js';
-import { boundExtractedText, estimateTokens, textCharacterBudget, textUsageUnits, type CompletenessMetadata, type TextContentClass } from './limits.js';
+import { boundExtractedText, estimateTokens, textUsageUnits, type CompletenessMetadata, type TextContentClass } from './limits.js';
 
 const API_PAGE_BYTES=3_000_000;
 const INFRA_SOURCE_MAX_BYTES=256_000_000;
@@ -49,23 +49,15 @@ function assertTextWithinBudget(text:string,budget:TextExtractionBudget|undefine
   if(textUsageUnits(estimateTokens(text))>budget.maxUsageUnits)throw quotaBudgetError(budget,context);
 }
 
-function sourceByteBudget(budget:TextExtractionBudget|undefined,floorBytes:number):{maxBytes:number;quotaBounded:boolean}{
-  if(!budget)return {maxBytes:INFRA_SOURCE_MAX_BYTES,quotaBounded:false};
-  // Raw HTML/JSON/PDF can be much larger than extracted text. Give it generous
-  // overhead while still stopping obviously unaffordable sources before buffering
-  // hundreds of MB.
-  const derived=Math.max(floorBytes,textCharacterBudget(budget.maxUsageUnits)*8);
-  return {maxBytes:Math.min(INFRA_SOURCE_MAX_BYTES,derived),quotaBounded:derived<INFRA_SOURCE_MAX_BYTES};
+function sourceByteBudget(_budget:TextExtractionBudget|undefined,_floorBytes:number):{maxBytes:number;quotaBounded:boolean}{
+  // Raw source bytes are not billable text and can be inflated by images, markup,
+  // fonts or metadata. Never infer "not enough units" from raw byte size.
+  return {maxBytes:INFRA_SOURCE_MAX_BYTES,quotaBounded:false};
 }
 
-async function safeGetForBudget(url:string,opts:{floorBytes:number;timeoutMs:number;maxRedirects?:number;userAgent?:string;accept?:string},budget:TextExtractionBudget|undefined,context:string){
+async function safeGetForBudget(url:string,opts:{floorBytes:number;timeoutMs:number;maxRedirects?:number;userAgent?:string;accept?:string},budget:TextExtractionBudget|undefined,_context:string){
   const bytes=sourceByteBudget(budget,opts.floorBytes);
-  try{
-    return await safeGetBuffer(url,{maxBytes:bytes.maxBytes,timeoutMs:opts.timeoutMs,maxRedirects:opts.maxRedirects,userAgent:opts.userAgent,accept:opts.accept});
-  }catch(error){
-    if(bytes.quotaBounded&&error instanceof Link2AIError&&/exceeded safety limit/i.test(error.message))throw quotaBudgetError(budget!,context);
-    throw error;
-  }
+  return await safeGetBuffer(url,{maxBytes:bytes.maxBytes,timeoutMs:opts.timeoutMs,maxRedirects:opts.maxRedirects,userAgent:opts.userAgent,accept:opts.accept});
 }
 
 function complete(payload:Omit<LinkTextPayload,'completeness'>,contentClass:TextContentClass,extra:Partial<CompletenessMetadata>={},budget?:TextExtractionBudget):LinkTextPayload{
