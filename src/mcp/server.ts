@@ -122,18 +122,18 @@ const videoMapOutputSchema=z.object({
 
 const usageOutputSchema=z.object({
   plan:z.enum(['trial','basic','pro']),
-  used_seconds:z.number().nonnegative(),
-  limit_seconds:z.number().nonnegative(),
-  remaining_seconds:z.number().nonnegative(),
-  used_links:z.number().int().nonnegative(),
-  limit_links:z.number().int().nonnegative(),
-  remaining_links:z.number().int().nonnegative(),
+  used_usage_units:z.number().int().nonnegative().describe('Authoritative processing units consumed in the current allowance period.'),
+  limit_usage_units:z.number().int().nonnegative().describe('Authoritative processing-unit allowance currently available to the account for this period, including applicable rollover/bonus units.'),
+  remaining_usage_units:z.number().int().nonnegative().describe('Authoritative processing units remaining. Use this field to answer questions about how many Link2AI processing units are left.'),
   concurrent_jobs:z.number().int().nonnegative(),
   concurrency_limit:z.number().int().nonnegative(),
   period_end:z.string().nullable().optional(),
-  used_usage_units:z.number().int().nonnegative(),
-  limit_usage_units:z.number().int().nonnegative(),
-  remaining_usage_units:z.number().int().nonnegative()
+  used_seconds:z.number().nonnegative().optional().describe('Legacy compatibility field derived from processing-unit accounting.'),
+  limit_seconds:z.number().nonnegative().optional().describe('Legacy compatibility field derived from processing-unit accounting.'),
+  remaining_seconds:z.number().nonnegative().optional().describe('Legacy compatibility field derived from processing-unit accounting.'),
+  used_links:z.number().int().nonnegative().optional().describe('Legacy compatibility field. Link count is not the current product-level quota model.'),
+  limit_links:z.number().int().nonnegative().nullable().optional().describe('Legacy compatibility field; null means there is no link-count cap. Do not use this field as the processing-unit balance.'),
+  remaining_links:z.number().int().nonnegative().nullable().optional().describe('Legacy compatibility field; null means there is no link-count cap. Do not use this field as the processing-unit balance.')
 });
 
 type Link2AIHandlerContext={http?:{authInfo?:AuthInfo & {extra?:{userId?:unknown}}}};
@@ -562,7 +562,7 @@ export function buildMcpServer(){
 
   server.registerTool('get_usage',{
     title:`Check ${env().PUBLIC_BRAND_NAME} usage`,
-    description:`Return the current ${env().PUBLIC_BRAND_NAME} plan and remaining link/content quota for the connected user.`,
+    description:`Return the connected user's current ${env().PUBLIC_BRAND_NAME} plan and authoritative processing-unit balance. For questions about units left, use remaining_usage_units. Legacy link/seconds fields are compatibility metadata and may be null or unlimited; do not use them as the processing-unit balance.`,
     inputSchema:{},
     outputSchema:usageOutputSchema.shape,
     securitySchemes:LINK2AI_OAUTH_SECURITY,
