@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 Object.assign(process.env,{DATABASE_URL:'postgres://127.0.0.1:1/link2ai',PUBLIC_BASE_URL:'https://launch.example',APP_SECRET:'01234567890123456789012345678901'});
-const [{pool},{reserveQuota,finalizeQuota}]=await Promise.all([import('../dist/src/db/pool.js'),import('../dist/src/quota/service.js')]);
+const [{pool},{availableUsageUnits,reserveQuota,finalizeQuota}]=await Promise.all([import('../dist/src/db/pool.js'),import('../dist/src/quota/service.js')]);
 const originalConnect=pool.connect.bind(pool);
 
 function clientFor({ledger=false,reservationSeconds=120}={}){
@@ -19,6 +19,13 @@ function clientFor({ledger=false,reservationSeconds=120}={}){
 }
 
 try{
+  const budgetClient=clientFor();pool.connect=async()=>budgetClient;
+  const budget=await availableUsageUnits('user-1','job-1');
+  assert.equal(budget.plan,'basic');
+  assert.equal(budget.remaining_usage_units,500,'text extraction budget should come from the same plan wallet as final quota reservation');
+  const budgetReservationQuery=budgetClient.queries.find(q=>q.sql.includes('FROM quota_reservations WHERE user_id=$1'));
+  assert.match(budgetReservationQuery.sql,/job_id<>\$2/,'budget calculation must exclude this job reservation');
+
   const reserveClient=clientFor();pool.connect=async()=>reserveClient;
   await reserveQuota('user-1','job-1',2);
   assert.match(reserveClient.queries.find(q=>q.sql.includes('SELECT plan,trial_eligible')).sql,/FOR UPDATE/,'user row lock prevents concurrent overspend');
