@@ -13,7 +13,7 @@ export function assertPlatformAllowedForProfile(platform:Platform,profile:Distri
   if(platformAllowedForProfile(platform,profile))return;
   throw new Link2AIError(
     'PLATFORM_BLOCKED',
-    'This source is not available through the ChatGPT distribution of Link2AI.',
+    'This source is not available through the ChatGPT distribution of Link2AI. This release supports public Bluesky posts, GitHub Issues / pull requests, and Hacker News discussions. No processing units were charged.',
     422,
     false,
     {cause_code:'openai_distribution_source_not_authorized',distribution_profile:'openai',platform}
