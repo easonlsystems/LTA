@@ -25,24 +25,49 @@ export interface CacheRow {
   content_sections_truncated:string[];
 }
 
+const CACHE_PROVENANCE_EPOCHS:Record<string,string>={
+  // Official Hacker News Firebase API became the production retrieval path in the
+  // OpenAI compliance release. Cache entries older than this may have come from
+  // the previous community Algolia adapter and must never be reused.
+  hackernews:'2026-09-18T18:03:16.000Z'
+};
+
+export function cacheProvenanceEpoch(platform:string):string|null{
+  return CACHE_PROVENANCE_EPOCHS[platform]??null;
+}
+
 export async function findCache(platform: string, canonicalId: string, language: string): Promise<CacheRow | null> {
   const params: unknown[] = [platform, canonicalId];
-  let langClause = '';
-  if (language !== 'auto') { params.push(language); langClause = ' AND language=$3'; }
+  const clauses=['platform=$1','canonical_media_id=$2','expires_at > now()'];
+  if (language !== 'auto') {
+    params.push(language);
+    clauses.push('language=$'+params.length);
+  }
+  const epoch=cacheProvenanceEpoch(platform);
+  if(epoch){
+    params.push(epoch);
+    clauses.push('created_at >= $'+params.length+'::timestamptz');
+  }
   const r = await pool.query<CacheRow>(
-    `SELECT * FROM transcript_cache WHERE platform=$1 AND canonical_media_id=$2${langClause} AND expires_at > now()
+    `SELECT * FROM transcript_cache WHERE ${clauses.join(' AND ')}
      ORDER BY created_at DESC LIMIT 1`, params
   );
   return r.rows[0] ?? null;
 }
 
 export async function findUserCompletedCache(userId:string,platform:string,canonicalId:string):Promise<CacheRow|null>{
+  const params:unknown[]=[userId,platform,canonicalId];
+  const clauses=["j.user_id=$1","j.platform=$2","j.canonical_media_id=$3","j.status='completed'","c.expires_at>now()"];
+  const epoch=cacheProvenanceEpoch(platform);
+  if(epoch){
+    params.push(epoch);
+    clauses.push('c.created_at >= $'+params.length+'::timestamptz');
+  }
   const r=await pool.query<CacheRow>(
     `SELECT c.* FROM transcript_jobs j JOIN transcript_cache c ON c.id=j.transcript_cache_id
-     WHERE j.user_id=$1 AND j.platform=$2 AND j.canonical_media_id=$3
-       AND j.status='completed' AND c.expires_at>now()
+     WHERE ${clauses.join(' AND ')}
      ORDER BY j.completed_at DESC LIMIT 1`,
-    [userId,platform,canonicalId]
+    params
   );
   return r.rows[0]??null;
 }
