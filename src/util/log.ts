@@ -1,6 +1,6 @@
 import { asLink2AIError } from './errors.js';
 
-const SENSITIVE_LOG_KEY=/(?:^|_)(?:user_?id|client_?id|job_?id|email|authorization|token|secret|password|cookie|source_?url|normalized_?url|canonical_?media_?id|content_?text|transcript|caption|title|creator|prompt|query|body)(?:$|_)/i;
+const SENSITIVE_LOG_KEY=/(?:^|_)(?:user_?id|client_?id|job_?id|email|authorization|token|secret|password|cookie|url|uri|source_?url|normalized_?url|canonical_?media_?id|content_?text|transcript|caption|title|creator|prompt|query|body|message|headers?|file_?path|path)(?:$|_)/i;
 
 function sanitizeString(value:string):string{
   return value
