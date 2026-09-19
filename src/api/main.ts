@@ -61,7 +61,11 @@ app.all('/mcp/openai',async(request,reply)=>{
   if(!auth){
     const diagnostic=await diagnoseBearerAuth(request.headers.authorization,mcpResource('openai')).catch(()=>null);
     app.log.warn({event:'openai_mcp_auth_rejected',...(diagnostic??{diagnostic_unavailable:true})});
-    reply.header('WWW-Authenticate',`Bearer resource_metadata="${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp/openai", scope="link2ai:read"`);
+    const resourceMetadata=`${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp/openai`;
+    const challenge=diagnostic?.authorization_present
+      ? `Bearer resource_metadata="${resourceMetadata}", scope="link2ai:read", error="invalid_token", error_description="Access token is invalid for this MCP resource"`
+      : `Bearer resource_metadata="${resourceMetadata}", scope="link2ai:read"`;
+    reply.header('WWW-Authenticate',challenge);
     return reply.code(401).send({error:'unauthorized',message:`Connect ${env().PUBLIC_BRAND_NAME} to continue.`});
   }
   return nodeOpenaiMcp(Object.assign(request.raw,{auth}),reply.raw,request.body);
