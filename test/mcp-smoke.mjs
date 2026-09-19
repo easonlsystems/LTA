@@ -242,11 +242,11 @@ try{
   assert.doesNotMatch(get_video_transcript_desc,/Reddit/i,'Without approved Reddit OAuth credentials, MCP must not advertise Reddit as live');
   assert.doesNotMatch(listed.result.tools[0].description,/Reddit/i,'Primary tool must also hide unavailable Reddit support');
   assert.match(initialized.result.instructions??'',/turn count alone is never a reason to refresh/i);
-  assert.match(initialized.result.instructions??'',/prefer read_public_links/i);
+  assert.match(initialized.result.instructions??'',/use read_public_links so source identities stay separate/i);
   assert.match(initialized.result.instructions??'',/get_video_time_range/i);
   assert.match(initialized.result.instructions??'',/find_in_link/i);
   assert.match(initialized.result.instructions??'',/get_video_map/i);
-  assert.match(listed.result.tools[0].description,/Do not call again merely because many turns passed/i);
+  assert.match(listed.result.tools[0].description,/Reuse a successful result for the same source/i);
   assert.ok(listed.result.tools[0].inputSchema.properties.refresh,'read_public_link must expose explicit refresh control');
 
   // Assertion for explicit opt-out wording
