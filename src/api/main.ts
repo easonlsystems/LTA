@@ -67,7 +67,6 @@ app.all('/mcp',async(request,reply)=>{
 });
 
 app.all('/mcp/openai',async(request,reply)=>{
-  const authorization=request.headers.authorization;
   const originHeader=Array.isArray(request.headers.origin)?request.headers.origin[0]:request.headers.origin;
   const originCheck=validateOriginHeader(originHeader,allowedPublicHosts);
   if(!originCheck.ok){
@@ -76,7 +75,17 @@ app.all('/mcp/openai',async(request,reply)=>{
   const auth=await authInfoFromBearer(request.headers.authorization,mcpResource('openai'));
   if(!auth){
     const diagnostic=await diagnoseBearerAuth(request.headers.authorization,mcpResource('openai')).catch(()=>null);
-    logEvent('openai_mcp_auth_rejected',{distribution_profile:'openai',...(diagnostic??{diagnostic_unavailable:true})});
+    logEvent('openai_mcp_auth_rejected',{
+      distribution_profile:'openai',
+      diagnostic_available:Boolean(diagnostic),
+      authorization_present:Boolean(diagnostic?.authorization_present),
+      bearer_scheme_valid:Boolean(diagnostic?.bearer_scheme_valid),
+      token_found:Boolean(diagnostic?.token_found),
+      scope_has_read:diagnostic?.scope_has_read,
+      expired:diagnostic?.expired,
+      revoked:diagnostic?.revoked,
+      user_disabled:diagnostic?.user_disabled
+    });
     const resourceMetadata=`${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp/openai`;
     const challenge=diagnostic?.authorization_present
       ? `Bearer resource_metadata="${resourceMetadata}", scope="link2ai:read", error="invalid_token", error_description="Access token is invalid for this MCP resource"`
@@ -92,9 +101,10 @@ app.get('/healthz',async(_req,reply)=>{
 });
 
 app.get('/readyz',async(_req,reply)=>{
-  try{await pool.query('SELECT 1');}catch{return reply.code(503).send({ready:false,issues:['database unavailable']});}
+  try{await pool.query('SELECT 1');}catch{return reply.code(503).send({ready:false});}
   const issues=readinessIssues('api');
-  return issues.length?reply.code(503).send({ready:false,issues}):{ready:true,issues:[]};
+  if(issues.length){logEvent('api_readiness_failed',{issue_count:issues.length});return reply.code(503).send({ready:false});}
+  return {ready:true};
 });
 
 app.get('/status',async(_req,reply)=>{
