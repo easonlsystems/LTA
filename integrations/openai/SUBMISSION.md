@@ -120,21 +120,21 @@ The compatibility `get_video_transcript`, `get_video_time_range`, and `get_video
 ## Suggested review prompts
 
 1. **GitHub pull request**
-   - URL: https://github.com/nodejs/node/pull/57343
-   - Ask for the implementation change, reviewer concerns, and unresolved discussion.
+   - URL: https://github.com/nodejs/node/pull/65472
+   - Ask for the change, the main reviewer concern, and how it was resolved.
 
 2. **Hacker News discussion**
-   - URL: https://news.ycombinator.com/item?id=8863
+   - URL: https://news.ycombinator.com/item?id=37137448
    - Ask for the strongest disagreements and supporting reasons.
 
 3. **Bluesky post**
-   - URL: https://bsky.app/profile/bsky.app/post/3mnzmprxpe22y
-   - Ask for the main claim and relevant public replies.
+   - URL: https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f
+   - Ask for a concise summary of the exact public announcement.
 
 4. **Multi-source comparison**
-   - GitHub: https://github.com/nodejs/node/issues/43816
-   - Hacker News: https://news.ycombinator.com/item?id=41064351
-   - Ask how the two sources frame native TypeScript support in Node.js, using `read_public_links` and preserving source attribution.
+   - GitHub issue: https://github.com/nodejs/node/issues/65470
+   - GitHub pull request: https://github.com/nodejs/node/pull/65472
+   - Ask how the issue's reported bug maps to the pull request's fix and reviewer feedback, using `read_public_links` and preserving source attribution.
 
 5. **Usage**
    - Ask: "How many Link2AI processing units do I have left?"
@@ -143,7 +143,7 @@ The compatibility `get_video_transcript`, `get_video_time_range`, and `get_video
 Negative review:
 - Use https://www.youtube.com/watch?v=M7lc1UVf-VE and verify that the ChatGPT endpoint returns `PLATFORM_BLOCKED` without retrieval or quota use.
 - Ask to crawl https://bsky.app/profile/bsky.app and verify that Link2AI refuses a profile/feed crawl.
-- Provide https://news.ycombinator.com/item?id=8863 while explicitly forbidding Link2AI/external fetching and verify no Link2AI tool is invoked.
+- Provide https://news.ycombinator.com/item?id=37137448 while explicitly forbidding Link2AI/external fetching and verify no Link2AI tool is invoked.
 
 ## Pre-submission gates
 
