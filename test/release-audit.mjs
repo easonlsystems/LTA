@@ -30,8 +30,9 @@ const orchestratorSource=await readFile(new URL('../src/resolvers/orchestrator.t
 const providerHealthMigration=await readFile(new URL('../sql/007_provider_health.sql',import.meta.url),'utf8');
 const logSource=await readFile(new URL('../src/util/log.ts',import.meta.url),'utf8');
 const billingRoutesSource=await readFile(new URL('../src/billing/routes.ts',import.meta.url),'utf8');
-assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News must use the official Firebase API path');
-assert.doesNotMatch(linkSource,/hn\.algolia\.com/,'OpenAI-ready core must not depend on the community Algolia HN adapter');
+assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News must keep the official Firebase API as its primary route');
+assert.match(linkSource,/hn\.algolia\.com\/api\/v1\/items/,'Hacker News must have an independent fallback route');
+assert.match(linkSource,/name:'hn_firebase',family:'official_api'[\s\S]*name:'hn_algolia',family:'external_provider'/,'Hacker News fallback must cross provider families');
 assert.doesNotMatch(policySource,/OPENAI_ALLOWED_PLATFORMS/,'ChatGPT must not maintain a narrower source allowlist than the default/Claude distribution');
 assert.match(policySource,/same[\s\S]*source matrix/i,'ChatGPT source policy must explicitly preserve parity with the default/Claude distribution');
 assert.match(apiSource,/app\.all\('\/mcp\/openai'/,'API must expose a distinct ChatGPT MCP endpoint');

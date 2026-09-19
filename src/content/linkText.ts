@@ -427,8 +427,30 @@ async function fetchHackerNewsOfficialTree(itemId:string,budget?:TextExtractionB
   return build(rootId)??hackerNewsOfficialItem(root,[]);
 }
 
+async function fetchHackerNewsAlgoliaItem(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  const payload=await safeJson(
+    `https://hn.algolia.com/api/v1/items/${encodeURIComponent(input.canonicalMediaId)}`,
+    'Hacker News Algolia fallback',
+    API_PAGE_BYTES,
+    budget
+  );
+  return parseHackerNewsItem(input,payload,budget);
+}
+
 async function fetchHackerNewsItem(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
-  return parseHackerNewsItem(input,await fetchHackerNewsOfficialTree(input.canonicalMediaId,budget),budget);
+  return await runProviderChain<LinkTextPayload>({
+    platform:'hackernews',operation:'text',
+    attempts:[
+      {
+        name:'hn_firebase',family:'official_api',
+        run:async()=>parseHackerNewsItem(input,await fetchHackerNewsOfficialTree(input.canonicalMediaId,budget),budget)
+      },
+      {
+        name:'hn_algolia',family:'external_provider',
+        run:()=>fetchHackerNewsAlgoliaItem(input,budget)
+      }
+    ]
+  });
 }
 
 export async function parsePdfBuffer(input:ParsedMediaUrl,bytes:Buffer,contentType:string|null,budget?:TextExtractionBudget):Promise<LinkTextPayload>{

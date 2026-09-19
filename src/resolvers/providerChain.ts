@@ -68,7 +68,12 @@ export async function runProviderChain<T>(input:ProviderChainInput<T>):Promise<T
     }catch(error){
       const attemptShouldFailover=attempt.shouldFailover??shouldFailover;
       const canFailover=attemptShouldFailover(error);
-      const circuit=noteProviderFailure(input.platform,input.operation,attempt,canFailover);
+      const mapped=asLink2AIError(error);
+      // Content-specific misses can still fall through to another provider, but they
+      // must not poison global provider health. Only transient/provider-level failures
+      // contribute to the circuit breaker.
+      const countsTowardCircuit=canFailover&&(mapped.retryable||mapped.code==='RATE_LIMITED'||mapped.code==='PLATFORM_BLOCKED');
+      const circuit=noteProviderFailure(input.platform,input.operation,attempt,countsTowardCircuit);
       await telemetry({
         platform:input.platform,operation:input.operation,provider:attempt.name,family,
         outcome:'failed',durationMs:Date.now()-started,error,attemptIndex:i
@@ -81,7 +86,6 @@ export async function runProviderChain<T>(input:ProviderChainInput<T>):Promise<T
       }
       const next=attempts[i+1];
       if(!next||!canFailover)throw error;
-      const mapped=asLink2AIError(error);
       logEvent('source_provider_failover',{
         platform:input.platform,operation:input.operation,
         from_provider:attempt.name,from_provider_family:family,
