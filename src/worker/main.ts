@@ -8,6 +8,7 @@ import { processJob } from './processor.js';
 import { readinessIssues } from '../config/readiness.js';
 import { assertWorkerRuntime } from './preflight.js';
 import { cleanupStaleTempDirs } from './tempCleanup.js';
+import { logErrorEvent, logEvent } from '../util/log.js';
 
 const regionRuntime=workerRegionRuntime();
 const workerId=`${os.hostname()}:${process.pid}:${regionRuntime.currentRegion}`;
@@ -21,7 +22,7 @@ const health=http.createServer(async(req,res)=>{
   res.setHeader('content-type','application/json');
   if(req.url==='/healthz'){
     res.statusCode=200;
-    res.end(JSON.stringify({ok:true,service:'link2ai-worker',worker_id:workerId,region:regionRuntime.currentRegion,primary_region:regionRuntime.primaryRegion,regional_fallback_order:regionRuntime.regionOrder,active_jobs:activeJobs,worker_concurrency:env().WORKER_CONCURRENCY,last_job_at:lastJobAt}));
+    res.end(JSON.stringify({ok:true,service:'link2ai-worker',region:regionRuntime.currentRegion,active_jobs:activeJobs,worker_concurrency:env().WORKER_CONCURRENCY}));
     return;
   }
   try{
@@ -54,7 +55,7 @@ async function slot(slotId:number){
       claimFailures=0;
     }catch(error){
       claimFailures++;
-      console.error(JSON.stringify({ts:new Date().toISOString(),event:'job_claim_error',slot_id:slotId,error_message:error instanceof Error?error.message:String(error)}));
+      logErrorEvent('job_claim_error',error,{slot_id:slotId});
     }
     finally{inflightClaims--;}
     if(!job&&claimFailures>0){await sleep(Math.min(30_000,1000*2**Math.min(claimFailures-1,5)));continue;}
@@ -70,7 +71,7 @@ async function maintenance(){
   while(!stopping){
     await sleep(60_000);
     if(stopping)break;
-    await recoverStaleJobs().catch(err=>console.error(JSON.stringify({ts:new Date().toISOString(),event:'maintenance_error',error_message:err instanceof Error?err.message:String(err)})));
+    await recoverStaleJobs().catch(err=>logErrorEvent('maintenance_error',err));
     await cleanupStaleTempDirs().catch(()=>{});
   }
 }
@@ -78,7 +79,7 @@ async function main(){
   await assertWorkerRuntime();
   await cleanupStaleTempDirs();
   await recoverStaleJobs();
-  console.log(`[worker] Link2AI worker ${workerId} started with ${env().WORKER_CONCURRENCY} slots; primary=${regionRuntime.primaryRegion}; fallback=${regionRuntime.regionOrder.join(' -> ')}`);
+  logEvent('worker_started',{region:regionRuntime.currentRegion,worker_concurrency:env().WORKER_CONCURRENCY});
   await Promise.all([...Array.from({length:env().WORKER_CONCURRENCY},(_,i)=>slot(i+1)),maintenance()]);
 }
 async function shutdown(){
@@ -97,4 +98,4 @@ async function shutdown(){
 }
 process.on('SIGTERM',()=>void shutdown());
 process.on('SIGINT',()=>void shutdown());
-main().catch(async err=>{console.error(err);stopping=true;health.close();await pool.end();process.exit(1);});
+main().catch(async err=>{logErrorEvent('worker_fatal',err);stopping=true;health.close();await pool.end();process.exit(1);});
