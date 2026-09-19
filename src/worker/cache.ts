@@ -26,10 +26,10 @@ export interface CacheRow {
 }
 
 const CACHE_PROVENANCE_EPOCHS:Record<string,string>={
-  // Official Hacker News Firebase API became the production retrieval path in the
-  // OpenAI compliance release. Cache entries older than this may have come from
+  // Conservative production cutover: the old worker had stopped and the ChatGPT
+  // endpoint was live by this point. Earlier HN cache entries may have come from
   // the previous community Algolia adapter and must never be reused.
-  hackernews:'2026-09-18T18:03:16.000Z'
+  hackernews:'2026-09-18T18:05:44.000Z'
 };
 
 export function cacheProvenanceEpoch(platform:string):string|null{
