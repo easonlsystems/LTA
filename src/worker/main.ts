@@ -21,14 +21,15 @@ const health=http.createServer(async(req,res)=>{
   res.setHeader('content-type','application/json');
   if(req.url==='/healthz'){
     res.statusCode=200;
-    res.end(JSON.stringify({ok:true,service:'link2ai-worker',region:regionRuntime.currentRegion,active_jobs:activeJobs,worker_concurrency:env().WORKER_CONCURRENCY}));
+    res.end(JSON.stringify({ok:true,service:'link2ai-worker',active_jobs:activeJobs,worker_concurrency:env().WORKER_CONCURRENCY}));
     return;
   }
   try{
     await pool.query('SELECT 1');
     const issues=readinessIssues('worker');
-    res.statusCode=issues.length?503:200;res.end(JSON.stringify({ready:issues.length===0,issues}));
-  }catch{res.statusCode=503;res.end(JSON.stringify({ok:false}));}
+    if(issues.length)logEvent('worker_readiness_failed',{issue_count:issues.length});
+    res.statusCode=issues.length?503:200;res.end(JSON.stringify({ready:issues.length===0}));
+  }catch{res.statusCode=503;res.end(JSON.stringify({ready:false}));}
 });
 health.listen(env().PORT,'0.0.0.0');
 
