@@ -366,6 +366,14 @@ try{
   });
   assert.equal(unauthorizedOpenai.status,401);
   assert.match(unauthorizedOpenai.headers.get('www-authenticate')??'',/oauth-protected-resource\/mcp\/openai/);
+  assert.doesNotMatch(unauthorizedOpenai.headers.get('www-authenticate')??'',/invalid_token/,'missing bearer token should use the normal OAuth challenge');
+
+  const rejectedOpenaiBearer=await fetch(`http://127.0.0.1:${port}/mcp/openai`,{
+    method:'POST',headers:{host:'link2ai.example','content-type':'application/json',authorization:'bearer definitely-not-a-real-token'},body:'{}'
+  });
+  assert.equal(rejectedOpenaiBearer.status,401);
+  assert.match(rejectedOpenaiBearer.headers.get('www-authenticate')??'',/error="invalid_token"/,'invalid bearer token should force the client to reauthorize');
+  assert.match(rejectedOpenaiBearer.headers.get('www-authenticate')??'',/oauth-protected-resource\/mcp\/openai/);
 
   console.log('runtime smoke tests PASS');
 }finally{
