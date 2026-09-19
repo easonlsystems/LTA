@@ -10,10 +10,10 @@ Record one continuous desktop capture, approximately 2–4 minutes, showing the 
 
 1. Show the Link2AI public website briefly.
 2. In ChatGPT, show Link2AI already installed/connected through the review configuration using the production `/mcp/openai` endpoint.
-3. Paste `https://github.com/nodejs/node/pull/57343` and ask: “Read this pull request with Link2AI and summarize the main implementation change, reviewer concerns, and unresolved discussion.”
+3. Paste `https://github.com/nodejs/node/pull/65472` and ask: “Read this pull request with Link2AI and summarize the change, the main reviewer concern, and how it was resolved.”
 4. Show Link2AI OAuth/reviewer authentication if the review connection requires it.
 5. Show the tool call returning the exact GitHub source identity and source text.
-6. Paste `https://news.ycombinator.com/item?id=8863` and ask: “Read this Hacker News discussion with Link2AI and summarize the strongest disagreements and the evidence each side gives.” If the source requires continuation, show at least one `get_transcript_result` continuation call.
+6. Paste `https://news.ycombinator.com/item?id=37137448` and ask: “Read this Hacker News discussion with Link2AI and summarize the strongest disagreements and the evidence each side gives.” If the source requires continuation, show at least one `get_transcript_result` continuation call.
 7. Ask "How many Link2AI processing units do I have left?" and show `get_usage`.
 8. Paste `https://www.youtube.com/watch?v=M7lc1UVf-VE` and ask Link2AI to summarize it. Show the explicit `PLATFORM_BLOCKED` result with no fabricated content and no processing-unit charge.
 9. End on the working ChatGPT answer for one of the supported sources.
@@ -31,9 +31,9 @@ Record one continuous desktop capture, approximately 2–4 minutes, showing the 
 
 ## Exact review fixtures
 
-- GitHub PR: https://github.com/nodejs/node/pull/57343
-- Hacker News: https://news.ycombinator.com/item?id=8863
-- Bluesky (optional extra positive demo): https://bsky.app/profile/bsky.app/post/3mnzmprxpe22y
+- GitHub PR: https://github.com/nodejs/node/pull/65472
+- Hacker News: https://news.ycombinator.com/item?id=37137448
+- Bluesky (optional extra positive demo): https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f
 - Blocked YouTube negative: https://www.youtube.com/watch?v=M7lc1UVf-VE
 
 Use these exact URLs in the recording so the demo matches the submitted review cases.

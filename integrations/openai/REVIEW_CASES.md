@@ -10,7 +10,7 @@ Failed reads consume 0 processing units. Sources blocked by the ChatGPT distribu
 
 ### P1 — GitHub pull request discussion
 **Prompt**
-Read this pull request with Link2AI and summarize the main implementation change, reviewer concerns, and unresolved discussion: https://github.com/nodejs/node/pull/57343
+Read this pull request with Link2AI and summarize the change, the main reviewer concern, and how it was resolved: https://github.com/nodejs/node/pull/65472
 
 **Expected behavior**
 - Invoke `read_public_link` for the exact PR.
@@ -19,14 +19,14 @@ Read this pull request with Link2AI and summarize the main implementation change
 - If more than one MCP delivery chunk is needed, continue with `get_transcript_result`.
 
 **Expected result structure**
-A structured PR summary with implementation, review concerns, and unresolved points.
+A concise PR summary covering the documentation change, the main reviewer concern, and how the author resolved it.
 
 **Fixture**
-`https://github.com/nodejs/node/pull/57343` — Node.js API documentation tooling migration. Verified to contain PR discussion, submitted reviews, and inline review comments.
+`https://github.com/nodejs/node/pull/65472` — Small Node.js documentation fix with approvals, a concrete reviewer concern, a changes-requested review, a follow-up fix, and final approval.
 
 ### P2 — Hacker News discussion
 **Prompt**
-Read this Hacker News discussion with Link2AI and summarize the strongest disagreements and the evidence each side gives: https://news.ycombinator.com/item?id=8863
+Read this Hacker News discussion with Link2AI and summarize the strongest disagreements and the evidence each side gives: https://news.ycombinator.com/item?id=37137448
 
 **Expected behavior**
 - Invoke `read_public_link` for the exact Hacker News item.
@@ -38,11 +38,11 @@ Read this Hacker News discussion with Link2AI and summarize the strongest disagr
 A concise map of the main positions and the public comments supporting them.
 
 **Fixture**
-`https://news.ycombinator.com/item?id=8863` — the original Dropbox launch discussion, with a long public comment tree and clear disagreements.
+`https://news.ycombinator.com/item?id=37137448` — a compact Draw.io discussion with a clear disagreement about whether the project should be described as fully open source.
 
 ### P3 — Bluesky post and replies
 **Prompt**
-Read this Bluesky post with Link2AI and summarize the main claim plus the most relevant public replies: https://bsky.app/profile/bsky.app/post/3mnzmprxpe22y
+Read this Bluesky post with Link2AI and summarize the announcement: https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f
 
 **Expected behavior**
 - Invoke `read_public_link` for the exact public Bluesky post.
@@ -51,14 +51,14 @@ Read this Bluesky post with Link2AI and summarize the main claim plus the most r
 - Do not invent image-only or visual details.
 
 **Expected result structure**
-The post's main claim followed by the relevant public reply context.
+A concise summary of the exact public Bluesky announcement, without inventing visual-only details.
 
 **Fixture**
-`https://bsky.app/profile/bsky.app/post/3mnzmprxpe22y` — Bluesky's official Group Chats announcement, a public post with public reply activity.
+`https://bsky.app/profile/bsky.app/post/3mnzmprxpe22y` — a short official Bluesky product-tip announcement suitable for deterministic exact-post reading.
 
 ### P4 — Multi-source comparison
 **Prompt**
-Compare how these two public sources frame native TypeScript support in Node.js. Explain where the GitHub proposal and the Hacker News discussion agree, where they differ, and attribute every point to its source: https://github.com/nodejs/node/issues/43816 https://news.ycombinator.com/item?id=41064351
+Compare this Node.js issue with the pull request that fixed it. Explain the reported problem, what changed in the fix, and how reviewer feedback affected the final result. Attribute each point to its source: https://github.com/nodejs/node/issues/65470 https://github.com/nodejs/node/pull/65472
 
 **Expected behavior**
 - Invoke `read_public_links` so source identities remain separate.
@@ -66,10 +66,10 @@ Compare how these two public sources frame native TypeScript support in Node.js.
 - Continue any source whose `continuation_required` value is true before making a claim that depends on omitted content.
 
 **Expected result structure**
-A comparison that clearly attributes claims to the GitHub and Hacker News sources separately.
+A comparison that clearly attributes the reported bug to the GitHub issue and the implemented/reviewed fix to the pull request.
 
 **Fixture**
-`https://github.com/nodejs/node/issues/43816` and `https://news.ycombinator.com/item?id=41064351` — both discuss native / experimental TypeScript support in Node.js.
+`https://github.com/nodejs/node/issues/65470` and `https://github.com/nodejs/node/pull/65472` — a compact issue/PR pair describing the same maxHeadersCount documentation bug and its fix.
 
 ### P5 — Usage balance
 **Prompt**
@@ -111,7 +111,7 @@ Broad crawling is outside Link2AI's declared product scope and supported-source 
 
 ### N3 — User explicitly forbids external fetching
 **Prompt**
-Do not use Link2AI or any external tool. Just answer from what I pasted here. URL for context only: https://news.ycombinator.com/item?id=8863
+Do not use Link2AI or any external tool. Just answer from what I pasted here. URL for context only: https://news.ycombinator.com/item?id=37137448
 
 **Expected behavior**
 Do not invoke Link2AI. Answer only from the supplied conversation content, or explain that the requested source-dependent answer cannot be verified without fetching.
