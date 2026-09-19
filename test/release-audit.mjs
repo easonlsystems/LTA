@@ -31,6 +31,10 @@ assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News mu
 assert.doesNotMatch(linkSource,/hn\.algolia\.com/,'OpenAI-ready core must not depend on the community Algolia HN adapter');
 assert.match(policySource,/OPENAI_ALLOWED_PLATFORMS[^\n]*\['bluesky','github','hackernews'\]/,'ChatGPT distribution must default-deny every source outside the reviewed allowlist');
 assert.match(apiSource,/app\.all\('\/mcp\/openai'/,'API must expose a distinct ChatGPT MCP endpoint');
+assert.match(apiSource,/const openaiAuth=await authInfoFromBearer\(request\.headers\.authorization,mcpResource\('openai'\)\)/,'Legacy /mcp must recognize OpenAI-scoped bearer tokens');
+assert.match(apiSource,/if\(openaiAuth\)[\s\S]*return nodeOpenaiMcp/,'OpenAI-scoped legacy /mcp traffic must use the restricted OpenAI handler');
+assert.match(apiSource,/if\(defaultAuth\)[\s\S]*return nodeMcp/,'General /mcp tokens must keep the default handler');
+assert.match(apiSource,/openai_mcp_legacy_alias/,'Legacy OpenAI runtime alias use must be observable without logging secrets');
 assert.match(authServiceSource,/mcpResource\('openai'\)/,'OAuth must define a distinct ChatGPT MCP audience');
 assert.match(authServiceSource,/authInfoFromBearer\(authorization\?: string,expectedResource=mcpResource\(\)\)/,'Bearer validation must accept an explicit expected MCP resource');
 assert.match(authServiceSource,/\[sha256\(token\),expectedResource\]/,'Bearer validation must query the token by the endpoint-specific OAuth resource');
