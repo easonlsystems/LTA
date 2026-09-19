@@ -10,12 +10,12 @@ Record one continuous desktop capture, approximately 2–4 minutes, showing the 
 
 1. Show the Link2AI public website briefly.
 2. In ChatGPT, show Link2AI already installed/connected through the review configuration using the production `/mcp/openai` endpoint.
-3. Submit a stable public GitHub PR and ask ChatGPT to read it with Link2AI and summarize the implementation plus review discussion.
+3. Paste `https://github.com/nodejs/node/pull/57343` and ask: “Read this pull request with Link2AI and summarize the main implementation change, reviewer concerns, and unresolved discussion.”
 4. Show Link2AI OAuth/reviewer authentication if the review connection requires it.
 5. Show the tool call returning the exact GitHub source identity and source text.
-6. Submit a stable public Hacker News discussion and ask for the strongest disagreements. If the source requires continuation, show at least one `get_transcript_result` continuation call.
+6. Paste `https://news.ycombinator.com/item?id=8863` and ask: “Read this Hacker News discussion with Link2AI and summarize the strongest disagreements and the evidence each side gives.” If the source requires continuation, show at least one `get_transcript_result` continuation call.
 7. Ask "How many Link2AI processing units do I have left?" and show `get_usage`.
-8. Submit one source intentionally blocked on the ChatGPT distribution, such as a YouTube URL, and show the explicit blocked result with no fabricated content.
+8. Paste `https://www.youtube.com/watch?v=M7lc1UVf-VE` and ask Link2AI to summarize it. Show the explicit `PLATFORM_BLOCKED` result with no fabricated content and no processing-unit charge.
 9. End on the working ChatGPT answer for one of the supported sources.
 
 ## Recording rules
@@ -27,3 +27,13 @@ Record one continuous desktop capture, approximately 2–4 minutes, showing the 
 - Do not edit the video to imply a successful action that did not occur.
 - Keep the source URLs visible enough for the reviewer to identify what was tested.
 - Upload the final recording to a reviewer-accessible HTTPS URL and paste that URL into the OpenAI submission portal.
+
+
+## Exact review fixtures
+
+- GitHub PR: https://github.com/nodejs/node/pull/57343
+- Hacker News: https://news.ycombinator.com/item?id=8863
+- Bluesky (optional extra positive demo): https://bsky.app/profile/bsky.app/post/3mnzmprxpe22y
+- Blocked YouTube negative: https://www.youtube.com/watch?v=M7lc1UVf-VE
+
+Use these exact URLs in the recording so the demo matches the submitted review cases.
