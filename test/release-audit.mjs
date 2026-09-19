@@ -197,6 +197,9 @@ assert.match(mcpSource,/get_video_time_range/,'V3 must expose timed lookup for p
 assert.match(mcpSource,/find_in_link/,'V3 must expose read-only search over processed source context');
 assert.match(mcpSource,/get_video_map/,'V3 must expose a whole-video timeline map for broad questions');
 assert.match(mcpSource,/video matches include timestamps|start_seconds/,'Video source search must preserve time ranges for follow-up context');
+assert.match(mcpSource,/sampled_visual_ocr/,'MCP results must distinguish sampled visual OCR from spoken/caption transcript text');
+assert.match(mcpSource,/visual_content_included:visualOnlyResult/,'Visual OCR provenance must be explicit in user-visible structured output');
+assert.match(mcpSource,/not full visual semantics/,'Visual OCR fallback must state its semantic limitation instead of implying full video understanding');
 assert.match(mcpSource,/search miss is not proof|zero matches as proof/i,'Source search must not turn lexical misses into false absence claims');
 assert.doesNotMatch(mcpSource,/checkout_url|plan_info_url/,'Public MCP schemas must not expose checkout or plan-purchase URLs for digital subscriptions or credits');
 assert.doesNotMatch(mcpServiceSource,/plan_info_url|\/pricing/,'ChatGPT tool results must not return upgrade, top-up, or plan-purchase links');
