@@ -42,5 +42,5 @@ jobs:
             pdftotext -v
             tesseract --version >/dev/null
             for lang in eng chi_tra chi_sim jpn kor; do tesseract --list-langs | grep -qx "$lang"; done
-            python3 -c "import curl_cffi, youtube_transcript_api; print('python extraction dependencies ok')"
+            python3 -c "import curl_cffi, youtube_transcript_api"
           '
