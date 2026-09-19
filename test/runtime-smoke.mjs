@@ -344,7 +344,7 @@ try{
 
   const ready=await fetch(`http://127.0.0.1:${port}/readyz`,{headers:{host:'link2ai.example'}});
   assert.equal(ready.status,503);
-  assert.deepEqual((await ready.json()).issues,['database unavailable']);
+  assert.deepEqual(await ready.json(),{ready:false},'public readiness response must not disclose internal dependency details');
 
   const mcpOpaqueOrigin=await rawPost('/mcp',{
     host:'link2ai.example',origin:'null','sec-fetch-site':'same-origin','content-type':'application/json'
@@ -356,6 +356,12 @@ try{
   });
   assert.equal(unauthorized.status,401);
   assert.match(unauthorized.headers.get('www-authenticate')??'',/oauth-protected-resource\/mcp/);
+
+  const legacyOpenaiRuntime=await fetch(`http://127.0.0.1:${port}/mcp`,{
+    method:'POST',headers:{host:'link2ai.example','content-type':'application/json','user-agent':'openai-mcp/1.0.0'},body:'{}'
+  });
+  assert.equal(legacyOpenaiRuntime.status,401);
+  assert.match(legacyOpenaiRuntime.headers.get('www-authenticate')??'',/oauth-protected-resource\/mcp\/openai/,'legacy ChatGPT runtime must reauthorize against the restricted OpenAI MCP audience');
 
   const openaiResourceMetadata=await fetch(`http://127.0.0.1:${port}/.well-known/oauth-protected-resource/mcp/openai`,{headers:{host:'link2ai.example'}});
   assert.equal(openaiResourceMetadata.status,200);
