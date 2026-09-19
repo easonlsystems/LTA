@@ -10,6 +10,11 @@ const skill=await readFile(new URL('../integrations/openai/skills/read-public-li
 
 assert.equal((cases.match(/^### P\d+ /gm)||[]).length,5,'OpenAI remote MCP submission requires exactly five positive cases');
 assert.equal((cases.match(/^### N\d+ /gm)||[]).length,3,'OpenAI remote MCP submission requires exactly three negative cases');
+assert.doesNotMatch(cases,/<REVIEW_[A-Z0-9_]+>/,'OpenAI review cases must not contain placeholder fixture URLs');
+assert.match(cases,/https:\/\/github\.com\/nodejs\/node\/pull\/57343/,'OpenAI GitHub PR review fixture must be pinned');
+assert.match(cases,/https:\/\/news\.ycombinator\.com\/item\?id=8863/,'OpenAI Hacker News review fixture must be pinned');
+assert.match(cases,/https:\/\/bsky\.app\/profile\/bsky\.app\/post\/3mnzmprxpe22y/,'OpenAI Bluesky review fixture must be pinned');
+assert.match(cases,/https:\/\/github\.com\/nodejs\/node\/issues\/43816[\s\S]*https:\/\/news\.ycombinator\.com\/item\?id=41064351/,'OpenAI multi-source fixture must compare related Node.js TypeScript sources');
 const positiveCases=cases.split('## Negative cases')[0];
 assert.match(positiveCases,/GitHub pull request/);
 assert.match(positiveCases,/Hacker News discussion/);
@@ -24,6 +29,9 @@ assert.match(demo,/production, not localhost/i);
 assert.match(demo,/Do not show passwords, tokens, client secrets/i);
 assert.match(demo,/\/mcp\/openai/);
 assert.match(demo,/Do not use the previous Instagram Reel demo/i);
+assert.match(demo,/nodejs\/node\/pull\/57343/,'Demo must use the same GitHub fixture as formal review');
+assert.match(demo,/item\?id=8863/,'Demo must use the same Hacker News fixture as formal review');
+assert.match(demo,/M7lc1UVf-VE/,'Demo must include a deterministic blocked-source case');
 assert.match(release,/first public OpenAI Plugin Directory submission/i);
 assert.match(submission,/interface\.logo/);
 assert.match(submission,/interface\.composerIcon/);
