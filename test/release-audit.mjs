@@ -131,7 +131,8 @@ assert.match(providerCircuitSource,/FAILURE_THRESHOLD=3/,'Provider circuit break
 assert.match(providerCircuitSource,/OPEN_MS=2\*60_000/,'Provider circuit breaker must cool down and probe again instead of permanently disabling a route');
 assert.match(orchestratorSource,/name:'x_syndication',family:'public:x_syndication'[\s\S]*name:'ytdlp',family:'local:yt_dlp'/,'X audio must preserve independent structured-X then local-extractor failover families');
 assert.match(orchestratorSource,/MEDIA_PROVIDER_URL/,'Managed external provider must remain an optional route, not a required recurring dependency');
-assert.match(orchestratorSource,/name:'ytdlp',family:'local:yt_dlp'[\s\S]*name:'gallery_dl_media',family:'local:gallery_dl'/,'Instagram and TikTok media must cross independent extractor families before managed fallback');
+assert.match(orchestratorSource,/name:'gallery_dl_media',family:'local:gallery_dl'/,'Instagram and TikTok media must expose gallery-dl as a separate extractor family');
+assert.match(orchestratorSource,/name:'ytdlp',family:'local:yt_dlp'[\s\S]*\.\.\.this\.gallery(?:Metadata|Audio)Attempt\(input(?:,outputDir)?\)/,'Instagram and TikTok media must place the independent gallery-dl route after yt-dlp');
 assert.match(galleryMediaSource,/gallery_dl_identity_unverified/,'Secondary media extraction must verify exact source identity before accepting a fallback result');
 assert.match(galleryMediaSource,/gallery-media\.\{extension\}/,'gallery-dl media fallback must isolate downloaded media in the job temp directory');
 assert.match(linkSource,/name:'gallery_dl'[\s\S]*name:'public_page'/,'Instagram and TikTok text posts must use an explicit primary-to-page fallback chain');
