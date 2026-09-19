@@ -97,9 +97,12 @@ export const SOURCE_REDUNDANCY={
     note:'Needs an independent rendered/browser retrieval path.'
   },
   pdf:{
-    state:'single_path',
-    routes:[{name:'pdf.js text-layer parser',rootFamily:'local:pdfjs'}],
-    note:'Needs a second parser; OCR/visual PDF remains a separate capability.'
+    state:'redundant',
+    routes:[
+      {name:'pdf.js text-layer parser',rootFamily:'local:pdfjs'},
+      {name:'Poppler pdftotext parser',rootFamily:'local:poppler'}
+    ],
+    note:'Two independent text-layer parsers; OCR/visual PDF remains a separate capability.'
   },
   speech_to_text:{
     state:'conditional',

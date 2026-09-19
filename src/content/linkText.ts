@@ -1,3 +1,6 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { safeGetBuffer } from '../util/safeHttp.js';
 import { runProcess } from '../util/process.js';
 import { Link2AIError } from '../util/errors.js';
@@ -473,9 +476,50 @@ export async function parsePdfBuffer(input:ParsedMediaUrl,bytes:Buffer,contentTy
   }catch(error){if(error instanceof Link2AIError)throw error;const message=error instanceof Error?error.message.toLowerCase():'';if(message.includes('password'))throw new Link2AIError('EXTRACTION_FAILED','Password-protected PDFs are not supported.',422,false);throw new Link2AIError('EXTRACTION_FAILED','The PDF was malformed or could not be parsed safely.',422,false);}
 }
 
+async function parsePdfWithPoppler(input:ParsedMediaUrl,bytes:Buffer,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  const tmpDir=await fs.mkdtemp(path.join(os.tmpdir(),'link2ai-pdf-'));
+  const inputPath=path.join(tmpDir,'source.pdf');
+  try{
+    await fs.writeFile(inputPath,bytes);
+    const result=await runProcess('pdftotext',['-layout','-enc','UTF-8',inputPath,'-'],{
+      timeoutMs:45_000,maxOutputBytes:64_000_000
+    });
+    if(result.code!==0){
+      throw new Link2AIError('EXTRACTION_FAILED','The fallback PDF parser could not read this document.',422,false,{cause_code:'pdftotext_failed'});
+    }
+    const raw=result.stdout.replace(/\r/g,'');
+    const rawPages=raw.split('\f');
+    const pages:string[]=[];
+    let usedChars=0;
+    for(let i=0;i<rawPages.length;i++){
+      const text=cleanText(rawPages[i]);
+      if(!text)continue;
+      const rendered=`[Page ${i+1}]\n${text}`;
+      usedChars+=Array.from(rendered).length+2;
+      assertCharsWithinBudget(usedChars,budget,'pdf_text');
+      pages.push(rendered);
+    }
+    const text=cleanText(pages.join('\n\n'));
+    if(!text)throw new Link2AIError('EXTRACTION_FAILED','This PDF has no readable text layer; OCR is not enabled.',422,false,{cause_code:'pdftotext_empty'});
+    return complete({
+      platform:'pdf',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,
+      caption:`${pages.length} pages`,language:'und',text,source:'page'
+    },'pdf',{pagesAvailable:pages.length,pagesExtracted:pages.length,truncated:false},budget);
+  }finally{
+    await fs.rm(tmpDir,{recursive:true,force:true}).catch(()=>{});
+  }
+}
+
 async function fetchPdf(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
   const response=await safeGetForBudget(input.normalizedUrl,{floorBytes:24_000_000,timeoutMs:45_000,maxRedirects:5,userAgent:BROWSER_UA,accept:'application/pdf'},budget,'pdf_response');
-  return await parsePdfBuffer({...input,normalizedUrl:response.finalUrl},response.bytes,response.contentType,budget);
+  const resolved={...input,normalizedUrl:response.finalUrl};
+  return await runProviderChain<LinkTextPayload>({
+    platform:'pdf',operation:'text',
+    attempts:[
+      {name:'pdfjs',family:'local:pdfjs',run:()=>parsePdfBuffer(resolved,response.bytes,response.contentType,budget)},
+      {name:'pdftotext',family:'local:poppler',run:()=>parsePdfWithPoppler(resolved,response.bytes,budget)}
+    ]
+  });
 }
 
 function redditChildren(listing:unknown):unknown[]{

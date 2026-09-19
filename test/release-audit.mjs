@@ -71,6 +71,7 @@ assert.doesNotMatch(oauthDiagFields,/access_token|refresh_token|token_hash|user_
 assert.match(apiSource,/error="invalid_token"/,'Rejected ChatGPT bearer tokens must explicitly challenge the client to reauthorize');
 assert.match(apiSource,/openaiRuntime[\s\S]*oauth-protected-resource\/mcp\/openai/,'Legacy ChatGPT runtime reauthorization must stay on the OpenAI MCP audience');
 assert.doesNotMatch(apiSource,/isUnauthenticatedMcpDiscoveryRequest/,'ChatGPT MCP route must not bypass OAuth at the transport layer');
+assert.match(linkSource,/name:'pdfjs',family:'local:pdfjs'[\s\S]*name:'pdftotext',family:'local:poppler'/,'PDF text extraction must have two independent parser families');
 assert.match(linkSource,/safeJsonArrayPages/,'GitHub discussions must paginate through public discussion pages');
 assert.match(linkSource,/GitHub comments/);
 assert.match(linkSource,/GitHub reviews/);
