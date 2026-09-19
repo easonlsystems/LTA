@@ -32,7 +32,11 @@ assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News mu
 assert.doesNotMatch(linkSource,/hn\.algolia\.com/,'OpenAI-ready core must not depend on the community Algolia HN adapter');
 assert.match(cacheSource,/CACHE_PROVENANCE_EPOCHS/,'Cache layer must define retrieval-provenance epochs for source migrations');
 assert.match(cacheSource,/hackernews:'2026-09-18T18:03:16\.000Z'/,'HN cache epoch must match the official-API production cutover');
-assert.match(cacheSource,/created_at >= \
+assert.ok(cacheSource.includes("clauses.push('created_at >= $'+params.length+'::timestamptz')"),'Shared HN cache lookup must reject pre-cutover entries');
+assert.ok(cacheSource.includes("clauses.push('c.created_at >= $'+params.length+'::timestamptz')"),'Same-user HN cache lookup must reject pre-cutover entries');
+assert.match(mcpServiceSource,/cacheProvenanceEpoch\(parsed\.platform\)/,'MCP same-user reuse must look up source provenance');
+assert.ok(mcpServiceSource.includes("AND ($5::timestamptz IS NULL OR c.created_at >= $5::timestamptz)"),'MCP same-user reuse must enforce cache provenance before returning a completed HN job');
+assert.match(mcpServiceSource,/profile==='openai'[\s\S]*source_fetched_at[\s\S]*TRANSCRIPT_EXPIRED/,'ChatGPT job-id reads must reject completed HN results created before the approved retrieval path');
 assert.match(policySource,/OPENAI_ALLOWED_PLATFORMS[^\n]*\['bluesky','github','hackernews'\]/,'ChatGPT distribution must default-deny every source outside the reviewed allowlist');
 assert.match(apiSource,/app\.all\('\/mcp\/openai'/,'API must expose a distinct ChatGPT MCP endpoint');
 assert.match(authServiceSource,/mcpResource\('openai'\)/,'OAuth must define a distinct ChatGPT MCP audience');
