@@ -1,4 +1,8 @@
-import { safeGetBuffer } from '../util/safeHttp.js';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { resolveTxt } from 'node:dns/promises';
+import { assertPublicHttpsTarget, safeGetBuffer } from '../util/safeHttp.js';
 import { runProcess } from '../util/process.js';
 import { Link2AIError } from '../util/errors.js';
 import { env } from '../config/env.js';
@@ -189,6 +193,44 @@ async function fetchPage(input:ParsedMediaUrl,budget?:TextExtractionBudget):Prom
   return complete({platform:input.platform,canonicalMediaId:input.canonicalMediaId,sourceUrl:response.finalUrl,title:doc.title,creator:doc.creator,caption:doc.description,language:doc.language,text:doc.text,source:input.kind==='post'?'post':'page'},input.kind==='post'?'social':'web',{},budget);
 }
 
+export function parseJinaReaderPayload(input:ParsedMediaUrl,raw:string,budget?:TextExtractionBudget):LinkTextPayload{
+  const sourceMatch=/^URL Source:\s*(https:\/\/\S+)\s*$/mi.exec(raw);
+  if(sourceMatch){
+    try{
+      const expected=new URL(input.normalizedUrl);
+      const returned=new URL(sourceMatch[1].trim());
+      if(returned.hostname.toLowerCase()!==expected.hostname.toLowerCase()){
+        throw new Link2AIError('EXTRACTION_FAILED','The external page reader returned a different source.',502,true,{cause_code:'jina_source_mismatch'});
+      }
+    }catch(error){
+      if(error instanceof Link2AIError)throw error;
+      throw new Link2AIError('EXTRACTION_FAILED','The external page reader returned invalid source metadata.',502,true,{cause_code:'jina_source_invalid'});
+    }
+  }
+  const title=/^Title:\s*(.+)$/mi.exec(raw)?.[1]?.trim();
+  const marker='Markdown Content:';
+  const markerIndex=raw.indexOf(marker);
+  const body=cleanText(markerIndex>=0?raw.slice(markerIndex+marker.length):raw);
+  if(body.length<80)throw new Link2AIError('EXTRACTION_FAILED','The external page reader did not return enough readable content.',502,true,{cause_code:'jina_reader_too_thin'});
+  return complete({
+    platform:'web',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,
+    title:clipExternalText(title,METADATA_LIMITS.title),language:'und',text:body,source:'page'
+  },'web',{
+    truncated:true,truncationReason:'external_reader_fallback',
+    contentSectionsTruncated:['source_structure']
+  },budget);
+}
+
+async function fetchJinaReaderPage(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  await assertPublicHttpsTarget(input.normalizedUrl,5_000);
+  const readerUrl=`https://r.jina.ai/${input.normalizedUrl}`;
+  const response=await safeGetForBudget(readerUrl,{
+    floorBytes:16_000_000,timeoutMs:30_000,maxRedirects:3,userAgent:BROWSER_UA,
+    accept:'text/plain,text/markdown;q=0.9,*/*;q=0.2'
+  },budget,'jina_reader_response');
+  return parseJinaReaderPayload(input,response.bytes.toString('utf8'),budget);
+}
+
 type XOEmbedData={html:string;author_name?:string};
 
 async function fetchXOEmbedData(input:ParsedMediaUrl):Promise<XOEmbedData>{
@@ -284,8 +326,18 @@ function collectBlueskyReplies(replies:unknown,out:BlueskyRendered,depth=0):void
 export function parseBlueskyThread(input:ParsedMediaUrl,payload:unknown,budget?:TextExtractionBudget):LinkTextPayload{
   const root=jsonObject(payload);const thread=jsonObject(root?.thread);const post=jsonObject(thread?.post);
   const [actor,rkey]=input.canonicalMediaId.split('/');
-  if(jsonString(post?.uri)!==`at://${actor}/app.bsky.feed.post/${rkey}`)throw new Link2AIError('EXTRACTION_FAILED','Bluesky returned a different post than requested.',502,true);
-  const record=jsonObject(post?.record);const author=jsonObject(post?.author);
+  const author=jsonObject(post?.author);
+  const postUri=jsonString(post?.uri);
+  const uriMatch=/^at:\/\/([^/]+)\/app\.bsky\.feed\.post\/([^/?#]+)$/.exec(postUri);
+  const authorDid=jsonString(author?.did).toLowerCase();
+  const authorHandle=jsonString(author?.handle).toLowerCase();
+  const actorIsDid=actor.startsWith('did:');
+  const identityMatches=Boolean(uriMatch&&uriMatch[2]===rkey&&(
+    uriMatch[1].toLowerCase()===actor.toLowerCase()||
+    (!actorIsDid&&authorHandle===actor.toLowerCase()&&authorDid&&uriMatch[1].toLowerCase()===authorDid)
+  ));
+  if(!identityMatches)throw new Link2AIError('EXTRACTION_FAILED','Bluesky returned a different post than requested.',502,true,{cause_code:'bluesky_identity_mismatch'});
+  const record=jsonObject(post?.record);
   const text=cleanText(jsonString(record?.text));
   if(!text)throw new Link2AIError('EXTRACTION_FAILED','This Bluesky post did not expose readable public text.',422,false);
   const display=jsonString(author?.displayName).trim();const handle=jsonString(author?.handle).trim();
@@ -305,11 +357,144 @@ export function parseBlueskyThread(input:ParsedMediaUrl,payload:unknown,budget?:
   return complete({platform:'bluesky',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title:clipExternalText(`Bluesky post by ${display||handle}`,METADATA_LIMITS.title),creator:clipExternalText(handle?`@${handle}`:display,METADATA_LIMITS.creator),caption:clipExternalText(text,METADATA_LIMITS.description),language:jsonString(record?.langs instanceof Array?record.langs[0]:undefined)||'und',text:cleanText(sections.filter(Boolean).join('\n\n')),source:'post'},'social',{itemsAvailable:repliesAvailable,itemsExtracted:replies.count,truncated:repliesTruncated,contentSectionsTruncated:repliesTruncated?['upstream_replies']:undefined},budget);
 }
 
-async function fetchBlueskyPost(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+function validAtprotoDid(value:string):boolean{
+  return /^did:plc:[a-z2-7]{20,64}$/i.test(value)||/^did:web:[a-z0-9.-]{1,253}$/i.test(value);
+}
+
+async function resolveBlueskyHandleDid(actor:string):Promise<string>{
+  if(validAtprotoDid(actor))return actor.toLowerCase();
+  if(!/^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/i.test(actor)||!actor.includes('.')){
+    throw new Link2AIError('EXTRACTION_FAILED','The Bluesky handle could not be resolved safely.',502,true,{cause_code:'bluesky_invalid_handle'});
+  }
+
+  try{
+    const response=await safeGetBuffer(`https://${actor}/.well-known/atproto-did`,{
+      maxBytes:8_192,timeoutMs:7_000,maxRedirects:2,userAgent:BROWSER_UA,accept:'text/plain,*/*;q=0.1'
+    });
+    const did=response.bytes.toString('utf8').trim();
+    if(validAtprotoDid(did))return did.toLowerCase();
+  }catch{/* DNS TXT is the independent standards-based fallback. */}
+
+  let records:string[][]=[];
+  try{
+    records=await Promise.race([
+      resolveTxt(`_atproto.${actor}`),
+      new Promise<string[][]>((_,reject)=>setTimeout(()=>reject(new Error('dns_timeout')),7_000))
+    ]);
+  }catch{
+    throw new Link2AIError('EXTRACTION_FAILED','The Bluesky handle could not be resolved to its AT Protocol identity.',502,true,{cause_code:'bluesky_handle_resolution_failed'});
+  }
+  for(const chunks of records){
+    const record=chunks.join('').trim();
+    if(record.toLowerCase().startsWith('did=')){
+      const did=record.slice(4).trim();
+      if(validAtprotoDid(did))return did.toLowerCase();
+    }
+  }
+  throw new Link2AIError('EXTRACTION_FAILED','The Bluesky handle did not publish a valid AT Protocol identity.',502,true,{cause_code:'bluesky_handle_no_did'});
+}
+
+async function resolveBlueskyDidDocument(did:string,budget?:TextExtractionBudget):Promise<JsonObject>{
+  let endpoint:string;
+  if(did.startsWith('did:plc:')){
+    endpoint=`https://plc.directory/${encodeURIComponent(did)}`;
+  }else if(did.startsWith('did:web:')){
+    const host=decodeURIComponent(did.slice('did:web:'.length));
+    if(!/^[a-z0-9.-]{1,253}$/i.test(host)||host.includes('..')){
+      throw new Link2AIError('EXTRACTION_FAILED','The Bluesky DID Web identity is not a supported host-level identity.',502,false,{cause_code:'bluesky_did_web_invalid'});
+    }
+    endpoint=`https://${host}/.well-known/did.json`;
+  }else{
+    throw new Link2AIError('EXTRACTION_FAILED','This Bluesky identity uses an unsupported DID method.',502,false,{cause_code:'bluesky_did_method_unsupported'});
+  }
+  const doc=jsonObject(await safeJson(endpoint,'Bluesky DID document',API_PAGE_BYTES,budget));
+  if(!doc||jsonString(doc.id).toLowerCase()!==did.toLowerCase()){
+    throw new Link2AIError('EXTRACTION_FAILED','The resolved Bluesky DID document did not match the requested identity.',502,true,{cause_code:'bluesky_did_mismatch'});
+  }
+  return doc;
+}
+
+function blueskyPdsOrigin(doc:JsonObject,did:string,actor:string):string{
+  if(!actor.startsWith('did:')){
+    const aliases=Array.isArray(doc.alsoKnownAs)?doc.alsoKnownAs.map(jsonString):[];
+    if(!aliases.some(alias=>alias.toLowerCase()===`at://${actor.toLowerCase()}`)){
+      throw new Link2AIError('EXTRACTION_FAILED','The Bluesky handle and DID did not verify bidirectionally.',502,true,{cause_code:'bluesky_handle_did_mismatch'});
+    }
+  }
+  const services=Array.isArray(doc.service)?doc.service:[];
+  for(const value of services){
+    const service=jsonObject(value);if(!service)continue;
+    const id=jsonString(service.id);
+    if(!(id==='#atproto_pds'||id===`${did}#atproto_pds`)||jsonString(service.type)!=='AtprotoPersonalDataServer')continue;
+    const raw=jsonString(service.serviceEndpoint);
+    try{
+      const endpoint=new URL(raw);
+      if(endpoint.protocol!=='https:'||endpoint.username||endpoint.password||endpoint.search||endpoint.hash||!endpoint.hostname)continue;
+      if(endpoint.pathname!==''&&endpoint.pathname!=='/')continue;
+      return endpoint.origin;
+    }catch{continue;}
+  }
+  throw new Link2AIError('EXTRACTION_FAILED','The Bluesky identity did not publish a usable PDS endpoint.',502,true,{cause_code:'bluesky_pds_missing'});
+}
+
+export function parseBlueskyPdsRecord(
+  input:ParsedMediaUrl,payload:unknown,did:string,displayHandle:string|undefined,budget?:TextExtractionBudget
+):LinkTextPayload{
+  const root=jsonObject(payload);const record=jsonObject(root?.value);
+  const [,rkey]=input.canonicalMediaId.split('/');
+  const expectedUri=`at://${did}/app.bsky.feed.post/${rkey}`;
+  if(!root||jsonString(root.uri)!==expectedUri||!record){
+    throw new Link2AIError('EXTRACTION_FAILED','The Bluesky PDS returned a different record than requested.',502,true,{cause_code:'bluesky_pds_identity_mismatch'});
+  }
+  const text=cleanText(jsonString(record.text));
+  if(!text)throw new Link2AIError('EXTRACTION_FAILED','This Bluesky post did not expose readable public text.',422,false);
+  const creator=displayHandle?`@${displayHandle}`:did;
+  const sections=[`Post by ${creator}`,isoTimestamp(record.createdAt)?`Published: ${isoTimestamp(record.createdAt)}`:'',text];
+  const embed=jsonObject(record.embed);const external=jsonObject(embed?.external);
+  if(external){
+    const card=[jsonString(external.title),jsonString(external.description),jsonString(external.uri)].filter(Boolean).join('\n');
+    if(card)sections.push(`External card:\n${cleanText(card)}`);
+  }
+  return complete({
+    platform:'bluesky',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,
+    title:clipExternalText(`Bluesky post by ${creator}`,METADATA_LIMITS.title),
+    creator:clipExternalText(creator,METADATA_LIMITS.creator),caption:clipExternalText(text,METADATA_LIMITS.description),
+    language:jsonString(record.langs instanceof Array?record.langs[0]:undefined)||'und',
+    text:cleanText(sections.filter(Boolean).join('\n\n')),source:'post'
+  },'social',{
+    truncated:true,truncationReason:'bluesky_pds_root_only',
+    itemsExtracted:0,contentSectionsTruncated:['thread_context']
+  },budget);
+}
+
+async function fetchBlueskyAppViewPost(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
   const [actor,rkey]=input.canonicalMediaId.split('/');
   const uri=`at://${actor}/app.bsky.feed.post/${rkey}`;
-  const data=await safeJson(`https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=1000&parentHeight=1`,'Bluesky',API_PAGE_BYTES,budget);
+  const data=await safeJson(`https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=1000&parentHeight=1`,'Bluesky AppView',API_PAGE_BYTES,budget);
   return parseBlueskyThread(input,data,budget);
+}
+
+async function fetchBlueskyPdsPost(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  const [actor,rkey]=input.canonicalMediaId.split('/');
+  const did=await resolveBlueskyHandleDid(actor);
+  const doc=await resolveBlueskyDidDocument(did,budget);
+  const pds=blueskyPdsOrigin(doc,did,actor);
+  const url=new URL('/xrpc/com.atproto.repo.getRecord',pds);
+  url.searchParams.set('repo',did);
+  url.searchParams.set('collection','app.bsky.feed.post');
+  url.searchParams.set('rkey',rkey);
+  const payload=await safeJson(url.toString(),'Bluesky PDS record',API_PAGE_BYTES,budget);
+  return parseBlueskyPdsRecord(input,payload,did,actor.startsWith('did:')?undefined:actor,budget);
+}
+
+async function fetchBlueskyPost(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  return await runProviderChain<LinkTextPayload>({
+    platform:'bluesky',operation:'text',
+    attempts:[
+      {name:'bsky_appview',family:'public:bsky_appview',run:()=>fetchBlueskyAppViewPost(input,budget)},
+      {name:'atproto_pds',family:'public:atproto_pds',run:()=>fetchBlueskyPdsPost(input,budget)}
+    ]
+  });
 }
 
 export function parseGitHubDiscussion(input:ParsedMediaUrl,itemValue:unknown,commentsValue:unknown,reviewsValue:unknown=[],diff='',sourceTruncated=false,budget?:TextExtractionBudget):LinkTextPayload{
@@ -336,7 +521,7 @@ export function parseGitHubDiscussion(input:ParsedMediaUrl,itemValue:unknown,com
   const title=jsonString(item.title);return complete({platform:'github',canonicalMediaId:input.canonicalMediaId,sourceUrl:jsonString(item.html_url)||input.normalizedUrl,title:clipExternalText(title,METADATA_LIMITS.title),creator:clipExternalText(jsonString(user?.login),METADATA_LIMITS.creator),caption:clipExternalText(jsonString(item.body),METADATA_LIMITS.description),language:'und',text:rawText,source:'post'},contentClass,{itemsAvailable:allDiscussion.length,itemsExtracted:discussionCandidates.length,truncated:sourceTruncated,contentSectionsTruncated:sourceTruncated?['upstream_discussion']:undefined},budget);
 }
 
-async function fetchGitHubDiscussion(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+async function fetchGitHubApiDiscussion(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
   const [owner,repo,type,number]=input.canonicalMediaId.split('/');const apiBase=`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
   const isPr=type==='pull';
   const item=await safeJson(`${apiBase}/${isPr?'pulls':'issues'}/${number}`,'GitHub',API_PAGE_BYTES,budget);
@@ -349,6 +534,49 @@ async function fetchGitHubDiscussion(input:ParsedMediaUrl,budget?:TextExtraction
   const sourceTruncated=commentsPage.truncated||reviewsPage.truncated||reviewCommentsPage.truncated;
   let diff='';if(isPr){const response=await safeGetForBudget(`${apiBase}/pulls/${number}`,{floorBytes:8_000_000,timeoutMs:20_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/vnd.github.v3.diff'},budget,'github_diff');diff=response.bytes.toString('utf8');}
   return parseGitHubDiscussion(input,item,combined,[],diff,sourceTruncated,budget);
+}
+
+async function fetchGitHubHtmlDiscussion(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  const [owner,repo,type,number]=input.canonicalMediaId.split('/');
+  const isPr=type==='pull';
+  const response=await safeGetForBudget(input.normalizedUrl,{
+    floorBytes:12_000_000,timeoutMs:20_000,maxRedirects:5,userAgent:BROWSER_UA,
+    accept:'text/html,application/xhtml+xml'
+  },budget,'github_html_fallback');
+  const doc=pageTextFromHtml(response.bytes.toString('utf8'));
+  let diff='';
+  let diffMissing=false;
+  if(isPr){
+    const diffUrl=`https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pull/${encodeURIComponent(number)}.diff`;
+    try{
+      const diffResponse=await safeGetForBudget(diffUrl,{
+        floorBytes:16_000_000,timeoutMs:20_000,maxRedirects:5,userAgent:BROWSER_UA,
+        accept:'text/plain,application/vnd.github.v3.diff,*/*;q=0.2'
+      },budget,'github_html_diff_fallback');
+      diff=diffResponse.bytes.toString('utf8');
+    }catch{diffMissing=true;}
+  }
+  const sections=[doc.text,isPr&&diff?`Pull request diff:\n${diff}`:''].filter(Boolean);
+  const text=cleanText(sections.join('\n\n'));
+  if(text.length<80)throw new Link2AIError('EXTRACTION_FAILED','GitHub public HTML fallback did not expose enough readable content.',502,true,{cause_code:'github_html_too_thin'});
+  const truncatedSections=['discussion_structure',...(isPr&&diffMissing?['pull_request_diff']:[])];
+  return complete({
+    platform:'github',canonicalMediaId:input.canonicalMediaId,sourceUrl:response.finalUrl,
+    title:doc.title,creator:doc.creator,caption:doc.description,language:doc.language,text,source:'post'
+  },isPr?'github_pr':'github_issue',{
+    truncated:true,truncationReason:'github_html_fallback',
+    contentSectionsTruncated:truncatedSections
+  },budget);
+}
+
+async function fetchGitHubDiscussion(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  return await runProviderChain<LinkTextPayload>({
+    platform:'github',operation:'text',
+    attempts:[
+      {name:'github_api',family:'official:github_api',run:()=>fetchGitHubApiDiscussion(input,budget)},
+      {name:'github_html',family:'public:github_html',run:()=>fetchGitHubHtmlDiscussion(input,budget)}
+    ]
+  });
 }
 
 type HnRendered={lines:string[];count:number};
@@ -427,8 +655,30 @@ async function fetchHackerNewsOfficialTree(itemId:string,budget?:TextExtractionB
   return build(rootId)??hackerNewsOfficialItem(root,[]);
 }
 
+async function fetchHackerNewsAlgoliaItem(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  const payload=await safeJson(
+    `https://hn.algolia.com/api/v1/items/${encodeURIComponent(input.canonicalMediaId)}`,
+    'Hacker News Algolia fallback',
+    API_PAGE_BYTES,
+    budget
+  );
+  return parseHackerNewsItem(input,payload,budget);
+}
+
 async function fetchHackerNewsItem(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
-  return parseHackerNewsItem(input,await fetchHackerNewsOfficialTree(input.canonicalMediaId,budget),budget);
+  return await runProviderChain<LinkTextPayload>({
+    platform:'hackernews',operation:'text',
+    attempts:[
+      {
+        name:'hn_firebase',family:'official:hn_firebase',
+        run:async()=>parseHackerNewsItem(input,await fetchHackerNewsOfficialTree(input.canonicalMediaId,budget),budget)
+      },
+      {
+        name:'hn_algolia',family:'external:hn_algolia',
+        run:()=>fetchHackerNewsAlgoliaItem(input,budget)
+      }
+    ]
+  });
 }
 
 export async function parsePdfBuffer(input:ParsedMediaUrl,bytes:Buffer,contentType:string|null,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
@@ -451,9 +701,50 @@ export async function parsePdfBuffer(input:ParsedMediaUrl,bytes:Buffer,contentTy
   }catch(error){if(error instanceof Link2AIError)throw error;const message=error instanceof Error?error.message.toLowerCase():'';if(message.includes('password'))throw new Link2AIError('EXTRACTION_FAILED','Password-protected PDFs are not supported.',422,false);throw new Link2AIError('EXTRACTION_FAILED','The PDF was malformed or could not be parsed safely.',422,false);}
 }
 
+async function parsePdfWithPoppler(input:ParsedMediaUrl,bytes:Buffer,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  const tmpDir=await fs.mkdtemp(path.join(os.tmpdir(),'link2ai-pdf-'));
+  const inputPath=path.join(tmpDir,'source.pdf');
+  try{
+    await fs.writeFile(inputPath,bytes);
+    const result=await runProcess('pdftotext',['-layout','-enc','UTF-8',inputPath,'-'],{
+      timeoutMs:45_000,maxOutputBytes:64_000_000
+    });
+    if(result.code!==0){
+      throw new Link2AIError('EXTRACTION_FAILED','The fallback PDF parser could not read this document.',422,false,{cause_code:'pdftotext_failed'});
+    }
+    const raw=result.stdout.replace(/\r/g,'');
+    const rawPages=raw.split('\f');
+    const pages:string[]=[];
+    let usedChars=0;
+    for(let i=0;i<rawPages.length;i++){
+      const text=cleanText(rawPages[i]);
+      if(!text)continue;
+      const rendered=`[Page ${i+1}]\n${text}`;
+      usedChars+=Array.from(rendered).length+2;
+      assertCharsWithinBudget(usedChars,budget,'pdf_text');
+      pages.push(rendered);
+    }
+    const text=cleanText(pages.join('\n\n'));
+    if(!text)throw new Link2AIError('EXTRACTION_FAILED','This PDF has no readable text layer; OCR is not enabled.',422,false,{cause_code:'pdftotext_empty'});
+    return complete({
+      platform:'pdf',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,
+      caption:`${pages.length} pages`,language:'und',text,source:'page'
+    },'pdf',{pagesAvailable:pages.length,pagesExtracted:pages.length,truncated:false},budget);
+  }finally{
+    await fs.rm(tmpDir,{recursive:true,force:true}).catch(()=>{});
+  }
+}
+
 async function fetchPdf(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
   const response=await safeGetForBudget(input.normalizedUrl,{floorBytes:24_000_000,timeoutMs:45_000,maxRedirects:5,userAgent:BROWSER_UA,accept:'application/pdf'},budget,'pdf_response');
-  return await parsePdfBuffer({...input,normalizedUrl:response.finalUrl},response.bytes,response.contentType,budget);
+  const resolved={...input,normalizedUrl:response.finalUrl};
+  return await runProviderChain<LinkTextPayload>({
+    platform:'pdf',operation:'text',
+    attempts:[
+      {name:'pdfjs',family:'local:pdfjs',run:()=>parsePdfBuffer(resolved,response.bytes,response.contentType,budget)},
+      {name:'pdftotext',family:'local:poppler',run:()=>parsePdfWithPoppler(resolved,response.bytes,budget)}
+    ]
+  });
 }
 
 function redditChildren(listing:unknown):unknown[]{
@@ -687,8 +978,17 @@ export async function extractTextLink(input:ParsedMediaUrl,budget?:TextExtractio
     return await runProviderChain<LinkTextPayload>({
       platform:input.platform,operation:'text',
       attempts:[
-        {name:'gallery_dl',run:()=>fetchGalleryPost(input,budget)},
-        {name:'public_page',run:()=>fetchPage(input,budget)}
+        {name:'gallery_dl',family:'local:gallery_dl',run:()=>fetchGalleryPost(input,budget)},
+        {name:'public_page',family:'public:html',run:()=>fetchPage(input,budget)}
+      ]
+    });
+  }
+  if(input.platform==='web'){
+    return await runProviderChain<LinkTextPayload>({
+      platform:'web',operation:'text',
+      attempts:[
+        {name:'direct_html',family:'public:direct_html',run:()=>fetchPage(input,budget)},
+        {name:'jina_reader',family:'external:jina_reader',run:()=>fetchJinaReaderPage(input,budget)}
       ]
     });
   }

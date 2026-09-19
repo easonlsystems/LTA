@@ -18,13 +18,13 @@ export interface TranscriptPayload {
   language: string;
   transcript: string;
   segments: TranscriptSegment[];
-  source: 'caption' | 'asr' | 'post' | 'page';
+  source: 'caption' | 'asr' | 'visual' | 'hybrid' | 'post' | 'page';
   completeness: CompletenessMetadata;
 }
 
 export interface MediaMetadata {
   platform: Platform;
-  resolver?: 'ytdlp' | 'external' | 'x_syndication';
+  resolver?: 'ytdlp' | 'gallery_dl' | 'external' | 'x_syndication';
   canonicalMediaId: string;
   webpageUrl: string;
   originalLanguage?: string;

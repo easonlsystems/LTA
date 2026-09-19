@@ -78,7 +78,10 @@ const timeRangeOutputSchema=z.object({
   error_code:z.string().nullable().optional(),
   retry_after_seconds:z.number().nonnegative().optional(),
   retryable:z.boolean().optional(),
-  message:z.string().optional()
+  message:z.string().optional(),
+  content_scope:z.string().optional(),
+  visual_content_included:z.boolean().optional(),
+  limitation_notice:z.string().optional()
 });
 
 const sourceSearchOutputSchema=z.object({
@@ -87,6 +90,9 @@ const sourceSearchOutputSchema=z.object({
   source_url:z.string().url().optional(),
   source_key:z.string().optional(),
   query:z.string().optional(),
+  content_scope:z.string().optional(),
+  visual_content_included:z.boolean().optional(),
+  limitation_notice:z.string().optional(),
   matches:z.array(z.object({
     offset:z.number().int().nonnegative().optional(),
     start_seconds:z.number().nonnegative().optional(),
@@ -108,6 +114,9 @@ const videoMapOutputSchema=z.object({
   duration_seconds:z.number().nonnegative().optional(),
   requested_window_seconds:z.number().int().positive().optional(),
   effective_window_seconds:z.number().int().positive().optional(),
+  content_scope:z.string().optional(),
+  visual_content_included:z.boolean().optional(),
+  limitation_notice:z.string().optional(),
   section_count:z.number().int().nonnegative().optional(),
   sections:z.array(z.object({
     start_seconds:z.number().nonnegative(),
@@ -168,6 +177,22 @@ export function unicodeSafeSlice(text:string,offset:number,size:number):{start:n
   return {start,end,text:text.slice(start,end)};
 }
 
+function videoContentScope(result:ToolJobResult):{contentScope:string;visualIncluded:boolean;limitation?:string}{
+  if(result.transcript_source==='visual'){
+    return {
+      contentScope:'sampled_visual_ocr',visualIncluded:true,
+      limitation:'This result contains sampled on-screen OCR only. It is not a complete account of the video visuals or spoken audio.'
+    };
+  }
+  if(result.transcript_source==='hybrid'){
+    return {
+      contentScope:'spoken_text_plus_sampled_visual_ocr',visualIncluded:true,
+      limitation:'This result combines an incomplete spoken transcript with sampled on-screen OCR. Missing speech, unsampled frames, and non-text visual semantics may not be represented.'
+    };
+  }
+  return {contentScope:'spoken_and_caption_text',visualIncluded:false};
+}
+
 export function chunkResult(result:ToolJobResult,offset=0,maxChars=MAX_CHARS):Record<string,unknown>{
   if(result.status!=='completed'||!result.transcript)return result as unknown as Record<string,unknown>;
   const safeOffset=Math.max(0,Math.min(offset,result.transcript.length));
@@ -176,11 +201,19 @@ export function chunkResult(result:ToolJobResult,offset=0,maxChars=MAX_CHARS):Re
   const contentText=chunk.text;
   const next=chunk.end<result.transcript.length?chunk.end:null;
   const contentType=kindFor(result);
+  const visualOnlyResult=result.transcript_source==='visual';
+  const hybridVisualResult=result.transcript_source==='hybrid';
+  const visualAugmentedResult=visualOnlyResult||hybridVisualResult;
+  const videoScope=videoContentScope(result);
   const visualNotice=contentType==='video'
-    ? 'Visual-only text, layout, gestures, charts, pairings, and other on-screen relationships may be missing. Do not infer them unless supported by transcript/caption text.'
+    ? visualOnlyResult
+      ? 'Link2AI recovered sampled on-screen OCR after spoken-text extraction failed. This represents only sampled readable text, not full visual semantics, gestures, objects, charts, or every frame.'
+      : hybridVisualResult
+        ? 'Link2AI fused an incomplete spoken transcript with sampled on-screen OCR. Both parts are partial; do not infer full visual semantics, unsampled frames, gestures, objects, charts, or missing speech.'
+        : 'Visual-only text, layout, gestures, charts, pairings, and other on-screen relationships may be missing. Do not infer them unless supported by transcript/caption text.'
     : 'Images, visual layout, attached media and other non-text details are not fully represented unless explicitly present in the returned text.';
   const sourceTruncated=Boolean(result.truncated);
-  const timelineCoverageVerified=contentType!=='video'||Boolean(result.segments?.length);
+  const timelineCoverageVerified=contentType!=='video'||(!visualAugmentedResult&&Boolean(result.segments?.length));
   const sourceCompleteness=sourceTruncated?'partial':timelineCoverageVerified?'complete':'unverified';
   const continuationRequired=next!==null;
   const contentComplete=sourceCompleteness==='complete'&&!continuationRequired;
@@ -203,9 +236,9 @@ export function chunkResult(result:ToolJobResult,offset=0,maxChars=MAX_CHARS):Re
     content_sections_truncated:result.content_sections_truncated??[],
     // Keep transcript for backward compatibility with already-connected MCP clients.
     transcript:contentText,
-    content_scope:contentType==='video'?'spoken_and_caption_text':contentType==='post'?'public_post_text':'public_page_text',
-    visual_content_included:false,continuation_notice:continuationNotice,limitation_notice:sourceTruncated
-      ? `Note: The upstream source or provider did not expose a complete result.${result.pages_extracted!==undefined&&result.pages_available!==undefined?` Processed ${result.pages_extracted} of ${result.pages_available} pages.`:''}${result.content_sections_truncated?.length?` Incomplete sections: ${result.content_sections_truncated.join(', ')}.`:''}`
+    content_scope:contentType==='video'?videoScope.contentScope:contentType==='post'?'public_post_text':'public_page_text',
+    visual_content_included:contentType==='video'?videoScope.visualIncluded:false,continuation_notice:continuationNotice,limitation_notice:sourceTruncated
+      ? `Note: The source result is incomplete.${result.pages_extracted!==undefined&&result.pages_available!==undefined?` Processed ${result.pages_extracted} of ${result.pages_available} pages.`:''}${result.content_sections_truncated?.length?` Incomplete sections: ${result.content_sections_truncated.join(', ')}.`:''} ${visualNotice}`
       : sourceCompleteness==='unverified'
         ? `Link2AI received transcript text, but this source did not provide timestamps that can prove timeline coverage. ${visualNotice}`
         : continuationNotice??visualNotice,
@@ -516,10 +549,13 @@ export function buildMcpServer(profile:DistributionProfile='default'){
     const segments=result.segments??[];
     if(!segments.length)throw new Link2AIError('TIMELINE_UNAVAILABLE','This video result does not contain timestamped transcript segments.',422,false);
     const window=selectTimedSegmentWindow(segments,start_seconds,end_seconds);
+    const scope=videoContentScope(result);
     return {
       status:'completed',job_id:result.job_id,source_url:result.source_url,source_key:result.source_key,
       requested_start_seconds:start_seconds,requested_end_seconds:end_seconds,...window,
-      ...(window.segment_count?{}:{message:'No timestamped speech/caption segment overlaps the requested range.'})
+      content_scope:scope.contentScope,visual_content_included:scope.visualIncluded,
+      ...(scope.limitation?{limitation_notice:scope.limitation}:{}),
+      ...(window.segment_count?{}:{message:scope.visualIncluded?'No sampled transcript/OCR segment overlaps the requested range.':'No timestamped speech/caption segment overlaps the requested range.'})
     };
   }));
 
@@ -544,9 +580,11 @@ export function buildMcpServer(profile:DistributionProfile='default'){
     const matches=videoSegments.length
       ? searchVideoSegments(videoSegments,query,max_matches??5)
       : searchSourceText(transcript,query,max_matches??5);
+    const scope=videoSegments.length?videoContentScope(result):null;
     return {
       status:'completed',job_id:result.job_id,source_url:result.source_url,source_key:result.source_key,
       query,matches,
+      ...(scope?{content_scope:scope.contentScope,visual_content_included:scope.visualIncluded,...(scope.limitation?{limitation_notice:scope.limitation}:{})}:{}),
       ...(matches.length?{}:{message:openaiProfile?'No lexical match was found. Try broader concepts/synonyms or continue reading the source; this does not prove the topic is absent.':'No lexical match was found. Try broader concepts/synonyms, inspect the video map, or continue reading the source; this does not prove the topic is absent.'})
     };
   }));
@@ -571,10 +609,13 @@ export function buildMcpServer(profile:DistributionProfile='default'){
     const segments=result.segments??[];
     if(!segments.length)throw new Link2AIError('TIMELINE_UNAVAILABLE','This video result does not contain timestamped transcript segments.',422,false);
     const map=buildVideoMap(segments,window_seconds??180,max_windows??80);
+    const scope=videoContentScope(result);
     return {
       status:'completed',job_id:result.job_id,source_url:result.source_url,source_key:result.source_key,
       duration_seconds:result.duration_seconds??Math.max(...segments.map(segment=>segment.end)),
       requested_window_seconds:window_seconds??180,effective_window_seconds:map.effective_window_seconds,
+      content_scope:scope.contentScope,visual_content_included:scope.visualIncluded,
+      ...(scope.limitation?{limitation_notice:scope.limitation}:{}),
       section_count:map.sections.length,sections:map.sections
     };
   }));

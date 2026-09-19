@@ -59,6 +59,35 @@ assert.equal(unverifiedVideo.source_completeness,'unverified');
 assert.equal(unverifiedVideo.timeline_coverage_verified,false);
 assert.equal(unverifiedVideo.content_complete,false);
 
+const visualOnlyVideo=chunkResult({
+  status:'completed',job_id:'00000000-0000-4000-8000-000000000004',platform:'instagram',
+  source_url:'https://www.instagram.com/reel/test1/',language:'und',transcript_source:'visual',
+  transcript:'[Visual OCR 00:03] SALE 50%',segments:[{start:3,end:6,text:'[Visual OCR 00:03] SALE 50%'}],
+  duration_seconds:12,truncated:true,truncation_reason:'visual_ocr_sampled',
+  extracted_token_estimate:6,usage_units:1,content_sections_truncated:['visual_semantics','unsampled_frames','spoken_audio']
+});
+assert.equal(visualOnlyVideo.source_completeness,'partial');
+assert.equal(visualOnlyVideo.content_complete,false);
+assert.equal(visualOnlyVideo.timeline_coverage_verified,false);
+assert.equal(visualOnlyVideo.content_scope,'sampled_visual_ocr');
+assert.equal(visualOnlyVideo.visual_content_included,true);
+assert.match(visualOnlyVideo.limitation_notice,/not full visual semantics|sampled/i);
+
+const hybridVideo=chunkResult({
+  status:'completed',job_id:'00000000-0000-4000-8000-000000000005',platform:'tiktok',
+  source_url:'https://www.tiktok.com/@test/video/12345678',language:'en',transcript_source:'hybrid',
+  transcript:'[Spoken transcript — timeline incomplete] hello\n\n[Sampled visual OCR] price 20',
+  segments:[{start:0,end:2,text:'[Speech] hello'},{start:3,end:6,text:'[Visual OCR 00:03] price 20'}],
+  duration_seconds:20,truncated:true,truncation_reason:'audio_visual_partial_fusion',
+  extracted_token_estimate:20,usage_units:1,content_sections_truncated:['visual_semantics','unsampled_frames','spoken_timeline_incomplete']
+});
+assert.equal(hybridVideo.source_completeness,'partial');
+assert.equal(hybridVideo.content_complete,false);
+assert.equal(hybridVideo.timeline_coverage_verified,false);
+assert.equal(hybridVideo.content_scope,'spoken_text_plus_sampled_visual_ocr');
+assert.equal(hybridVideo.visual_content_included,true);
+assert.match(hybridVideo.limitation_notice,/incomplete spoken transcript|sampled/i);
+
 const timed=selectTimedSegmentWindow([
   {start:0,end:10,text:'intro'},
   {start:2220,end:2240,text:'target section one'},

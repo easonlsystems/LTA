@@ -1,12 +1,13 @@
 import { asLink2AIError } from '../util/errors.js';
 import { logEvent } from '../util/log.js';
 
-export type ProviderOperation='metadata'|'audio'|'transcript'|'text';
+export type ProviderOperation='metadata'|'audio'|'transcript'|'text'|'visual';
 
 export interface ProviderOutcomeInput{
   platform:string;
   operation:ProviderOperation;
   provider:string;
+  family?:string;
   outcome:'success'|'failed';
   durationMs:number;
   error?:unknown;
@@ -28,6 +29,7 @@ export async function recordProviderOutcome(input:ProviderOutcomeInput):Promise<
     platform:clean(input.platform,48),
     operation:input.operation,
     provider:clean(input.provider,64),
+    ...(input.family?{provider_family:clean(input.family,64)}:{}),
     outcome:input.outcome,
     duration_ms:durationMs,
     ...(input.attemptIndex!==undefined?{attempt_index:input.attemptIndex}:{}),

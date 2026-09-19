@@ -4,6 +4,7 @@ import { PLAN_LIMITS } from '../quota/plans.js';
 import { heartbeatMediaClaim } from './mediaClaims.js';
 import { env } from '../config/env.js';
 import { normalizeWorkerRegion } from './regions.js';
+import { runtimeRelease } from '../config/release.js';
 
 export interface JobRow {
   id: string;
@@ -22,11 +23,15 @@ export interface JobRow {
   checkout_url: string | null;
   preferred_region: string | null;
   attempted_regions: string[];
+  worker_region: string | null;
+  worker_release: string | null;
+  worker_deployment_id: string | null;
 }
 
 export async function claimNextJob(workerId: string, workerRegion='local', primaryRegion=workerRegion): Promise<JobRow | null> {
   const normalizedWorkerRegion=normalizeWorkerRegion(workerRegion)||'local';
   const normalizedPrimaryRegion=normalizeWorkerRegion(primaryRegion)||normalizedWorkerRegion;
+  const release=runtimeRelease();
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -68,12 +73,17 @@ export async function claimNextJob(workerId: string, workerRegion='local', prima
     await client.query(
       `UPDATE transcript_jobs SET status='processing', locked_at=now(), locked_by=$2, attempts=attempts+1,
          attempted_regions=CASE WHEN $3::text=ANY(attempted_regions) THEN attempted_regions ELSE array_append(attempted_regions,$3::text) END,
-         updated_at=now() WHERE id=$1`,
-      [job.id, workerId, normalizedWorkerRegion]
+         worker_region=$3,worker_release=$4,worker_deployment_id=$5,updated_at=now() WHERE id=$1`,
+      [job.id,workerId,normalizedWorkerRegion,release.commitSha,release.deploymentId]
     );
     await client.query('COMMIT');
     const attempted=Array.from(new Set([...(job.attempted_regions??[]),normalizedWorkerRegion].map(normalizeWorkerRegion).filter(Boolean)));
-    return { ...job, preferred_region: job.preferred_region?normalizeWorkerRegion(job.preferred_region):null, status: 'processing', attempts: job.attempts + 1, attempted_regions: attempted };
+    return {
+      ...job,
+      preferred_region:job.preferred_region?normalizeWorkerRegion(job.preferred_region):null,
+      status:'processing',attempts:job.attempts+1,attempted_regions:attempted,
+      worker_region:normalizedWorkerRegion,worker_release:release.commitSha,worker_deployment_id:release.deploymentId
+    };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

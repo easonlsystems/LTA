@@ -5,6 +5,7 @@ import { parseMediaUrl } from '../media/url.js';
 import { extractTextLink, resolveRedditSharePost } from '../content/linkText.js';
 import { fetchBestCaption } from '../media/captions.js';
 import { normalizeAudioForAsr, probeMediaDurationSeconds } from '../media/audio.js';
+import { extractVisualOcr, mediaHasVideoStream } from '../media/visual.js';
 import { ResolverOrchestrator } from '../resolvers/orchestrator.js';
 import { resolveYouTubeTranscriptFallback } from '../resolvers/youtubeTranscript.js';
 import type { MediaMetadata, TranscriptSegment } from '../media/types.js';
@@ -137,7 +138,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       try{
         const fallback=await resolveYouTubeTranscriptFallback(parsed,job.language,45_000);
         await recordProviderOutcome({
-          platform:'youtube',operation:'transcript',provider:'youtube_transcript',
+          platform:'youtube',operation:'transcript',provider:'youtube_transcript',family:'public:youtube_transcript',
           outcome:'success',durationMs:Date.now()-transcriptProviderStarted,attemptIndex:1
         });
         metadata=fallback.metadata;
@@ -148,7 +149,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
         });
       }catch(fallbackError){
         await recordProviderOutcome({
-          platform:'youtube',operation:'transcript',provider:'youtube_transcript',
+          platform:'youtube',operation:'transcript',provider:'youtube_transcript',family:'public:youtube_transcript',
           outcome:'failed',durationMs:Date.now()-transcriptProviderStarted,error:fallbackError,attemptIndex:1
         });
         const mapped=asLink2AIError(fallbackError);
@@ -226,7 +227,38 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       return;
     }
 
-    const caption=directCaption??await fetchBestCaption(metadata.subtitles,metadata.automaticCaptions,job.language,metadata.originalLanguage);
+    let caption=directCaption??await fetchBestCaption(metadata.subtitles,metadata.automaticCaptions,job.language,metadata.originalLanguage);
+
+    // A successful yt-dlp metadata read must not make YouTube depend on yt-dlp for the
+    // transcript path. When platform captions are missing, try the independent transcript
+    // provider before downloading audio. This keeps the normal path cheaper and gives
+    // YouTube a separate failure domain before media extraction / ASR.
+    if(!caption?.transcript&&parsed.platform==='youtube'&&!directCaption){
+      const transcriptProviderStarted=Date.now();
+      try{
+        const fallback=await resolveYouTubeTranscriptFallback(parsed,job.language,45_000);
+        await recordProviderOutcome({
+          platform:'youtube',operation:'transcript',provider:'youtube_transcript',family:'public:youtube_transcript',
+          outcome:'success',durationMs:Date.now()-transcriptProviderStarted,attemptIndex:0
+        });
+        caption=fallback.caption;
+        if(metadata.durationSeconds<=0&&fallback.metadata.durationSeconds>0)await applyDuration(fallback.metadata.durationSeconds);
+        logEvent('youtube_transcript_secondary_success',{
+          job_id:job.id,platform:'youtube',duration_seconds:fallback.metadata.durationSeconds,
+          language:fallback.caption.language
+        });
+      }catch(transcriptError){
+        const mapped=asLink2AIError(transcriptError);
+        await recordProviderOutcome({
+          platform:'youtube',operation:'transcript',provider:'youtube_transcript',family:'public:youtube_transcript',
+          outcome:'failed',durationMs:Date.now()-transcriptProviderStarted,error:transcriptError,attemptIndex:0
+        });
+        logEvent('youtube_transcript_secondary_failed',{
+          job_id:job.id,platform:'youtube',error_code:mapped.code,retryable:mapped.retryable
+        });
+      }
+    }
+
     if(caption?.transcript&&metadata.durationSeconds<=0){
       const captionDuration=captionDurationSeconds(caption.segments);
       if(captionDuration>0)await applyDuration(captionDuration);
@@ -251,13 +283,27 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
 
     const tmpDir=await fs.mkdtemp(path.join(os.tmpdir(),'link2ai-'));
     tmp=tmpDir;
-    const audio=await resolver.audio(parsed,tmpDir);
+    let audio:string|undefined;
+    let visualMedia:string|undefined;
+    try{
+      audio=await resolver.audio(parsed,tmpDir);
+    }catch(audioDownloadError){
+      const mapped=asLink2AIError(audioDownloadError);
+      if(mapped.code!=='EXTRACTION_FAILED')throw audioDownloadError;
+      // Silent/video-only sources can legitimately fail the audio-only download route.
+      // Do not fail the whole job before the visual recovery path gets a chance.
+      logEvent('audio_route_unavailable_visual_fallback',{
+        job_id:job.id,platform:job.platform,error_code:mapped.code
+      });
+      visualMedia=await resolver.visual(parsed,tmpDir);
+    }
 
-    // Some public Instagram reels currently resolve successfully but omit duration in
-    // yt-dlp metadata. Probe the actual downloaded media before quota reservation. This
-    // prevents both false failures and under-counting / max-duration bypasses.
+    // Some short-form sources omit duration in metadata. Recover it from whichever
+    // media route actually succeeded before quota reservation.
     if(metadata.durationSeconds<=0){
-      const probedDuration=await probeMediaDurationSeconds(audio);
+      const durationMedia=audio??visualMedia;
+      if(!durationMedia)throw new Link2AIError('EXTRACTION_FAILED','No downloaded media was available for duration recovery.',502,true,{cause_code:'duration_media_missing'});
+      const probedDuration=await probeMediaDurationSeconds(durationMedia);
       await applyDuration(probedDuration);
       logEvent('resolver_duration_recovered',{job_id:job.id,platform:job.platform,duration_seconds:metadata.durationSeconds,source:'ffprobe'});
     }
@@ -281,22 +327,84 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       logEvent('caption_incomplete_fallback_asr',{job_id:job.id,platform:job.platform,duration_seconds:metadata.durationSeconds,truncation_reason:completeness.truncationReason??'caption_timeline_incomplete'});
     }
 
-    const preparedAudio=await normalizeAudioForAsr(audio,tmpDir);
-    const asr=await transcribeAudio(preparedAudio,job.language);
-    const asrCompleteness=videoCompleteness(asr.transcript,metadata.durationSeconds,asr.segments);
-    if(asrCompleteness.truncated){
-      throw new Link2AIError('EXTRACTION_FAILED','The full video timeline could not be transcribed reliably. No processing units were charged.',502,true,{
-        cause_code:'asr_timeline_incomplete',truncation_reason:asrCompleteness.truncationReason
+    let partialAsr:Awaited<ReturnType<typeof transcribeAudio>>|undefined;
+    if(audio)try{
+      const preparedAudio=await normalizeAudioForAsr(audio,tmpDir);
+      const asr=await transcribeAudio(preparedAudio,job.language,job.platform);
+      const asrCompleteness=videoCompleteness(asr.transcript,metadata.durationSeconds,asr.segments);
+      if(asrCompleteness.truncated){
+        partialAsr=asr;
+        throw new Link2AIError('EXTRACTION_FAILED','The full video timeline could not be transcribed reliably. No processing units were charged.',502,true,{
+          cause_code:'asr_timeline_incomplete',truncation_reason:asrCompleteness.truncationReason
+        });
+      }
+      const cache=await saveCache({
+        platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
+        title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
+        language:asr.language,transcript:asr.transcript,segments:asr.segments,source:'asr',completeness:asrCompleteness
       });
+      await finalizeQuota(job.user_id,job.id);reserved=false;
+      await markCompleted(job.id,cache.id,metadata.durationSeconds);
+      logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'asr',resolver:metadata.resolver??'unknown',transcription_provider:asr.provider,duration_seconds:metadata.durationSeconds,extracted_token_estimate:estimateTokens(asr.transcript),usage_units:videoUsageUnits(metadata.durationSeconds),truncated:false,processing_ms:Date.now()-startedAt});
+      return;
+    }catch(audioTextError){
+      const mappedAudio=asLink2AIError(audioTextError);
+      if(!['TRANSCRIPTION_FAILED','EXTRACTION_FAILED'].includes(mappedAudio.code))throw audioTextError;
+      logEvent('visual_ocr_fallback_started',{job_id:job.id,platform:job.platform,audio_error_code:mappedAudio.code});
     }
-    const cache=await saveCache({
-      platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
-      title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
-      language:asr.language,transcript:asr.transcript,segments:asr.segments,source:'asr',completeness:asrCompleteness
-    });
-    await finalizeQuota(job.user_id,job.id); reserved=false;
-    await markCompleted(job.id,cache.id,metadata.durationSeconds);
-    logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'asr',resolver:metadata.resolver??'unknown',transcription_provider:asr.provider,duration_seconds:metadata.durationSeconds,extracted_token_estimate:estimateTokens(asr.transcript),usage_units:videoUsageUnits(metadata.durationSeconds),truncated:false,processing_ms:Date.now()-startedAt});
+
+    visualMedia=visualMedia??(audio&&await mediaHasVideoStream(audio)?audio:await resolver.visual(parsed,tmpDir));
+    const visualStarted=Date.now();
+    try{
+      const visual=await extractVisualOcr(visualMedia,tmpDir,metadata.durationSeconds);
+      await recordProviderOutcome({
+        platform:job.platform,operation:'visual',provider:'tesseract_ocr',family:'local:tesseract',
+        outcome:'success',durationMs:Date.now()-visualStarted,attemptIndex:0
+      });
+      const source=partialAsr?'hybrid':'visual';
+      const fusedSegments=partialAsr?.segments?.length
+        ?[
+            ...partialAsr.segments.map(segment=>({...segment,text:`[Speech] ${segment.text}`})),
+            ...visual.segments
+          ].sort((a,b)=>a.start-b.start||a.end-b.end)
+        :visual.segments;
+      const fusedTranscript=partialAsr
+        ?`[Spoken transcript — timeline incomplete]\n${partialAsr.transcript}\n\n[Sampled visual OCR]\n${visual.transcript}`
+        :visual.transcript;
+      const completeness={
+        truncated:true,
+        truncationReason:partialAsr?'audio_visual_partial_fusion':'visual_ocr_sampled',
+        extractedTokenEstimate:estimateTokens(fusedTranscript),
+        usageUnits:videoUsageUnits(metadata.durationSeconds),
+        contentSectionsTruncated:partialAsr
+          ?['visual_semantics','unsampled_frames','spoken_timeline_incomplete']
+          :['visual_semantics','unsampled_frames','spoken_audio']
+      };
+      const cache=await saveCache({
+        platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
+        title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
+        language:partialAsr?.language??'und',transcript:fusedTranscript,segments:fusedSegments,source,completeness
+      });
+      await finalizeQuota(job.user_id,job.id);reserved=false;
+      await markCompleted(job.id,cache.id,metadata.durationSeconds);
+      logEvent('job_completed',{
+        job_id:job.id,platform:job.platform,source,resolver:metadata.resolver??'unknown',
+        duration_seconds:metadata.durationSeconds,sampled_frames:visual.sampledFrames,frames_with_text:visual.framesWithText,
+        usage_units:videoUsageUnits(metadata.durationSeconds),truncated:true,truncation_reason:completeness.truncationReason,
+        processing_ms:Date.now()-startedAt
+      });
+      return;
+    }catch(visualError){
+      await recordProviderOutcome({
+        platform:job.platform,operation:'visual',provider:'tesseract_ocr',family:'local:tesseract',
+        outcome:'failed',durationMs:Date.now()-visualStarted,error:visualError,attemptIndex:0
+      });
+      throw new Link2AIError(
+        'TRANSCRIPTION_FAILED',
+        'Link2AI could not recover reliable spoken text or readable on-screen text from this video. No processing units were charged.',
+        502,true,{cause_code:'audio_and_visual_unreadable'}
+      );
+    }
   }catch(e){
     const err=asLink2AIError(e);
     if(reserved){await releaseQuota(job.id).catch(()=>{});reserved=false;}

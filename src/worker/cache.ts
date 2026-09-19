@@ -13,7 +13,7 @@ export interface CacheRow {
   duration_seconds: number;
   transcript: string;
   segments: Array<{start:number;end:number;text:string}>;
-  source: 'caption'|'asr'|'post'|'page';
+  source: 'caption'|'asr'|'visual'|'hybrid'|'post'|'page';
   truncated:boolean;
   truncation_reason:string|null;
   extracted_token_estimate:number;

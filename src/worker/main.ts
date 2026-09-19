@@ -9,8 +9,10 @@ import { readinessIssues } from '../config/readiness.js';
 import { assertWorkerRuntime } from './preflight.js';
 import { cleanupStaleTempDirs } from './tempCleanup.js';
 import { logErrorEvent, logEvent } from '../util/log.js';
+import { runtimeRelease } from '../config/release.js';
 
 const regionRuntime=workerRegionRuntime();
+const release=runtimeRelease();
 const workerId=`${os.hostname()}:${process.pid}:${regionRuntime.currentRegion}`;
 let stopping=false;
 let activeJobs=0;
@@ -79,7 +81,10 @@ async function main(){
   await assertWorkerRuntime();
   await cleanupStaleTempDirs();
   await recoverStaleJobs();
-  logEvent('worker_started',{region:regionRuntime.currentRegion,worker_concurrency:env().WORKER_CONCURRENCY});
+  logEvent('worker_started',{
+    region:regionRuntime.currentRegion,worker_concurrency:env().WORKER_CONCURRENCY,
+    release_sha:release.commitShort,deployment_id:release.deploymentId??'unknown'
+  });
   await Promise.all([...Array.from({length:env().WORKER_CONCURRENCY},(_,i)=>slot(i+1)),maintenance()]);
 }
 async function shutdown(){
