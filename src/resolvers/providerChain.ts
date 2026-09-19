@@ -13,7 +13,12 @@ export type ProviderFamily=
   |'external_provider'
   |'asr_groq'
   |'asr_openai'
-  |'other';
+  |'other'
+  |`official:${string}`
+  |`public:${string}`
+  |`local:${string}`
+  |`external:${string}`
+  |`asr:${string}`;
 
 export interface ProviderAttempt<T>{
   name:string;

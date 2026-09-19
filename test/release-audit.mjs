@@ -27,6 +27,7 @@ const providerChainSource=await readFile(new URL('../src/resolvers/providerChain
 const providerTelemetrySource=await readFile(new URL('../src/resolvers/providerTelemetry.ts',import.meta.url),'utf8');
 const providerCircuitSource=await readFile(new URL('../src/resolvers/providerCircuit.ts',import.meta.url),'utf8');
 const orchestratorSource=await readFile(new URL('../src/resolvers/orchestrator.ts',import.meta.url),'utf8');
+const galleryMediaSource=await readFile(new URL('../src/resolvers/galleryDl.ts',import.meta.url),'utf8');
 const providerHealthMigration=await readFile(new URL('../sql/007_provider_health.sql',import.meta.url),'utf8');
 const logSource=await readFile(new URL('../src/util/log.ts',import.meta.url),'utf8');
 const billingRoutesSource=await readFile(new URL('../src/billing/routes.ts',import.meta.url),'utf8');
@@ -127,6 +128,9 @@ assert.match(providerCircuitSource,/FAILURE_THRESHOLD=3/,'Provider circuit break
 assert.match(providerCircuitSource,/OPEN_MS=2\*60_000/,'Provider circuit breaker must cool down and probe again instead of permanently disabling a route');
 assert.match(orchestratorSource,/name:'x_syndication',family:'public_structured'[\s\S]*name:'ytdlp',family:'local_extractor'/,'X audio must preserve independent structured-X then local-extractor failover families');
 assert.match(orchestratorSource,/MEDIA_PROVIDER_URL/,'Managed external provider must remain an optional route, not a required recurring dependency');
+assert.match(orchestratorSource,/name:'ytdlp',family:'local:yt_dlp'[\s\S]*name:'gallery_dl_media',family:'local:gallery_dl'/,'Instagram and TikTok media must cross independent extractor families before managed fallback');
+assert.match(galleryMediaSource,/gallery_dl_identity_unverified/,'Secondary media extraction must verify exact source identity before accepting a fallback result');
+assert.match(galleryMediaSource,/gallery-media\.\{extension\}/,'gallery-dl media fallback must isolate downloaded media in the job temp directory');
 assert.match(linkSource,/name:'gallery_dl'[\s\S]*name:'public_page'/,'Instagram and TikTok text posts must use an explicit primary-to-page fallback chain');
 assert.match(processorSource,/provider:'youtube_transcript'/,'YouTube transcript fallback must report provider health separately from yt-dlp');
 assert.match(processorSource,/youtube_transcript_secondary_success/,'YouTube must try its independent transcript route before downloading audio when normal captions are missing');
