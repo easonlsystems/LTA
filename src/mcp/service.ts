@@ -4,7 +4,7 @@ import { assertPlatformAllowedForProfile, parseAllowedMediaUrl, type Distributio
 import { asLink2AIError, Link2AIError } from '../util/errors.js';
 import { reserveQuota, finalizeQuota, getUsageSnapshot } from '../quota/service.js';
 import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limits.js';
-import { findCache } from '../worker/cache.js';
+import { cacheProvenanceEpoch, findCache } from '../worker/cache.js';
 import { planForUser, priorityForPlan, markAwaitingPayment, markCompleted, setJobMetadata } from '../worker/jobs.js';
 import { recordActivationEvent } from '../analytics/product.js';
 
@@ -61,12 +61,14 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
   // for this user so retries/follow-ups do not consume quota twice. Explicit refresh bypasses successful-result
   // reuse and the shared cache, but still reuses any in-flight job to avoid duplicate concurrent processing.
   if(!options.refresh&&parsed.platform!=='x'){
+    const provenanceEpoch=cacheProvenanceEpoch(parsed.platform);
     const completed=await pool.query<{id:string}>(
       `SELECT j.id FROM transcript_jobs j JOIN transcript_cache c ON c.id=j.transcript_cache_id
        WHERE j.user_id=$1 AND j.platform=$2 AND (j.canonical_media_id=$3 OR j.normalized_url=$4)
          AND j.status='completed' AND c.expires_at>now()
+         AND ($5::timestamptz IS NULL OR c.created_at >= $5::timestamptz)
        ORDER BY j.completed_at DESC LIMIT 1`,
-      [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl]
+      [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl,provenanceEpoch]
     );
     if(completed.rowCount)return await getJobResult(userId,completed.rows[0].id,profile);
   }
@@ -135,6 +137,20 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
   if(!r.rowCount)throw new Link2AIError('JOB_NOT_FOUND','Link-reading job not found.',404);
   const row=r.rows[0];
   assertPlatformAllowedForProfile(row.platform,profile);
+  const provenanceEpoch=cacheProvenanceEpoch(String(row.platform));
+  if(profile==='openai'&&row.status==='completed'&&provenanceEpoch){
+    const sourceFetchedAt=row.source_fetched_at?new Date(row.source_fetched_at).getTime():NaN;
+    const requiredAfter=new Date(provenanceEpoch).getTime();
+    if(!Number.isFinite(sourceFetchedAt)||sourceFetchedAt<requiredAfter){
+      return {
+        status:'failed',
+        job_id:row.id,
+        platform:row.platform,
+        error_code:'TRANSCRIPT_EXPIRED',
+        message:'This Hacker News result predates the ChatGPT-approved retrieval path. Read the original Hacker News link again to refresh it.'
+      };
+    }
+  }
   if(row.status==='completed'&&!row.transcript){
     return {status:'failed',job_id:row.id,error_code:'TRANSCRIPT_EXPIRED',message:'This temporary result has expired. Call Read link content with the original link to read it again.'};
   }
