@@ -15,7 +15,6 @@ const workerId=`${os.hostname()}:${process.pid}:${regionRuntime.currentRegion}`;
 let stopping=false;
 let activeJobs=0;
 let inflightClaims=0;
-let lastJobAt:string|null=null;
 
 const health=http.createServer(async(req,res)=>{
   if(req.url!=='/healthz'&&req.url!=='/readyz'){res.statusCode=404;res.end('not found');return;}
@@ -63,7 +62,7 @@ async function slot(slotId:number){
     activeJobs++;
     try{
       if(stopping){await deferJob(job.id,0);continue;}
-      await processJob(job,{workerRegion:regionRuntime.currentRegion,regionOrder:regionRuntime.regionOrder});lastJobAt=new Date().toISOString();
+      await processJob(job,{workerRegion:regionRuntime.currentRegion,regionOrder:regionRuntime.regionOrder});
     }finally{activeJobs--;}
   }
 }
