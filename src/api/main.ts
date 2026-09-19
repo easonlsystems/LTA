@@ -14,6 +14,7 @@ import { browserSameOriginOk, publicHostAllowlist } from '../config/publicUrl.js
 import { getUsageSnapshot } from '../quota/service.js';
 import { trackWebsiteEvent, trackWebsiteVisit } from '../analytics/visitors.js';
 import { recordActivationEvent } from '../analytics/product.js';
+import { logErrorEvent, logEvent } from '../util/log.js';
 
 const allowedPublicHosts=publicHostAllowlist(env().PUBLIC_BASE_URL,[process.env.RAILWAY_PUBLIC_DOMAIN??'']);
 const redditOAuthReady=Boolean(env().REDDIT_CLIENT_ID&&env().REDDIT_CLIENT_SECRET);
@@ -32,12 +33,9 @@ app.addContentTypeParser('application/x-www-form-urlencoded',{parseAs:'string'},
 });
 
 const mcpHandler=createMcpHandler(()=>buildMcpServer());
-const nodeMcp=toNodeHandler(mcpHandler,{onerror:(err)=>app.log.error(err)});
+const nodeMcp=toNodeHandler(mcpHandler,{onerror:(err)=>logErrorEvent('mcp_adapter_error',err,{distribution_profile:'default'})});
 const openaiMcpHandler=createMcpHandler(()=>buildMcpServer('openai'));
-const nodeOpenaiMcp=toNodeHandler(openaiMcpHandler,{onerror:(err)=>{
-  const error=err instanceof Error?err:new Error(String(err));
-  console.error(JSON.stringify({event:'openai_mcp_adapter_error',name:error.name,message:error.message}));
-}});
+const nodeOpenaiMcp=toNodeHandler(openaiMcpHandler,{onerror:(err)=>logErrorEvent('mcp_adapter_error',err,{distribution_profile:'openai'})});
 
 app.all('/mcp',async(request,reply)=>{
   const originHeader=Array.isArray(request.headers.origin)?request.headers.origin[0]:request.headers.origin;
@@ -60,30 +58,20 @@ app.all('/mcp',async(request,reply)=>{
   // access: the OpenAI token never gains the general /mcp tool surface.
   const openaiAuth=await authInfoFromBearer(request.headers.authorization,mcpResource('openai'));
   if(openaiAuth){
-    console.info(JSON.stringify({
-      event:'openai_mcp_legacy_alias',
-      method:request.method,
-      user_agent:String(request.headers['user-agent']??'').slice(0,120)
-    }));
+    logEvent('openai_mcp_legacy_alias',{method:request.method,distribution_profile:'openai'});
     return nodeOpenaiMcp(Object.assign(request.raw,{auth:openaiAuth}),reply.raw,request.body);
   }
 
-  reply.header('WWW-Authenticate',`Bearer resource_metadata="${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp", scope="link2ai:read"`);
+  const ua=String(request.headers['user-agent']??'');
+  const openaiRuntime=/^openai-mcp\//i.test(ua);
+  const resourceMetadata=openaiRuntime
+    ? `${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp/openai`
+    : `${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp`;
+  reply.header('WWW-Authenticate',`Bearer resource_metadata="${resourceMetadata}", scope="link2ai:read"`);
   return reply.code(401).send({error:'unauthorized',message:`Connect ${env().PUBLIC_BRAND_NAME} to continue.`});
 });
 
 app.all('/mcp/openai',async(request,reply)=>{
-  const authorization=request.headers.authorization;
-  console.info(JSON.stringify({
-    event:'openai_mcp_request',
-    method:request.method,
-    user_agent:String(request.headers['user-agent']??'').slice(0,120),
-    content_type:String(request.headers['content-type']??'').slice(0,120),
-    accept:String(request.headers.accept??'').slice(0,160),
-    content_length:String(request.headers['content-length']??'').slice(0,32),
-    authorization_present:Boolean(authorization),
-    bearer_scheme:/^Bearer\s+/i.test(String(authorization??''))
-  }));
   const originHeader=Array.isArray(request.headers.origin)?request.headers.origin[0]:request.headers.origin;
   const originCheck=validateOriginHeader(originHeader,allowedPublicHosts);
   if(!originCheck.ok){
@@ -92,7 +80,17 @@ app.all('/mcp/openai',async(request,reply)=>{
   const auth=await authInfoFromBearer(request.headers.authorization,mcpResource('openai'));
   if(!auth){
     const diagnostic=await diagnoseBearerAuth(request.headers.authorization,mcpResource('openai')).catch(()=>null);
-    console.warn(JSON.stringify({event:'openai_mcp_auth_rejected',...(diagnostic??{diagnostic_unavailable:true})}));
+    logEvent('openai_mcp_auth_rejected',{
+      distribution_profile:'openai',
+      diagnostic_available:Boolean(diagnostic),
+      authorization_present:Boolean(diagnostic?.authorization_present),
+      bearer_scheme_valid:Boolean(diagnostic?.bearer_scheme_valid),
+      token_found:Boolean(diagnostic?.token_found),
+      scope_has_read:diagnostic?.scope_has_read,
+      expired:diagnostic?.expired,
+      revoked:diagnostic?.revoked,
+      user_disabled:diagnostic?.user_disabled
+    });
     const resourceMetadata=`${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp/openai`;
     const challenge=diagnostic?.authorization_present
       ? `Bearer resource_metadata="${resourceMetadata}", scope="link2ai:read", error="invalid_token", error_description="Access token is invalid for this MCP resource"`
@@ -108,14 +106,15 @@ app.get('/healthz',async(_req,reply)=>{
 });
 
 app.get('/readyz',async(_req,reply)=>{
-  try{await pool.query('SELECT 1');}catch{return reply.code(503).send({ready:false,issues:['database unavailable']});}
+  try{await pool.query('SELECT 1');}catch{return reply.code(503).send({ready:false});}
   const issues=readinessIssues('api');
-  return issues.length?reply.code(503).send({ready:false,issues}):{ready:true,issues:[]};
+  if(issues.length){logEvent('api_readiness_failed',{issue_count:issues.length});return reply.code(503).send({ready:false});}
+  return {ready:true};
 });
 
 app.get('/status',async(_req,reply)=>{
   let dbOk=false;
-  try{await pool.query('SELECT 1');dbOk=true;}catch(e){app.log.error(e);}
+  try{await pool.query('SELECT 1');dbOk=true;}catch(e){logErrorEvent('status_database_error',e);}
   const status={ok:dbOk,timestamp:new Date().toISOString(),service:'link2ai-api',note:'Core API and database state only. Individual supported-link availability can vary with third-party platforms.'};
   return dbOk?reply.send(status):reply.code(503).send(status);
 });
@@ -1033,7 +1032,7 @@ app.post('/founder/user/:id/update',async(req,reply)=>{
     return reply.redirect(`/founder/user/${encodeURIComponent(targetId)}?saved=1`);
   }catch(err){
     await client.query('ROLLBACK');
-    app.log.error(err);
+    logErrorEvent('founder_account_update_error',err);
     return reply.redirect(`/founder/user/${encodeURIComponent(targetId)}?error=${encodeURIComponent('儲存失敗。')}`);
   }finally{client.release();}
 });
@@ -1074,18 +1073,11 @@ await registerAuthRoutes(app);
 await registerBillingRoutes(app);
 
 app.setErrorHandler((err,req,reply)=>{
-  if(req.url.startsWith('/mcp/openai')){
-    const error=err instanceof Error?err:new Error(String(err));
-    console.error(JSON.stringify({
-      event:'openai_mcp_request_error',
-      method:req.method,
-      name:error.name,
-      message:error.message,
-      code:typeof (err as {code?:unknown})?.code==='string'?(err as {code:string}).code:undefined
-    }));
-  }else{
-    app.log.error(err);
-  }
+  logErrorEvent(req.url.startsWith('/mcp/openai')?'openai_mcp_request_error':'api_request_error',err,{
+    method:req.method,
+    distribution_profile:req.url.startsWith('/mcp/openai')?'openai':'default',
+    code:typeof (err as {code?:unknown})?.code==='string'?(err as {code:string}).code:undefined
+  });
   if(reply.sent)return;
   const message=err instanceof Error?err.message:'Unknown error';
   reply.code(500).send({error:'internal_error',message:env().NODE_ENV==='production'?'Something went wrong.':message});

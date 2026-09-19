@@ -20,7 +20,7 @@ async function probe(name,mode,fn){
     const value=await fn();
     results.push({name,mode,status:'PASS',ms:Date.now()-started,detail:value});
   }catch(error){
-    results.push({name,mode,status:'FAIL',ms:Date.now()-started,detail:`${error?.code??error?.name??'Error'}: ${error?.message??String(error)}`});
+    results.push({name,mode,status:'FAIL',ms:Date.now()-started,detail:String(error?.code??error?.name??'Error').slice(0,80)});
   }
 }
 const textProbe=async url=>{

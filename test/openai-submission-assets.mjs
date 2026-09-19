@@ -14,6 +14,7 @@ assert.doesNotMatch(cases,/<REVIEW_[A-Z0-9_]+>/,'OpenAI review cases must not co
 assert.match(cases,/https:\/\/github\.com\/nodejs\/node\/pull\/65472/,'OpenAI GitHub PR review fixture must be pinned');
 assert.match(cases,/https:\/\/news\.ycombinator\.com\/item\?id=37137448/,'OpenAI Hacker News review fixture must be pinned');
 assert.match(cases,/https:\/\/bsky\.app\/profile\/bsky\.app\/post\/3lydpzxb3uc2f/,'OpenAI Bluesky review fixture must be pinned');
+assert.doesNotMatch(cases,/3mnzmprxpe22y/,'OpenAI Bluesky fixture description must match the actual review prompt');
 assert.match(cases,/https:\/\/github\.com\/nodejs\/node\/issues\/65470[\s\S]*https:\/\/github\.com\/nodejs\/node\/pull\/65472/,'OpenAI multi-source fixture must compare a compact related Node.js issue\/PR pair');
 const positiveCases=cases.split('## Negative cases')[0];
 assert.match(positiveCases,/GitHub pull request/);
@@ -23,6 +24,10 @@ assert.doesNotMatch(positiveCases,/YouTube source fallback|Public PDF|Long artic
 assert.equal(mcp.mcpServers.link2ai.url,'https://api-production-0383e.up.railway.app/mcp/openai');
 assert.match(skill,/supported public-source categories are limited to Bluesky posts, GitHub Issues \/ pull requests, and Hacker News discussions/i);
 assert.match(skill,/intentionally blocked on this distribution/i);
+assert.match(skill,/explicitly asks to use Link2AI/i,'Skill must honor explicit Link2AI requests');
+assert.match(skill,/do not spend Link2AI processing units/i,'Skill must avoid unnecessary quota use when native access is sufficient');
+assert.match(skill,/server logs/i,'Skill must keep logs and internal diagnostics out of normal user-facing answers');
+assert.doesNotMatch(skill,/plan_info_url|checkout_url/i,'Skill must not instruct ChatGPT to surface purchase or checkout URLs');
 assert.match(cases,/continuation_required/);
 assert.match(cases,/Failed reads consume 0 processing units/);
 assert.match(demo,/production, not localhost/i);
