@@ -313,7 +313,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     }
 
     const preparedAudio=await normalizeAudioForAsr(audio,tmpDir);
-    const asr=await transcribeAudio(preparedAudio,job.language);
+    const asr=await transcribeAudio(preparedAudio,job.language,job.platform);
     const asrCompleteness=videoCompleteness(asr.transcript,metadata.durationSeconds,asr.segments);
     if(asrCompleteness.truncated){
       throw new Link2AIError('EXTRACTION_FAILED','The full video timeline could not be transcribed reliably. No processing units were charged.',502,true,{

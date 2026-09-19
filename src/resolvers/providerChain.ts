@@ -11,7 +11,8 @@ export type ProviderFamily=
   |'public_html'
   |'local_extractor'
   |'external_provider'
-  |'asr'
+  |'asr_groq'
+  |'asr_openai'
   |'other';
 
 export interface ProviderAttempt<T>{

@@ -98,6 +98,14 @@ export const SOURCE_REDUNDANCY={
     state:'single_path',
     routes:[{name:'pdf.js text-layer parser',rootFamily:'local_extractor'}],
     note:'Needs a second parser; OCR/visual PDF remains a separate capability.'
+  },
+  speech_to_text:{
+    state:'conditional',
+    routes:[
+      {name:'Groq ASR',rootFamily:'asr_groq',conditional:true},
+      {name:'OpenAI ASR',rootFamily:'asr_openai',conditional:true}
+    ],
+    note:'The router supports independent ASR vendors; runtime redundancy depends on configuring both.'
   }
 } as const satisfies Record<string,SourceRedundancyEntry>;
 

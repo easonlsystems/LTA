@@ -30,6 +30,7 @@ const orchestratorSource=await readFile(new URL('../src/resolvers/orchestrator.t
 const providerHealthMigration=await readFile(new URL('../sql/007_provider_health.sql',import.meta.url),'utf8');
 const logSource=await readFile(new URL('../src/util/log.ts',import.meta.url),'utf8');
 const billingRoutesSource=await readFile(new URL('../src/billing/routes.ts',import.meta.url),'utf8');
+const transcriptionRouterSource=await readFile(new URL('../src/transcription/router.ts',import.meta.url),'utf8');
 assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News must keep the official Firebase API as its primary route');
 assert.match(linkSource,/hn\.algolia\.com\/api\/v1\/items/,'Hacker News must have an independent fallback route');
 assert.match(linkSource,/name:'hn_firebase',family:'official_api'[\s\S]*name:'hn_algolia',family:'external_provider'/,'Hacker News fallback must cross provider families');
@@ -133,6 +134,10 @@ assert.match(processorSource,/family:'platform_transcript'/,'YouTube transcript 
 assert.match(providerTelemetrySource,/provider_health_hourly/,'Provider outcomes must feed rolling health telemetry');
 assert.doesNotMatch(providerTelemetrySource,/\b(?:source_url|normalized_url|canonical_media_id|content_text|transcript)\s*:/,'Provider health telemetry must not accept or persist source URLs, identifiers, or source content fields');
 assert.match(providerHealthMigration,/PRIMARY KEY\(bucket_start,platform,operation,provider\)/,'Provider health storage must use bounded hourly aggregates instead of unbounded per-request rows');
+assert.match(transcriptionRouterSource,/runProviderChain/,'ASR providers must use the same health-aware failover chain as source providers');
+assert.match(transcriptionRouterSource,/name:'groq_asr',family:'asr_groq'/,'Groq ASR must have its own provider failure family');
+assert.match(transcriptionRouterSource,/name:'openai_asr',family:'asr_openai'/,'OpenAI ASR must have its own provider failure family');
+assert.match(processorSource,/transcribeAudio\(preparedAudio,job\.language,job\.platform\)/,'ASR health telemetry must retain the source platform dimension');
 assert.match(processorSource,/if\(reserved\)\{await releaseQuota\(job\.id\)/,'Failed provider\/extraction paths must release reserved quota before retry or failure');
 assert.match(billingSource,/j\.error_code='QUOTA_EXCEEDED'/,'A successful top-up must resume quota-blocked jobs');
 assert.doesNotMatch(apiSource,/supports videos up to 30 minutes|supports videos up to 120 minutes|very large sources may return partial context/i,'Published copy must match the unit-bounded full-source policy');
