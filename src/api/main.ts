@@ -15,6 +15,9 @@ import { getUsageSnapshot } from '../quota/service.js';
 import { trackWebsiteEvent, trackWebsiteVisit } from '../analytics/visitors.js';
 import { recordActivationEvent } from '../analytics/product.js';
 import { logErrorEvent, logEvent } from '../util/log.js';
+import { runtimeRelease } from '../config/release.js';
+import { providerIsDegraded } from '../resolvers/providerHealth.js';
+import { SOURCE_REDUNDANCY } from '../resolvers/redundancy.js';
 
 const allowedPublicHosts=publicHostAllowlist(env().PUBLIC_BASE_URL,[process.env.RAILWAY_PUBLIC_DOMAIN??'']);
 const redditOAuthReady=Boolean(env().REDDIT_CLIENT_ID&&env().REDDIT_CLIENT_SECRET);
@@ -719,8 +722,8 @@ app.get('/founder',async(req,reply)=>{
       COALESCE((SELECT SUM(seconds) FROM usage_ledger WHERE created_at>now()-interval '7 days'),0)::text AS seconds_7d,
       (SELECT COUNT(*) FROM transcript_jobs WHERE status='failed' AND created_at>now()-interval '24 hours')::text AS failed_24h,
       (SELECT COUNT(*) FROM transcript_jobs WHERE status='failed' AND created_at>now()-interval '7 days')::text AS failed_7d`),
-    pool.query<{user_id:string;email:string|null;platform:string;status:string;duration_seconds:number|null;error_code:string|null;created_at:string}>(
-      `SELECT j.user_id,u.email,j.platform,j.status,j.duration_seconds,j.error_code,j.created_at
+    pool.query<{user_id:string;email:string|null;platform:string;status:string;duration_seconds:number|null;error_code:string|null;created_at:string;worker_region:string|null;worker_release:string|null}>(
+      `SELECT j.user_id,u.email,j.platform,j.status,j.duration_seconds,j.error_code,j.created_at,j.worker_region,j.worker_release
        FROM transcript_jobs j LEFT JOIN users u ON u.id=j.user_id
        ORDER BY j.created_at DESC LIMIT 20`
     ),
@@ -888,7 +891,7 @@ app.get('/founder',async(req,reply)=>{
       CASE WHEN SUM(attempts)>0 THEN ROUND(SUM(total_duration_ms)::numeric/SUM(attempts))::text ELSE '0' END AS avg_duration_ms,
       (array_agg(last_error_code ORDER BY bucket_start DESC) FILTER(WHERE last_error_code IS NOT NULL))[1] AS last_error_code
     FROM provider_health_hourly
-    WHERE bucket_start>=date_trunc('hour',now()-interval '24 hours')
+    WHERE bucket_start>=date_trunc('hour',now()-interval '2 hours')
     GROUP BY platform,operation,provider
     ORDER BY platform,operation,provider`);
 
@@ -909,16 +912,28 @@ app.get('/founder',async(req,reply)=>{
   const productFirstLinkAttempt=founderNum(productFunnel?.first_link_attempt);
   const productFirstSuccessfulRead=founderNum(productFunnel?.first_successful_read);
   const providerHealthRows=providerHealthResult.rows.map(row=>{
-    const attempts=founderNum(row.attempts),successes=founderNum(row.successes),failures=founderNum(row.failures);
+    const attempts=founderNum(row.attempts),successes=founderNum(row.successes),failures=founderNum(row.failures),retryableFailures=founderNum(row.retryable_failures);
     const health=attempts>0?Math.round(successes/attempts*100):0;
-    return `<tr><td>${founderEscape(row.platform)}</td><td>${founderEscape(row.operation)}</td><td class="fd-email">${founderEscape(row.provider)}</td><td>${attempts}</td><td><span class="fd-status ${health>=90?'ok':health>=60?'wait':'bad'}">${health}%</span></td><td>${failures}</td><td>${founderNum(row.retryable_failures)}</td><td>${founderNum(row.avg_duration_ms)} ms</td><td>${founderEscape(row.last_error_code??'—')}</td></tr>`;
-  }).join('')||'<tr><td colspan="9">最近 24 小時尚無 provider attempts。</td></tr>';
+    const degraded=providerIsDegraded({provider:row.provider,attempts,successes,retryableFailures});
+    return `<tr><td>${founderEscape(row.platform)}</td><td>${founderEscape(row.operation)}</td><td class="fd-email">${founderEscape(row.provider)}</td><td>${attempts}</td><td><span class="fd-status ${health>=90?'ok':health>=60?'wait':'bad'}">${health}%</span></td><td><span class="fd-status ${degraded?'bad':'ok'}">${degraded?'deprioritized':'normal'}</span></td><td>${failures}</td><td>${retryableFailures}</td><td>${founderNum(row.avg_duration_ms)} ms</td><td>${founderEscape(row.last_error_code??'—')}</td></tr>`;
+  }).join('')||'<tr><td colspan="10">最近 2 小時尚無 provider attempts。</td></tr>';
+  const redundancyRows=Object.entries(SOURCE_REDUNDANCY).map(([source,entry])=>{
+    const stateClass=entry.state==='redundant'?'ok':entry.state==='conditional'?'wait':'bad';
+    const routes=entry.routes.map(route=>`${route.name} [${route.rootFamily}]${route.conditional?' · conditional':''}`).join('<br>');
+    return `<tr><td class="fd-source">${founderEscape(source)}</td><td><span class="fd-status ${stateClass}">${founderEscape(entry.state)}</span></td><td class="fd-email">${routes}</td><td>${founderEscape(entry.note)}</td></tr>`;
+  }).join('');
+  const release=runtimeRelease();
+  const releaseLabel=`${release.serviceName??'api'} · ${release.commitShort}${release.replicaRegion?` · ${release.replicaRegion}`:''}`;
   const sourceRows=sourceResult.rows.map(row=>`<tr><td class="fd-source">${founderEscape(row.source)}</td><td>${founderNum(row.visitors)}</td><td>${founderNum(row.signups)}</td><td>${founderPct(founderNum(row.signups),Math.max(founderNum(row.visitors),1))}</td></tr>`).join('')||'<tr><td colspan="4">尚無外部來源資料。</td></tr>';
   const renderedAt=founderTime(new Date().toISOString());
   const trackingStarted=founderTime(a?.tracking_started_at);
   const trackingLast=founderTime(a?.tracking_last_at);
   const topPages=topPagesResult.rows.map(row=>`<tr><td class="fd-email">${founderEscape(row.path)}</td><td>${founderNum(row.visitors)}</td><td>${founderNum(row.views)}</td></tr>`).join('')||'<tr><td colspan="3">目前還沒有網站瀏覽紀錄。</td></tr>';
-  const recentJobs=recentJobsResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td class="fd-email"><a href="/founder/user/${founderEscape(row.user_id)}">${founderEscape(row.email??'匿名')}</a></td><td>${founderEscape(row.platform)}</td><td><span class="fd-status ${row.status==='completed'?'ok':row.status==='failed'?'bad':'wait'}">${founderEscape(founderJobStatusLabel(row.status))}</span></td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)} 分鐘`:'—'}</td><td>${founderEscape(row.error_code??'—')}</td></tr>`).join('')||'<tr><td colspan="6">目前還沒有工作紀錄。</td></tr>';
+  const recentJobs=recentJobsResult.rows.map(row=>{
+    const workerVersion=row.worker_release?row.worker_release.slice(0,12):'—';
+    const worker=[row.worker_region,workerVersion].filter(Boolean).join(' · ');
+    return `<tr><td>${founderTime(row.created_at)}</td><td class="fd-email"><a href="/founder/user/${founderEscape(row.user_id)}">${founderEscape(row.email??'匿名')}</a></td><td>${founderEscape(row.platform)}</td><td><span class="fd-status ${row.status==='completed'?'ok':row.status==='failed'?'bad':'wait'}">${founderEscape(founderJobStatusLabel(row.status))}</span></td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)} 分鐘`:'—'}</td><td class="fd-email">${founderEscape(worker)}</td><td>${founderEscape(row.error_code??'—')}</td></tr>`;
+  }).join('')||'<tr><td colspan="7">目前還沒有工作紀錄。</td></tr>';
   const platforms=platformResult.rows.map(row=>`<span class="fd-chip">${founderEscape(row.platform)} · ${founderNum(row.count)}</span>`).join('')||'<span class="fd-chip">目前還沒有成功連結</span>';
   const totalMatched=founderNum(accountsCountResult.rows[0]?.count);
   const totalPages=Math.max(1,Math.ceil(totalMatched/pageSize));
@@ -928,7 +943,7 @@ app.get('/founder',async(req,reply)=>{
   const prev=page>1?`<a class="btn alt sm" href="/founder?page=${page-1}${querySuffix}">← 上一頁</a>`:'';
   const next=page<totalPages?`<a class="btn alt sm" href="/founder?page=${page+1}${querySuffix}">下一頁 →</a>`:'';
 
-  const html=`<main class="fd">${founderCss()}<div class="fd-head"><div><span class="badge"><span class="badge-dot"></span>Founder 私人後台</span><h1>Link2AI 後台</h1><p class="fd-sub">網站流量、產品使用情況與帳號管理。完整 Email 只會顯示在這裡。</p></div><div class="fd-head-actions"><div class="fd-data-status"><span class="fd-live-dot"></span><div><strong>資料截至 ${renderedAt}</strong><span>台灣時間 · 網站記錄自 ${trackingStarted} · 最近事件 ${trackingLast}</span></div></div><span class="fd-security">已通過 Founder 驗證 · 15 分鐘</span><a class="btn alt sm" href="/founder">重新整理</a><form method="post" action="/founder/lock" style="margin:0"><input type="hidden" name="csrf" value="${founderEscape(founderCsrf)}"><button class="btn alt sm" type="submit">鎖定後台</button></form></div></div>
+  const html=`<main class="fd">${founderCss()}<div class="fd-head"><div><span class="badge"><span class="badge-dot"></span>Founder 私人後台</span><h1>Link2AI 後台</h1><p class="fd-sub">網站流量、產品使用情況與帳號管理。完整 Email 只會顯示在這裡。</p></div><div class="fd-head-actions"><div class="fd-data-status"><span class="fd-live-dot"></span><div><strong>資料截至 ${renderedAt}</strong><span>台灣時間 · 網站記錄自 ${trackingStarted} · 最近事件 ${trackingLast}</span></div></div><span class="fd-security">API ${founderEscape(releaseLabel)}</span><span class="fd-security">已通過 Founder 驗證 · 15 分鐘</span><a class="btn alt sm" href="/founder">重新整理</a><form method="post" action="/founder/lock" style="margin:0"><input type="hidden" name="csrf" value="${founderEscape(founderCsrf)}"><button class="btn alt sm" type="submit">鎖定後台</button></form></div></div>
     <section class="fd-grid">
       <div class="fd-card"><div class="fd-label">瀏覽次數</div><div class="fd-value">${externalPageviews}</div><div class="fd-note">今天 ${externalPageviews24h} · 近 7 天 ${externalPageviews7d} · 排除 Founder / 內部測試</div></div>
       <div class="fd-card"><div class="fd-label">外部訪客</div><div class="fd-value">${externalVisitorsAll}</div><div class="fd-note">近 7 天 ${founderNum(a?.non_founder_7d)} · 不重複訪客</div></div>
@@ -941,12 +956,13 @@ app.get('/founder',async(req,reply)=>{
     </section>
     <section><div class="fd-label" style="margin-bottom:8px">外部啟用漏斗 · 排除 Founder / 內部測試 · 自 ${activationStarted} 起</div><div class="fd-funnel activation"><div class="fd-step"><b>${activationVisitors}</b><span>可比較外部訪客</span></div><div class="fd-step"><b>${ctaStarts}</b><span>點主 CTA · ${founderPct(ctaStarts,Math.max(activationVisitors,1))}</span></div><div class="fd-step"><b>${signupViews}</b><span>看註冊頁 · ${founderPct(signupViews,Math.max(activationVisitors,1))}</span></div><div class="fd-step"><b>${signupSubmits}</b><span>送出註冊 · ${founderPct(signupSubmits,Math.max(signupViews,1))}</span></div><div class="fd-step"><b>${externalSignups}</b><span>完成註冊 · ${founderPct(externalSignups,Math.max(signupSubmits,1))}</span></div><div class="fd-step"><b>${externalConnected}</b><span>AI connected · ${founderPct(externalConnected,Math.max(externalSignups,1))}</span></div><div class="fd-step"><b>${externalActivated}</b><span>首次成功 read · ${founderPct(externalActivated,Math.max(externalConnected,1))}</span></div><div class="fd-step"><b>${externalPaid}</b><span>付費 · ${founderPct(externalPaid,Math.max(externalActivated,1))}</span></div></div><div class="fd-note">舊 Railway 回補流量仍保留在總訪客與熱門頁面，但不混進這條新漏斗的轉換率；這樣接下來累積到約 100 個 relevant external visitors 時才可直接比較。</div></section>
     <section><div class="fd-label" style="margin-bottom:8px">Claude 連線 → 首次成功讀取 · 新 activation 埋點</div><div class="fd-funnel activation"><div class="fd-step"><b>${productConnectCta}</b><span>Connect CTA</span></div><div class="fd-step"><b>${productConnectionStarted}</b><span>OAuth started · ${founderPct(productConnectionStarted,Math.max(productConnectCta,1))}</span></div><div class="fd-step"><b>${productConnectionSuccess}</b><span>Connected · ${founderPct(productConnectionSuccess,Math.max(productConnectionStarted,1))}</span></div><div class="fd-step"><b>${productConnectorEnabled}</b><span>Connector usable* · ${founderPct(productConnectorEnabled,Math.max(productConnectionSuccess,1))}</span></div><div class="fd-step"><b>${productFirstLinkAttempt}</b><span>First link attempt · ${founderPct(productFirstLinkAttempt,Math.max(productConnectorEnabled,1))}</span></div><div class="fd-step"><b>${productFirstSuccessfulRead}</b><span>First successful read · ${founderPct(productFirstSuccessfulRead,Math.max(productFirstLinkAttempt,1))}</span></div></div><div class="fd-note">* Claude 不提供「使用者剛剛切開 connector toggle」的 server-side webhook，因此 connector usable 是在第一個已驗證 Link2AI tool call 抵達後推定；它可以區分「已授權但從未真正用到」與「connector 已經在對話中可被呼叫」。這組資料從本版上線後開始累積，不回推舊使用者。</div></section>
-    <section class="fd-panel"><div class="fd-panel-head"><div><h2>Source provider health</h2><div class="fd-note">最近 24 小時 · 每個 provider attempt 都會記成功／失敗、延遲與錯誤類型；不保存來源 URL 或內容。</div></div><span class="fd-label">rolling 24h</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:980px"><thead><tr><th>平台</th><th>操作</th><th>Provider</th><th>Attempts</th><th>成功率</th><th>失敗</th><th>可重試失敗</th><th>平均延遲</th><th>最近錯誤</th></tr></thead><tbody>${providerHealthRows}</tbody></table></div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><div><h2>Source redundancy</h2><div class="fd-note">工程 truth table · retry / impersonation 不算第二條 failure domain。conditional 代表 fallback 可用但完整度或 runtime 設定仍有條件。</div></div><span class="fd-label">V3 reliability</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:1050px"><thead><tr><th>能力</th><th>狀態</th><th>獨立路徑</th><th>備註</th></tr></thead><tbody>${redundancyRows}</tbody></table></div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><div><h2>Source provider health</h2><div class="fd-note">最近 2 小時 · 跟 runtime routing 使用相同 degradation 門檻；deprioritized 會被健康路徑排到後面。只保存彙總，不保存來源 URL 或內容。</div></div><span class="fd-label">routing window · 2h</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:1080px"><thead><tr><th>平台</th><th>操作</th><th>Provider</th><th>Attempts</th><th>成功率</th><th>Routing</th><th>失敗</th><th>可重試失敗</th><th>平均延遲</th><th>最近錯誤</th></tr></thead><tbody>${providerHealthRows}</tbody></table></div></section>
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>流量來源</h2><div class="fd-note">UTM source 優先；沒有 UTM 時只保存 referrer hostname，不保存完整 referrer URL、IP 或 User-Agent。</div></div><span class="fd-label">external only</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:620px"><thead><tr><th>來源</th><th>訪客</th><th>註冊</th><th>註冊率</th></tr></thead><tbody>${sourceRows}</tbody></table></div></section>
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>熱門網站頁面</h2><div class="fd-note">最近 7 天 · 匿名第一方統計</div></div><span class="fd-label">不儲存 IP</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:520px"><thead><tr><th>頁面</th><th>不重複訪客</th><th>瀏覽次數</th></tr></thead><tbody>${topPages}</tbody></table></div></section>
     <section><div class="fd-label" style="margin-bottom:8px">產品轉換漏斗</div><div class="fd-funnel"><div class="fd-step"><b>${accounts}</b><span>帳號</span></div><div class="fd-step"><b>${connected}</b><span>已連接 AI · ${founderPct(connected,accounts)}</span></div><div class="fd-step"><b>${activated}</b><span>首次成功連結 · ${founderPct(activated,accounts)}</span></div><div class="fd-step"><b>${paid}</b><span>付費 · 佔已啟用使用者 ${founderPct(paid,Math.max(activated,1))}</span></div></div></section>
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>所有帳號</h2><div class="fd-note">${totalMatched} 筆符合 · 第 ${page}／${totalPages} 頁</div></div><form method="get" action="/founder" class="fd-tools"><input class="fd-input" type="search" name="q" value="${searchValue}" placeholder="搜尋 Email"><button class="btn alt sm" type="submit">搜尋</button>${q?'<a class="btn alt sm" href="/founder">清除</a>':''}</form></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>Email</th><th>方案</th><th>狀態</th><th>試用資格</th><th>統計</th><th>AI</th><th>成功連結</th><th>Processing units</th><th>失敗</th><th>最後活動</th><th></th></tr></thead><tbody>${accountRows}</tbody></table></div><div class="fd-panel-head"><span class="fd-label">每頁 100 筆</span><div class="fd-nav">${prev}${next}</div></div></section>
-    <section class="fd-panel"><div class="fd-panel-head"><h2>最近工作</h2><span class="fd-label">最近 20 筆</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>Email</th><th>平台</th><th>狀態</th><th>長度</th><th>錯誤</th></tr></thead><tbody>${recentJobs}</tbody></table></div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><h2>最近工作</h2><span class="fd-label">最近 20 筆</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>Email</th><th>平台</th><th>狀態</th><th>長度</th><th>Worker</th><th>錯誤</th></tr></thead><tbody>${recentJobs}</tbody></table></div></section>
     <div class="fd-warning">Analytics 上線前的可辨識網站瀏覽已從 Railway 舊 HTTP logs 回補。歷史不重複訪客是匿名估算值；明顯 bot／爬蟲已排除。回補資料只保存匿名識別碼、頁面與時間，不保存原始 IP 或 User-Agent，也不推測無法確認的歷史註冊歸因。</div><div class="fd-warning">後台調整不會刪除使用紀錄。額外額度會加在原方案上；手動修改方案後，之後仍可能被 Lemon Squeezy 的正式訂閱 webhook 更新。</div>
     <p class="fd-private">私人頁面。除了 FOUNDER_EMAIL 登入外，還需要 15 分鐘有效的 Founder Email 驗證；管理 POST 另外驗證 CSRF 與同源請求。</p></main>`;
   return reply.type('text/html').send(founderShell(html,`${env().PUBLIC_BRAND_NAME} 後台`));

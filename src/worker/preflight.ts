@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { env } from '../config/env.js';
 import { runProcess } from '../util/process.js';
 import { Link2AIError } from '../util/errors.js';
@@ -12,8 +13,20 @@ async function requireBinary(command:string,args:string[],label:string):Promise<
   }
 }
 
+function ffprobeBin(ffmpegBin:string):string{
+  const base=path.basename(ffmpegBin);
+  return base==='ffmpeg'?path.join(path.dirname(ffmpegBin),'ffprobe'):'ffprobe';
+}
+
 export async function assertWorkerRuntime():Promise<void>{
   await requireBinary(env().YTDLP_BIN,['--version'],'yt-dlp');
+  await requireBinary('gallery-dl',['--version'],'gallery-dl');
   await requireBinary(env().FFMPEG_BIN,['-version'],'FFmpeg');
-  await requireBinary('python3',['-c','import curl_cffi; print(curl_cffi.__version__)'],'curl_cffi');
+  await requireBinary(ffprobeBin(env().FFMPEG_BIN),['-version'],'ffprobe');
+  await requireBinary('pdftotext',['-v'],'Poppler pdftotext');
+  await requireBinary(
+    'python3',
+    ['-c','import curl_cffi, youtube_transcript_api; print(curl_cffi.__version__)'],
+    'Python extraction dependencies'
+  );
 }

@@ -27,3 +27,18 @@ jobs:
 
       - name: Build and test
         run: npm test
+
+      - name: Build production runtime image
+        run: docker build -t link2ai-runtime-ci .
+
+      - name: Smoke native runtime dependencies
+        run: |
+          docker run --rm --entrypoint sh link2ai-runtime-ci -c '
+            set -eu
+            yt-dlp --version
+            gallery-dl --version
+            ffmpeg -version >/dev/null
+            ffprobe -version >/dev/null
+            pdftotext -v
+            python3 -c "import curl_cffi, youtube_transcript_api; print("python extraction dependencies ok")"
+          '
