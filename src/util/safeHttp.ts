@@ -66,6 +66,15 @@ async function resolvePublic(hostname:string,timeoutMs:number):Promise<Array<{ad
   return orderPublicAddresses(addresses).slice(0,8);
 }
 
+export async function assertPublicHttpsTarget(rawUrl:string,timeoutMs=5_000):Promise<void>{
+  let url:URL;
+  try{url=new URL(rawUrl);}catch{throw new Link2AIError('EXTRACTION_FAILED','Remote content URL is invalid.',502,false,{cause_code:'invalid_target_url'});}
+  if(url.protocol!=='https:'||url.username||url.password){
+    throw new Link2AIError('EXTRACTION_FAILED','Remote content URL must use public HTTPS.',502,false,{cause_code:'unsafe_target_scheme'});
+  }
+  await resolvePublic(url.hostname,timeoutMs);
+}
+
 export async function safeGetBuffer(rawUrl:string,opts:{maxBytes:number;timeoutMs:number;maxRedirects?:number;userAgent?:string;accept?:string}):Promise<{bytes:Buffer;contentType:string|null;finalUrl:string}>{
   let current=rawUrl; const redirects=opts.maxRedirects??5;
   const overallDeadline=Date.now()+opts.timeoutMs;

@@ -112,6 +112,10 @@ assert.match(safeHttpSource,/orderPublicAddresses/,'External HTTP must order val
 assert.match(safeHttpSource,/requestDeadline/,'External HTTP address fallback must stay inside the configured timeout budget');
 assert.match(safeHttpSource,/DNS lookup timed out/,'DNS resolution must share the external request timeout budget');
 assert.match(safeHttpSource,/Remote content response was truncated/,'prematurely closed HTTP responses must not become successful partial content');
+assert.match(safeHttpSource,/assertPublicHttpsTarget/,'External retrieval fallbacks must preflight the original target against the SSRF boundary');
+assert.match(linkSource,/name:'direct_html',family:'public:direct_html'[\s\S]*name:'jina_reader',family:'external:jina_reader'/,'Generic web reads must have an independent external reader fallback');
+assert.match(linkSource,/external_reader_fallback/,'External web-reader fallback must be marked partial rather than false-complete');
+assert.match(linkSource,/assertPublicHttpsTarget\(input\.normalizedUrl/,'External web fallback must not bypass public-target validation');
 assert.match(authServiceSource,/pg_advisory_xact_lock\(hashtext\('link2ai:password-auth:global'\)\)/,'password admission count+insert must be serialized');
 assert.match(workerSource,/logErrorEvent\('job_claim_error'/,'a transient database claim error must not terminate the worker and must use sanitized error logging');
 assert.doesNotMatch(audioSource,/V1 transcription limit/,'User-facing errors must not expose internal V1 naming');

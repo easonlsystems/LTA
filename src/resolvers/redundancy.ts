@@ -98,9 +98,12 @@ export const SOURCE_REDUNDANCY={
     note:'Do not add scraping as a fake fallback; second route must be compliant.'
   },
   web:{
-    state:'single_path',
-    routes:[{name:'direct SSRF-safe HTML fetch',rootFamily:'public:html'}],
-    note:'Needs an independent rendered/browser retrieval path.'
+    state:'conditional',
+    routes:[
+      {name:'direct SSRF-safe HTML fetch',rootFamily:'public:direct_html'},
+      {name:'Jina Reader rendered fallback',rootFamily:'external:jina_reader',conditional:true}
+    ],
+    note:'External reader is a different retrieval stack but is conservatively reported as partial rather than false-complete.'
   },
   pdf:{
     state:'redundant',

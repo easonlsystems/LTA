@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { resolveTxt } from 'node:dns/promises';
-import { safeGetBuffer } from '../util/safeHttp.js';
+import { assertPublicHttpsTarget, safeGetBuffer } from '../util/safeHttp.js';
 import { runProcess } from '../util/process.js';
 import { Link2AIError } from '../util/errors.js';
 import { env } from '../config/env.js';
@@ -191,6 +191,44 @@ async function fetchPage(input:ParsedMediaUrl,budget?:TextExtractionBudget):Prom
   const html=response.bytes.toString('utf8');
   const doc=pageTextFromHtml(html);
   return complete({platform:input.platform,canonicalMediaId:input.canonicalMediaId,sourceUrl:response.finalUrl,title:doc.title,creator:doc.creator,caption:doc.description,language:doc.language,text:doc.text,source:input.kind==='post'?'post':'page'},input.kind==='post'?'social':'web',{},budget);
+}
+
+export function parseJinaReaderPayload(input:ParsedMediaUrl,raw:string,budget?:TextExtractionBudget):LinkTextPayload{
+  const sourceMatch=/^URL Source:\s*(https:\/\/\S+)\s*$/mi.exec(raw);
+  if(sourceMatch){
+    try{
+      const expected=new URL(input.normalizedUrl);
+      const returned=new URL(sourceMatch[1].trim());
+      if(returned.hostname.toLowerCase()!==expected.hostname.toLowerCase()){
+        throw new Link2AIError('EXTRACTION_FAILED','The external page reader returned a different source.',502,true,{cause_code:'jina_source_mismatch'});
+      }
+    }catch(error){
+      if(error instanceof Link2AIError)throw error;
+      throw new Link2AIError('EXTRACTION_FAILED','The external page reader returned invalid source metadata.',502,true,{cause_code:'jina_source_invalid'});
+    }
+  }
+  const title=/^Title:\s*(.+)$/mi.exec(raw)?.[1]?.trim();
+  const marker='Markdown Content:';
+  const markerIndex=raw.indexOf(marker);
+  const body=cleanText(markerIndex>=0?raw.slice(markerIndex+marker.length):raw);
+  if(body.length<80)throw new Link2AIError('EXTRACTION_FAILED','The external page reader did not return enough readable content.',502,true,{cause_code:'jina_reader_too_thin'});
+  return complete({
+    platform:'web',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,
+    title:clipExternalText(title,METADATA_LIMITS.title),language:'und',text:body,source:'page'
+  },'web',{
+    truncated:true,truncationReason:'external_reader_fallback',
+    contentSectionsTruncated:['source_structure']
+  },budget);
+}
+
+async function fetchJinaReaderPage(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  await assertPublicHttpsTarget(input.normalizedUrl,5_000);
+  const readerUrl=`https://r.jina.ai/${input.normalizedUrl}`;
+  const response=await safeGetForBudget(readerUrl,{
+    floorBytes:16_000_000,timeoutMs:30_000,maxRedirects:3,userAgent:BROWSER_UA,
+    accept:'text/plain,text/markdown;q=0.9,*/*;q=0.2'
+  },budget,'jina_reader_response');
+  return parseJinaReaderPayload(input,response.bytes.toString('utf8'),budget);
 }
 
 type XOEmbedData={html:string;author_name?:string};
@@ -942,6 +980,15 @@ export async function extractTextLink(input:ParsedMediaUrl,budget?:TextExtractio
       attempts:[
         {name:'gallery_dl',family:'local:gallery_dl',run:()=>fetchGalleryPost(input,budget)},
         {name:'public_page',family:'public:html',run:()=>fetchPage(input,budget)}
+      ]
+    });
+  }
+  if(input.platform==='web'){
+    return await runProviderChain<LinkTextPayload>({
+      platform:'web',operation:'text',
+      attempts:[
+        {name:'direct_html',family:'public:direct_html',run:()=>fetchPage(input,budget)},
+        {name:'jina_reader',family:'external:jina_reader',run:()=>fetchJinaReaderPage(input,budget)}
       ]
     });
   }
