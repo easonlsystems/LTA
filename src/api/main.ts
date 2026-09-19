@@ -402,7 +402,7 @@ app.get('/',async(req,reply)=>{
       <div class="home-inner">
         <div class="experience-copy reveal">
           <span class="experience-kicker">Interactive comparison · Claude-first</span>
-          <h1>Paste a link. <span>Claude can read it.</span></h1>
+          <h1>Connect Link2AI to Claude. <span>Then paste a link in Claude.</span></h1>
           <p class="experience-lede">Link2AI adds source-reading to Claude. Connect it once, enable it in the conversation you want to use, then paste public links into Claude's normal chat — there is no separate Link2AI paste box.</p>
         </div>
         <div class="sim-shell reveal" id="comparison-demo" aria-label="Interactive Link2AI comparison simulation">
@@ -439,7 +439,7 @@ app.get('/',async(req,reply)=>{
         </div>
         <div class="experience-hero-cta reveal"><a class="btn purple" href="/start?from=hero-simulation">Connect Link2AI to Claude →</a><span class="micro">10 processing units · No card required · Failed reads cost 0</span></div>
         <div class="clarity-strip reveal" aria-label="How to start using Link2AI">
-          <div class="clarity-item"><b>1</b><div><strong>Connect Link2AI</strong><span>Use the button above. Link2AI is a Claude custom connector, not something you need to find in Claude's Connector Directory.</span></div></div>
+          <div class="clarity-item"><b>1</b><div><strong>Connect Link2AI</strong><span>Use the button above to connect directly today. We are also preparing a Claude Connector Directory listing, but you do not need to wait for it to start.</span></div></div>
           <div class="clarity-item"><b>2</b><div><strong>Enable it in the chat</strong><span>Claude can say Connected before Link2AI is turned on for the specific conversation. Open + → Connectors → Link2AI once in that chat.</span></div></div>
           <div class="clarity-item"><b>3</b><div><strong>Paste the link in Claude</strong><span>After that, use Claude normally. Paste the public link into Claude's message box and ask your question there.</span></div></div>
         </div>
@@ -447,7 +447,7 @@ app.get('/',async(req,reply)=>{
     </section>
 
     <script src="/home.js?v=20260917-homeonly2" defer></script>
-  </main>`, `${env().PUBLIC_BRAND_NAME} — Paste a link. Claude can read it.`, `/`));
+  </main>`, `${env().PUBLIC_BRAND_NAME} — Connect to Claude. Then paste a link.`, `/`));
 });
 
 
