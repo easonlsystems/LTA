@@ -34,7 +34,10 @@ app.addContentTypeParser('application/x-www-form-urlencoded',{parseAs:'string'},
 const mcpHandler=createMcpHandler(()=>buildMcpServer());
 const nodeMcp=toNodeHandler(mcpHandler,{onerror:(err)=>app.log.error(err)});
 const openaiMcpHandler=createMcpHandler(()=>buildMcpServer('openai'));
-const nodeOpenaiMcp=toNodeHandler(openaiMcpHandler,{onerror:(err)=>app.log.error(err)});
+const nodeOpenaiMcp=toNodeHandler(openaiMcpHandler,{onerror:(err)=>{
+  const error=err instanceof Error?err:new Error(String(err));
+  console.error(JSON.stringify({event:'openai_mcp_adapter_error',name:error.name,message:error.message}));
+}});
 
 app.all('/mcp',async(request,reply)=>{
   const originHeader=Array.isArray(request.headers.origin)?request.headers.origin[0]:request.headers.origin;
@@ -52,6 +55,17 @@ app.all('/mcp',async(request,reply)=>{
 });
 
 app.all('/mcp/openai',async(request,reply)=>{
+  const authorization=request.headers.authorization;
+  console.info(JSON.stringify({
+    event:'openai_mcp_request',
+    method:request.method,
+    user_agent:String(request.headers['user-agent']??'').slice(0,120),
+    content_type:String(request.headers['content-type']??'').slice(0,120),
+    accept:String(request.headers.accept??'').slice(0,160),
+    content_length:String(request.headers['content-length']??'').slice(0,32),
+    authorization_present:Boolean(authorization),
+    bearer_scheme:/^Bearer\s+/i.test(String(authorization??''))
+  }));
   const originHeader=Array.isArray(request.headers.origin)?request.headers.origin[0]:request.headers.origin;
   const originCheck=validateOriginHeader(originHeader,allowedPublicHosts);
   if(!originCheck.ok){
@@ -60,7 +74,7 @@ app.all('/mcp/openai',async(request,reply)=>{
   const auth=await authInfoFromBearer(request.headers.authorization,mcpResource('openai'));
   if(!auth){
     const diagnostic=await diagnoseBearerAuth(request.headers.authorization,mcpResource('openai')).catch(()=>null);
-    app.log.warn({event:'openai_mcp_auth_rejected',...(diagnostic??{diagnostic_unavailable:true})});
+    console.warn(JSON.stringify({event:'openai_mcp_auth_rejected',...(diagnostic??{diagnostic_unavailable:true})}));
     const resourceMetadata=`${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp/openai`;
     const challenge=diagnostic?.authorization_present
       ? `Bearer resource_metadata="${resourceMetadata}", scope="link2ai:read", error="invalid_token", error_description="Access token is invalid for this MCP resource"`
@@ -1041,8 +1055,19 @@ app.get('/terms',async(_req,reply)=>reply.type('text/html').send(legalPage('Term
 await registerAuthRoutes(app);
 await registerBillingRoutes(app);
 
-app.setErrorHandler((err,_req,reply)=>{
-  app.log.error(err);
+app.setErrorHandler((err,req,reply)=>{
+  if(req.url.startsWith('/mcp/openai')){
+    const error=err instanceof Error?err:new Error(String(err));
+    console.error(JSON.stringify({
+      event:'openai_mcp_request_error',
+      method:req.method,
+      name:error.name,
+      message:error.message,
+      code:typeof (err as {code?:unknown})?.code==='string'?(err as {code:string}).code:undefined
+    }));
+  }else{
+    app.log.error(err);
+  }
   if(reply.sent)return;
   const message=err instanceof Error?err.message:'Unknown error';
   reply.code(500).send({error:'internal_error',message:env().NODE_ENV==='production'?'Something went wrong.':message});
