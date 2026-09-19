@@ -40,5 +40,5 @@ jobs:
             ffmpeg -version >/dev/null
             ffprobe -version >/dev/null
             pdftotext -v
-            python3 -c "import curl_cffi, youtube_transcript_api; print("python extraction dependencies ok")"
+            python3 -c "import curl_cffi, youtube_transcript_api; print('python extraction dependencies ok')"
           '
