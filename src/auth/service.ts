@@ -817,8 +817,7 @@ export async function exchangeAuthorizationCode(input: {code:string;clientId:str
       distribution_profile:issuedResource===mcpResource('openai')?'openai':'default'
     }));
     await recordActivationEvent(row.user_id,'connection_success',{
-      distributionProfile:issuedResource===mcpResource('openai')?'openai':'default',
-      metadata:{client_id:row.client_id}
+      distributionProfile:issuedResource===mcpResource('openai')?'openai':'default'
     });
     return { access_token: access, ...(refresh?{refresh_token:refresh}:{}), expires_in: 3600, scope: row.scope };
   } catch(err) { await client.query('ROLLBACK'); throw err; }
