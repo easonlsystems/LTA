@@ -174,7 +174,8 @@ assert.match(orchestratorSource,/MEDIA_PROVIDER_URL/,'Managed external provider 
 assert.match(orchestratorSource,/name:'gallery_dl_media',family:'local:gallery_dl'/,'Instagram and TikTok media must expose gallery-dl as a separate extractor family');
 assert.match(orchestratorSource,/name:'ytdlp',family:'local:yt_dlp'[\s\S]*\.\.\.this\.gallery(?:Metadata|Audio)Attempt\(input(?:,outputDir)?\)/,'Instagram and TikTok media must place the independent gallery-dl route after yt-dlp');
 assert.match(galleryMediaSource,/gallery_dl_identity_unverified/,'Secondary media extraction must verify exact source identity before accepting a fallback result');
-assert.match(galleryMediaSource,/gallery-media\.\{extension\}/,'gallery-dl media fallback must isolate downloaded media in the job temp directory');
+assert.match(galleryMediaSource,/downloadMedia\(input,outputDir,ctx,'gallery-media'\)/,'gallery-dl audio fallback must use its own job-temp filename prefix');
+assert.match(galleryMediaSource,/downloadMedia\(input,outputDir,ctx,'gallery-visual'\)/,'gallery-dl visual fallback must use a separate job-temp filename prefix');
 assert.match(linkSource,/name:'gallery_dl'[\s\S]*name:'public_page'/,'Instagram and TikTok text posts must use an explicit primary-to-page fallback chain');
 assert.match(processorSource,/provider:'youtube_transcript'/,'YouTube transcript fallback must report provider health separately from yt-dlp');
 assert.match(processorSource,/youtube_transcript_secondary_success/,'YouTube must try its independent transcript route before downloading audio when normal captions are missing');
