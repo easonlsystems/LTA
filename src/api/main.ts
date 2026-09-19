@@ -62,7 +62,12 @@ app.all('/mcp',async(request,reply)=>{
     return nodeOpenaiMcp(Object.assign(request.raw,{auth:openaiAuth}),reply.raw,request.body);
   }
 
-  reply.header('WWW-Authenticate',`Bearer resource_metadata="${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp", scope="link2ai:read"`);
+  const ua=String(request.headers['user-agent']??'');
+  const openaiRuntime=/^openai-mcp\//i.test(ua);
+  const resourceMetadata=openaiRuntime
+    ? `${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp/openai`
+    : `${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp`;
+  reply.header('WWW-Authenticate',`Bearer resource_metadata="${resourceMetadata}", scope="link2ai:read"`);
   return reply.code(401).send({error:'unauthorized',message:`Connect ${env().PUBLIC_BRAND_NAME} to continue.`});
 });
 
