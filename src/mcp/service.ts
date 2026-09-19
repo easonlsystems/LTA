@@ -27,6 +27,7 @@ export interface ToolJobResult {
   error_code?: string|null;
   message?: string;
   retry_after_seconds?: number;
+  retryable?:boolean;
   truncated?:boolean;
   truncation_reason?:string|null;
   extracted_token_estimate?:number;
@@ -185,7 +186,7 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
       job_id:row.id,
       duration_seconds:row.duration_seconds??undefined,
       error_code:row.error_code??'QUOTA_EXCEEDED',
-      message:`Link2AI could not read the full source because the connected account${remaining===undefined?' does not have enough processing units':` has ${remaining} processing units remaining`}. No processing units were charged for this failed read. Review processing-unit options on the Link2AI website outside ChatGPT.`,
+      message:`Link2AI could not read the full source because the connected account${remaining===undefined?' does not have enough processing units':` has ${remaining} processing units remaining`}. Processing units for text sources are based on the amount of source text Link2AI must retrieve, so large discussions or pull-request diffs can require multiple units. Link2AI does not intentionally return a partial source just to fit the remaining balance. No processing units were charged for this failed read. Review processing-unit options on the Link2AI website outside ChatGPT.`,
       usage_units:0,
       ...(remaining===undefined?{}:{remaining_usage_units:remaining}),
       plan_info_url:`${base}/pricing`
