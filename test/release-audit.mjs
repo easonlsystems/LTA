@@ -46,7 +46,8 @@ const oauthDiagStart=authServiceSource.indexOf("event:'oauth_access_token_issued
 const oauthDiagEnd=authServiceSource.indexOf('}));',oauthDiagStart);
 assert.ok(oauthDiagStart>=0&&oauthDiagEnd>oauthDiagStart,'OAuth issuance diagnostic block must be present');
 const oauthDiagBlock=authServiceSource.slice(oauthDiagStart,oauthDiagEnd);
-assert.doesNotMatch(oauthDiagBlock,/access_token|refresh_token|token_hash|user_id|email/i,'OAuth issuance diagnostic must not include secrets or user identifiers');
+const oauthDiagFields=oauthDiagBlock.split('\n').slice(1).join('\n');
+assert.doesNotMatch(oauthDiagFields,/access_token|refresh_token|token_hash|user_id|email/i,'OAuth issuance diagnostic fields must not include secrets or user identifiers');
 assert.match(apiSource,/error="invalid_token"/,'Rejected ChatGPT bearer tokens must explicitly challenge the client to reauthorize');
 assert.doesNotMatch(apiSource,/isUnauthenticatedMcpDiscoveryRequest/,'ChatGPT MCP route must not bypass OAuth at the transport layer');
 assert.match(linkSource,/safeJsonArrayPages/,'GitHub discussions must paginate through public discussion pages');
