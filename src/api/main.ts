@@ -919,7 +919,7 @@ app.get('/founder',async(req,reply)=>{
   }).join('')||'<tr><td colspan="10">最近 2 小時尚無 provider attempts。</td></tr>';
   const redundancyRows=Object.entries(SOURCE_REDUNDANCY).map(([source,entry])=>{
     const stateClass=entry.state==='redundant'?'ok':entry.state==='conditional'?'wait':'bad';
-    const routes=entry.routes.map(route=>`${route.name} [${route.rootFamily}]${route.conditional?' · conditional':''}`).join('<br>');
+    const routes=entry.routes.map(route=>`${route.name} [${route.rootFamily}]${'conditional' in route&&route.conditional?' · conditional':''}`).join('<br>');
     return `<tr><td class="fd-source">${founderEscape(source)}</td><td><span class="fd-status ${stateClass}">${founderEscape(entry.state)}</span></td><td class="fd-email">${routes}</td><td>${founderEscape(entry.note)}</td></tr>`;
   }).join('');
   const release=runtimeRelease();
