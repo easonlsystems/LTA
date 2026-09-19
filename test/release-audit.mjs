@@ -35,6 +35,9 @@ const transcriptionRouterSource=await readFile(new URL('../src/transcription/rou
 assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News must keep the official Firebase API as its primary route');
 assert.match(linkSource,/hn\.algolia\.com\/api\/v1\/items/,'Hacker News must have an independent fallback route');
 assert.match(linkSource,/name:'hn_firebase',family:'official:hn_firebase'[\s\S]*name:'hn_algolia',family:'external:hn_algolia'/,'Hacker News fallback must cross provider families');
+assert.match(linkSource,/name:'bsky_appview',family:'public:bsky_appview'[\s\S]*name:'atproto_pds',family:'public:atproto_pds'/,'Bluesky must fail over from the public AppView to a direct PDS route');
+assert.match(linkSource,/bluesky_pds_root_only/,'Direct Bluesky PDS fallback must explicitly mark missing thread context as partial');
+assert.match(linkSource,/bluesky_handle_did_mismatch/,'Direct Bluesky PDS fallback must verify handle and DID bidirectionally');
 assert.doesNotMatch(policySource,/OPENAI_ALLOWED_PLATFORMS/,'ChatGPT must not maintain a narrower source allowlist than the default/Claude distribution');
 assert.match(policySource,/same[\s\S]*source matrix/i,'ChatGPT source policy must explicitly preserve parity with the default/Claude distribution');
 assert.match(apiSource,/app\.all\('\/mcp\/openai'/,'API must expose a distinct ChatGPT MCP endpoint');

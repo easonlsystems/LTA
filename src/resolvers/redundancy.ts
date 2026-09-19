@@ -85,9 +85,12 @@ export const SOURCE_REDUNDANCY={
     note:'HTML fallback keeps the source readable when the API path fails, but marks discussion structure as partial.'
   },
   bluesky:{
-    state:'single_path',
-    routes:[{name:'public AppView API',rootFamily:'official:platform_api'}],
-    note:'Needs a direct-PDS or other independent complete-source path.'
+    state:'conditional',
+    routes:[
+      {name:'Bluesky public AppView thread API',rootFamily:'public:bsky_appview'},
+      {name:'direct AT Protocol PDS record',rootFamily:'public:atproto_pds',conditional:true}
+    ],
+    note:'Direct PDS fallback preserves the exact root post but intentionally marks thread context as partial.'
   },
   reddit:{
     state:'single_path',

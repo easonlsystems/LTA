@@ -9,7 +9,7 @@ declare module 'node:path' { const x:any; export default x; }
 declare module 'node:url' { export const fileURLToPath:any; }
 declare module 'node:os' { const x:any; export default x; }
 declare module 'node:net' { const x:any; export default x; }
-declare module 'node:dns/promises' { export const lookup:any; }
+declare module 'node:dns/promises' { export const lookup:any; export const resolveTxt:any; }
 declare module 'node:http' { const x:any; export default x; export type IncomingHttpHeaders=any; }
 declare module 'node:https' { const x:any; export default x; export type IncomingHttpHeaders=any; }
 declare module 'fastify' { export type FastifyInstance = any; export type FastifyReply = any; export type FastifyRequest = any; }
