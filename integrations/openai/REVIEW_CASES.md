@@ -2,29 +2,43 @@
 
 Use the dedicated production reviewer account supplied privately in the OpenAI submission portal. No MFA, email confirmation, SMS confirmation, or private-network access may be required.
 
-The ChatGPT distribution is intentionally limited to public Bluesky posts, public GitHub Issues / pull requests, and public Hacker News discussions. Other Link2AI sources are blocked on this distribution unless a separately authorized retrieval path is added later.
-
-Failed reads consume 0 processing units. Sources blocked by the ChatGPT distribution are rejected before retrieval or quota consumption.
+The ChatGPT distribution uses the same supported-source matrix as Link2AI's default/Claude distribution. Failed reads consume 0 processing units. Profiles, feeds, timelines, broad crawling, private/login-only content, paywall/DRM bypass, and visual-only claims not represented in returned text remain unsupported.
 
 ## Positive cases — exactly 5
 
-### P1 — GitHub pull request discussion
+### P1 — Instagram Reel
 **Prompt**
-Read this pull request with Link2AI and summarize the change, the main reviewer concern, and how it was resolved: https://github.com/nodejs/node/pull/65472
+Use Link2AI to read this Instagram Reel and summarize the main points: https://www.instagram.com/reel/DdNnHPip4RD/
 
 **Expected behavior**
-- Invoke `read_public_link` for the exact PR.
-- Include available PR body, diff, issue comments, reviews, and inline review comments returned by Link2AI.
-- Preserve file/line context when present.
-- If more than one MCP delivery chunk is needed, continue with `get_transcript_result`.
+- Invoke `read_public_link` for the exact Reel.
+- Return available spoken/caption text and exact source identity.
+- If processing is still running, continue with `get_transcript_result`.
+- Do not invent visual-only details that are not represented in returned text.
 
 **Expected result structure**
-A concise PR summary covering the documentation change, the main reviewer concern, and how the author resolved it.
+A concise Reel summary grounded in Link2AI's returned transcript/source text.
 
 **Fixture**
-`https://github.com/nodejs/node/pull/65472` — Small Node.js documentation fix with approvals, a concrete reviewer concern, a changes-requested review, a follow-up fix, and final approval.
+`https://www.instagram.com/reel/DdNnHPip4RD/` — public Reel previously verified in production Link2AI testing.
 
-### P2 — Hacker News discussion
+### P2 — YouTube video
+**Prompt**
+Use Link2AI to read this YouTube video and summarize what it explains: https://www.youtube.com/watch?v=M7lc1UVf-VE
+
+**Expected behavior**
+- Invoke `read_public_link` for the exact public YouTube URL.
+- Prefer usable captions when available and use the configured media/transcription fallback when needed.
+- If processing is still running, continue with `get_transcript_result`.
+- Do not invent visual-only details that are not represented in returned text.
+
+**Expected result structure**
+A concise content-grounded summary based on the source text returned by Link2AI.
+
+**Fixture**
+`https://www.youtube.com/watch?v=M7lc1UVf-VE` — public YouTube fixture.
+
+### P3 — Hacker News discussion
 **Prompt**
 Read this Hacker News discussion with Link2AI and summarize the strongest disagreements and the evidence each side gives: https://news.ycombinator.com/item?id=37137448
 
@@ -40,29 +54,13 @@ A concise map of the main positions and the public comments supporting them.
 **Fixture**
 `https://news.ycombinator.com/item?id=37137448` — a compact Draw.io discussion with a clear disagreement about whether the project should be described as fully open source.
 
-### P3 — Bluesky post and replies
-**Prompt**
-Read this Bluesky post with Link2AI and summarize the announcement: https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f
-
-**Expected behavior**
-- Invoke `read_public_link` for the exact public Bluesky post.
-- Preserve the exact source identity.
-- Use only text returned from the public AT Protocol API path.
-- Do not invent image-only or visual details.
-
-**Expected result structure**
-A concise summary of the exact public Bluesky announcement, without inventing visual-only details.
-
-**Fixture**
-`https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f` — a short official Bluesky product-tip announcement suitable for deterministic exact-post reading.
-
-### P4 — Multi-source comparison
+### P4 — Multi-source GitHub comparison
 **Prompt**
 Compare this Node.js issue with the pull request that fixed it. Explain the reported problem, what changed in the fix, and how reviewer feedback affected the final result. Attribute each point to its source: https://github.com/nodejs/node/issues/65470 https://github.com/nodejs/node/pull/65472
 
 **Expected behavior**
 - Invoke `read_public_links` so source identities remain separate.
-- Preserve each source's own `source_key`, `job_id`, completeness state, and continuation state inside tool state so continuation remains reliable; do not narrate internal IDs in the normal user-facing answer.
+- Preserve each source's own source/completeness/continuation state inside tool state; do not narrate internal IDs in the normal user-facing answer.
 - Continue any source whose `continuation_required` value is true before making a claim that depends on omitted content.
 
 **Expected result structure**
@@ -89,19 +87,9 @@ Dedicated production reviewer account.
 
 ## Negative cases — exactly 3
 
-### N1 — Source blocked on the ChatGPT distribution
+### N1 — Broad profile/feed crawl
 **Prompt**
-Read this YouTube video with Link2AI and summarize it: https://www.youtube.com/watch?v=M7lc1UVf-VE
-
-**Expected behavior**
-The tool result should be `PLATFORM_BLOCKED` before retrieval, cache reuse, job creation, or quota consumption. The normal user-facing answer should translate that into plain language and must not expose server logs, OAuth diagnostics, provider details, or raw tool plumbing. Do not silently fall back to another Link2AI retrieval route.
-
-**Why the plugin must not complete the requested operation**
-Those source categories are intentionally unavailable through the ChatGPT distribution unless a separately authorized retrieval path is added later.
-
-### N2 — Broad profile/feed crawl
-**Prompt**
-Use Link2AI to crawl every post from this Bluesky profile and summarize the account: https://bsky.app/profile/bsky.app
+Use Link2AI to crawl every post from this Instagram profile and summarize the account: https://www.instagram.com/instagram/
 
 **Expected behavior**
 Do not perform broad crawling. Explain that Link2AI reads supported exact public source URLs rather than profiles, feeds, timelines, or bulk collections.
@@ -109,7 +97,7 @@ Do not perform broad crawling. Explain that Link2AI reads supported exact public
 **Why the plugin must not complete the requested operation**
 Broad crawling is outside Link2AI's declared product scope and supported-source contract.
 
-### N3 — User explicitly forbids external fetching
+### N2 — User explicitly forbids external fetching
 **Prompt**
 Do not use Link2AI or any external tool. Just answer from what I pasted here. URL for context only: https://news.ycombinator.com/item?id=37137448
 
@@ -118,3 +106,13 @@ Do not invoke Link2AI. Answer only from the supplied conversation content, or ex
 
 **Why the plugin must not complete the requested operation**
 The user's explicit instruction not to use external fetching must take precedence over Link2AI's fallback workflow.
+
+### N3 — URL is incidental
+**Prompt**
+Save this link for later: https://www.youtube.com/watch?v=M7lc1UVf-VE
+
+**Expected behavior**
+Do not invoke Link2AI merely because a supported URL appears in the conversation.
+
+**Why the plugin must not complete the requested operation**
+The request does not depend on reading or understanding the content behind the link.
