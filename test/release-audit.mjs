@@ -203,6 +203,8 @@ assert.match(mcpSource,/sampled_visual_ocr/,'MCP results must distinguish sample
 assert.match(mcpSource,/visual_content_included:visualAugmentedResult/,'Visual OCR and hybrid provenance must be explicit in user-visible structured output');
 assert.match(mcpSource,/spoken_text_plus_sampled_visual_ocr/,'Hybrid video results must expose an explicit content scope');
 assert.match(mcpSource,/not full visual semantics/,'Visual OCR fallback must state its semantic limitation instead of implying full video understanding');
+assert.match(mcpSource,/const scope=videoContentScope\(result\)/,'Timed lookup, search, and video-map helpers must preserve video provenance');
+assert.match(mcpSource,/content_scope:scope\.contentScope,visual_content_included:scope\.visualIncluded/,'Follow-up video tools must expose spoken-vs-visual scope instead of relabeling OCR as speech');
 assert.match(mcpSource,/search miss is not proof|zero matches as proof/i,'Source search must not turn lexical misses into false absence claims');
 assert.doesNotMatch(mcpSource,/checkout_url|plan_info_url/,'Public MCP schemas must not expose checkout or plan-purchase URLs for digital subscriptions or credits');
 assert.doesNotMatch(mcpServiceSource,/plan_info_url|\/pricing/,'ChatGPT tool results must not return upgrade, top-up, or plan-purchase links');
