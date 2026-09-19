@@ -6,8 +6,11 @@ process.env.PUBLIC_BASE_URL='https://link2ai.example';
 process.env.APP_SECRET='test-secret-that-is-at-least-thirty-two-characters-long';
 
 const {runProviderChain}=await import('../dist/src/resolvers/providerChain.js');
+const {orderProviderAttempts,noteProviderFailure,resetProviderCircuitsForTests}=await import('../dist/src/resolvers/providerCircuit.js');
 const {Link2AIError}=await import('../dist/src/util/errors.js');
 const {pool}=await import('../dist/src/db/pool.js');
+
+resetProviderCircuitsForTests();
 
 {
   const calls=[];
@@ -15,14 +18,14 @@ const {pool}=await import('../dist/src/db/pool.js');
   const result=await runProviderChain({
     platform:'youtube',operation:'metadata',
     attempts:[
-      {name:'primary',run:async()=>{calls.push('primary');return 'ok';}},
-      {name:'fallback',run:async()=>{calls.push('fallback');return 'wrong';}}
+      {name:'primary',family:'local_extractor',run:async()=>{calls.push('primary');return 'ok';}},
+      {name:'fallback',family:'external_provider',run:async()=>{calls.push('fallback');return 'wrong';}}
     ],
     telemetry:async event=>{telemetry.push(event);}
   });
   assert.equal(result,'ok');
   assert.deepEqual(calls,['primary']);
-  assert.deepEqual(telemetry.map(x=>[x.provider,x.outcome]),[['primary','success']]);
+  assert.deepEqual(telemetry.map(x=>[x.provider,x.family,x.outcome]),[['primary','local_extractor','success']]);
 }
 
 {
@@ -31,14 +34,17 @@ const {pool}=await import('../dist/src/db/pool.js');
   const result=await runProviderChain({
     platform:'instagram',operation:'audio',
     attempts:[
-      {name:'primary',run:async()=>{calls.push('primary');throw new Link2AIError('PLATFORM_BLOCKED','blocked',502,true);}},
-      {name:'fallback',run:async()=>{calls.push('fallback');return 'audio.mp3';}}
+      {name:'primary',family:'local_extractor',run:async()=>{calls.push('primary');throw new Link2AIError('PLATFORM_BLOCKED','blocked',502,true);}},
+      {name:'fallback',family:'external_provider',run:async()=>{calls.push('fallback');return 'audio.mp3';}}
     ],
     telemetry:async event=>{telemetry.push(event);}
   });
   assert.equal(result,'audio.mp3');
   assert.deepEqual(calls,['primary','fallback']);
-  assert.deepEqual(telemetry.map(x=>[x.provider,x.outcome]),[['primary','failed'],['fallback','success']]);
+  assert.deepEqual(telemetry.map(x=>[x.provider,x.family,x.outcome]),[
+    ['primary','local_extractor','failed'],
+    ['fallback','external_provider','success']
+  ]);
 }
 
 {
@@ -47,8 +53,8 @@ const {pool}=await import('../dist/src/db/pool.js');
     runProviderChain({
       platform:'youtube',operation:'metadata',
       attempts:[
-        {name:'primary',run:async()=>{throw new Link2AIError('LOGIN_REQUIRED','login',403,false);}},
-        {name:'fallback',run:async()=>{fallbackCalled=true;return 'should-not-run';}}
+        {name:'primary',family:'local_extractor',run:async()=>{throw new Link2AIError('LOGIN_REQUIRED','login',403,false);}},
+        {name:'fallback',family:'external_provider',run:async()=>{fallbackCalled=true;return 'should-not-run';}}
       ],
       telemetry:async()=>{}
     }),
@@ -63,11 +69,11 @@ const {pool}=await import('../dist/src/db/pool.js');
     platform:'x',operation:'audio',
     attempts:[
       {
-        name:'structured',
+        name:'structured',family:'public_structured',
         run:async()=>{throw new Link2AIError('DOWNLOAD_TOO_LARGE','full mp4 too large',413,false);},
         shouldFailover:error=>error instanceof Link2AIError&&error.code==='DOWNLOAD_TOO_LARGE'
       },
-      {name:'audio_only',run:async()=>{fallbackCalled=true;return 'audio-only.mp3';}}
+      {name:'audio_only',family:'local_extractor',run:async()=>{fallbackCalled=true;return 'audio-only.mp3';}}
     ],
     telemetry:async()=>{}
   });
@@ -80,13 +86,34 @@ const {pool}=await import('../dist/src/db/pool.js');
     runProviderChain({
       platform:'x',operation:'audio',
       attempts:[
-        {name:'primary',run:async()=>{throw new Link2AIError('EXTRACTION_FAILED','first',502,true);}},
-        {name:'fallback',run:async()=>{throw new Link2AIError('RATE_LIMITED','second',429,true);}}
+        {name:'primary',family:'public_structured',run:async()=>{throw new Link2AIError('EXTRACTION_FAILED','first',502,true);}},
+        {name:'fallback',family:'local_extractor',run:async()=>{throw new Link2AIError('RATE_LIMITED','second',429,true);}}
       ],
       telemetry:async()=>{}
     }),
     error=>error instanceof Link2AIError&&error.code==='RATE_LIMITED',
     'when all eligible providers fail, surface the final provider error'
+  );
+}
+
+{
+  resetProviderCircuitsForTests();
+  const attempts=[
+    {name:'primary',family:'local_extractor'},
+    {name:'fallback',family:'external_provider'}
+  ];
+  noteProviderFailure('youtube','metadata',attempts[0],true,1_000);
+  noteProviderFailure('youtube','metadata',attempts[0],true,1_100);
+  noteProviderFailure('youtube','metadata',attempts[0],true,1_200);
+  assert.deepEqual(
+    orderProviderAttempts('youtube','metadata',attempts,2_000).map(x=>x.name),
+    ['fallback','primary'],
+    'an open provider circuit must defer the unhealthy provider behind an independent route'
+  );
+  assert.deepEqual(
+    orderProviderAttempts('youtube','metadata',attempts,122_000).map(x=>x.name),
+    ['primary','fallback'],
+    'after cooldown, the original provider must be allowed to probe again'
   );
 }
 

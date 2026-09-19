@@ -137,7 +137,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       try{
         const fallback=await resolveYouTubeTranscriptFallback(parsed,job.language,45_000);
         await recordProviderOutcome({
-          platform:'youtube',operation:'transcript',provider:'youtube_transcript',
+          platform:'youtube',operation:'transcript',provider:'youtube_transcript',family:'platform_transcript',
           outcome:'success',durationMs:Date.now()-transcriptProviderStarted,attemptIndex:1
         });
         metadata=fallback.metadata;
@@ -148,7 +148,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
         });
       }catch(fallbackError){
         await recordProviderOutcome({
-          platform:'youtube',operation:'transcript',provider:'youtube_transcript',
+          platform:'youtube',operation:'transcript',provider:'youtube_transcript',family:'platform_transcript',
           outcome:'failed',durationMs:Date.now()-transcriptProviderStarted,error:fallbackError,attemptIndex:1
         });
         const mapped=asLink2AIError(fallbackError);
@@ -226,7 +226,38 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       return;
     }
 
-    const caption=directCaption??await fetchBestCaption(metadata.subtitles,metadata.automaticCaptions,job.language,metadata.originalLanguage);
+    let caption=directCaption??await fetchBestCaption(metadata.subtitles,metadata.automaticCaptions,job.language,metadata.originalLanguage);
+
+    // A successful yt-dlp metadata read must not make YouTube depend on yt-dlp for the
+    // transcript path. When platform captions are missing, try the independent transcript
+    // provider before downloading audio. This keeps the normal path cheaper and gives
+    // YouTube a separate failure domain before media extraction / ASR.
+    if(!caption?.transcript&&parsed.platform==='youtube'&&!directCaption){
+      const transcriptProviderStarted=Date.now();
+      try{
+        const fallback=await resolveYouTubeTranscriptFallback(parsed,job.language,45_000);
+        await recordProviderOutcome({
+          platform:'youtube',operation:'transcript',provider:'youtube_transcript',family:'platform_transcript',
+          outcome:'success',durationMs:Date.now()-transcriptProviderStarted,attemptIndex:0
+        });
+        caption=fallback.caption;
+        if(metadata.durationSeconds<=0&&fallback.metadata.durationSeconds>0)await applyDuration(fallback.metadata.durationSeconds);
+        logEvent('youtube_transcript_secondary_success',{
+          job_id:job.id,platform:'youtube',duration_seconds:fallback.metadata.durationSeconds,
+          language:fallback.caption.language
+        });
+      }catch(transcriptError){
+        const mapped=asLink2AIError(transcriptError);
+        await recordProviderOutcome({
+          platform:'youtube',operation:'transcript',provider:'youtube_transcript',family:'platform_transcript',
+          outcome:'failed',durationMs:Date.now()-transcriptProviderStarted,error:transcriptError,attemptIndex:0
+        });
+        logEvent('youtube_transcript_secondary_failed',{
+          job_id:job.id,platform:'youtube',error_code:mapped.code,retryable:mapped.retryable
+        });
+      }
+    }
+
     if(caption?.transcript&&metadata.durationSeconds<=0){
       const captionDuration=captionDurationSeconds(caption.segments);
       if(captionDuration>0)await applyDuration(captionDuration);

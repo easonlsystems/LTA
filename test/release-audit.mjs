@@ -25,6 +25,7 @@ const activationSource=await readFile(new URL('../src/analytics/product.ts',impo
 const activationMigration=await readFile(new URL('../sql/006_activation_funnel.sql',import.meta.url),'utf8');
 const providerChainSource=await readFile(new URL('../src/resolvers/providerChain.ts',import.meta.url),'utf8');
 const providerTelemetrySource=await readFile(new URL('../src/resolvers/providerTelemetry.ts',import.meta.url),'utf8');
+const providerCircuitSource=await readFile(new URL('../src/resolvers/providerCircuit.ts',import.meta.url),'utf8');
 const orchestratorSource=await readFile(new URL('../src/resolvers/orchestrator.ts',import.meta.url),'utf8');
 const providerHealthMigration=await readFile(new URL('../sql/007_provider_health.sql',import.meta.url),'utf8');
 const logSource=await readFile(new URL('../src/util/log.ts',import.meta.url),'utf8');
@@ -119,10 +120,15 @@ assert.match(processorSource,/const reuseCache=job\.platform!=='x'/,'Worker must
 assert.match(providerChainSource,/runProviderChain/,'Media providers must use one explicit failover-chain implementation');
 assert.match(providerChainSource,/shouldTryExternalFallback/,'Provider failover must stop on definitive access errors');
 assert.match(providerChainSource,/source_provider_failover/,'Provider transitions must emit explicit failover telemetry');
-assert.match(orchestratorSource,/name:'x_syndication'[\s\S]*name:'ytdlp'/,'X audio must preserve structured-X then yt-dlp failover order');
+assert.match(providerChainSource,/provider_family/,'Provider transitions must preserve provider-family identity');
+assert.match(providerCircuitSource,/FAILURE_THRESHOLD=3/,'Provider circuit breaker must require repeated failures before deferring a route');
+assert.match(providerCircuitSource,/OPEN_MS=2\*60_000/,'Provider circuit breaker must cool down and probe again instead of permanently disabling a route');
+assert.match(orchestratorSource,/name:'x_syndication',family:'public_structured'[\s\S]*name:'ytdlp',family:'local_extractor'/,'X audio must preserve independent structured-X then local-extractor failover families');
 assert.match(orchestratorSource,/MEDIA_PROVIDER_URL/,'Managed external provider must remain an optional route, not a required recurring dependency');
 assert.match(linkSource,/name:'gallery_dl'[\s\S]*name:'public_page'/,'Instagram and TikTok text posts must use an explicit primary-to-page fallback chain');
 assert.match(processorSource,/provider:'youtube_transcript'/,'YouTube transcript fallback must report provider health separately from yt-dlp');
+assert.match(processorSource,/youtube_transcript_secondary_success/,'YouTube must try its independent transcript route before downloading audio when normal captions are missing');
+assert.match(processorSource,/family:'platform_transcript'/,'YouTube transcript fallback must be classified as a separate provider family');
 assert.match(providerTelemetrySource,/provider_health_hourly/,'Provider outcomes must feed rolling health telemetry');
 assert.doesNotMatch(providerTelemetrySource,/\b(?:source_url|normalized_url|canonical_media_id|content_text|transcript)\s*:/,'Provider health telemetry must not accept or persist source URLs, identifiers, or source content fields');
 assert.match(providerHealthMigration,/PRIMARY KEY\(bucket_start,platform,operation,provider\)/,'Provider health storage must use bounded hourly aggregates instead of unbounded per-request rows');

@@ -19,7 +19,7 @@ export class ResolverOrchestrator {
   private externalMetadataAttempt(input:ParsedMediaUrl):ProviderAttempt<MediaMetadata>[]{
     if(!env().MEDIA_PROVIDER_URL)return [];
     return [{
-      name:'external',
+      name:'external',family:'external_provider',
       run:()=>new ExternalProviderResolver(input.platform).resolveMetadata(input,{timeoutMs:env().EXTRACTION_TIMEOUT_MS})
     }];
   }
@@ -27,7 +27,7 @@ export class ResolverOrchestrator {
   private externalAudioAttempt(input:ParsedMediaUrl,outputDir:string):ProviderAttempt<string>[]{
     if(!env().MEDIA_PROVIDER_URL)return [];
     return [{
-      name:'external',
+      name:'external',family:'external_provider',
       run:()=>new ExternalProviderResolver(input.platform).downloadAudio(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS})
     }];
   }
@@ -39,7 +39,7 @@ export class ResolverOrchestrator {
       operation:'metadata',
       attempts:[
         {
-          name:'x_syndication',
+          name:'x_syndication',family:'public_structured',
           run:()=>this.xSyndication.probeMetadata(input,{timeoutMs:env().EXTRACTION_TIMEOUT_MS})
         },
         ...this.externalMetadataAttempt(input)
@@ -51,14 +51,14 @@ export class ResolverOrchestrator {
     const attempts:ProviderAttempt<MediaMetadata>[]=input.platform==='x'
       ?[
           {
-            name:'x_syndication',
+            name:'x_syndication',family:'public_structured',
             run:()=>this.xSyndication.resolveMetadata(input,{timeoutMs:env().EXTRACTION_TIMEOUT_MS})
           },
           ...this.externalMetadataAttempt(input)
         ]
       :[
           {
-            name:'ytdlp',
+            name:'ytdlp',family:'local_extractor',
             run:()=>new YtDlpResolver(input.platform).resolveMetadata(input,{timeoutMs:env().EXTRACTION_TIMEOUT_MS})
           },
           ...this.externalMetadataAttempt(input)
@@ -70,19 +70,19 @@ export class ResolverOrchestrator {
     const attempts:ProviderAttempt<string>[]=input.platform==='x'
       ?[
           {
-            name:'x_syndication',
+            name:'x_syndication',family:'public_structured',
             run:()=>this.xSyndication.downloadAudio(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS}),
             shouldFailover:shouldFailoverFromXSyndicationAudio
           },
           {
-            name:'ytdlp',
+            name:'ytdlp',family:'local_extractor',
             run:()=>new YtDlpResolver('x').downloadAudio(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS})
           },
           ...this.externalAudioAttempt(input,outputDir)
         ]
       :[
           {
-            name:'ytdlp',
+            name:'ytdlp',family:'local_extractor',
             run:()=>new YtDlpResolver(input.platform).downloadAudio(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS})
           },
           ...this.externalAudioAttempt(input,outputDir)

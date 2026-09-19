@@ -687,8 +687,8 @@ export async function extractTextLink(input:ParsedMediaUrl,budget?:TextExtractio
     return await runProviderChain<LinkTextPayload>({
       platform:input.platform,operation:'text',
       attempts:[
-        {name:'gallery_dl',run:()=>fetchGalleryPost(input,budget)},
-        {name:'public_page',run:()=>fetchPage(input,budget)}
+        {name:'gallery_dl',family:'local_extractor',run:()=>fetchGalleryPost(input,budget)},
+        {name:'public_page',family:'public_html',run:()=>fetchPage(input,budget)}
       ]
     });
   }
