@@ -9,6 +9,7 @@ import {
 } from './service.js';
 import { linkWebsiteVisitorToUser, trackWebsiteEvent, trackWebsiteVisit } from '../analytics/visitors.js';
 import { recordActivationEvent } from '../analytics/product.js';
+import { openAiIssuedResourceOverride } from './openaiCompat.js';
 
 function escapeHtml(v: unknown): string {
   return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]!));
@@ -99,20 +100,6 @@ const GOOGLE_FLOW_COOKIE='link2ai_google_oauth_state';
 function googleFlowCookie(value:string,maxAge=600):string{
   const secure=env().NODE_ENV==='production'?'; Secure':'';
   return `${GOOGLE_FLOW_COOKIE}=${encodeURIComponent(value)}; Path=/auth/google/callback; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
-}
-
-function openAiIssuedResourceOverride(headers:Record<string,string|string[]|undefined>,resource:unknown):string|undefined{
-  const rawUa=Array.isArray(headers['user-agent'])?headers['user-agent'][0]:headers['user-agent'];
-  const ua=String(rawUa??'');
-  const requested=String(resource??'');
-  // OpenAI Plugin Portal currently sends the legacy Link2AI /mcp resource while
-  // exchanging a token for the configured /mcp/openai server. Narrow the issued
-  // token to /mcp/openai for the official OpenAI OAuth client only. This never
-  // broadens access: the token becomes valid for fewer endpoints, not more.
-  if(/^openai-connectors-oauth\/\d+(?:\.\d+)*$/i.test(ua)&&requested===mcpResource()){
-    return mcpResource('openai');
-  }
-  return undefined;
 }
 
 function browserPostOriginOk(headers:Record<string,string|string[]|undefined>):boolean{
@@ -402,7 +389,12 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         const resource=b.resource?boundedOAuthString(b.resource,'resource',2048):undefined;
         const result = await exchangeAuthorizationCode({
           code,clientId,redirectUri,codeVerifier,resource,
-          issuedResourceOverride:openAiIssuedResourceOverride(req.headers as Record<string,string|string[]|undefined>,resource)
+          issuedResourceOverride:openAiIssuedResourceOverride(
+            Array.isArray(req.headers['user-agent'])?req.headers['user-agent'][0]:req.headers['user-agent'],
+            resource,
+            mcpResource(),
+            mcpResource('openai')
+          )
         });
         return reply.send({ token_type:'Bearer', ...result });
       }
