@@ -16,9 +16,9 @@ The general Link2AI `/mcp` endpoint is not the OpenAI submission endpoint.
 
 **Plugin name:** Link2AI
 
-**Short description:** Read supported public developer and discussion links when the original source is not reliably available to the AI.
+**Short description:** Read supported exact public links when the original source is not reliably available to the AI.
 
-**Long description:** Through its ChatGPT-specific distribution, Link2AI retrieves AI-readable source context from supported public Bluesky posts, GitHub Issues / pull requests, and Hacker News discussions. It preserves source identity, reports incomplete upstream results honestly, and paginates long results without treating delivery chunk size as a source-size limit.
+**Long description:** Through its ChatGPT-specific distribution, Link2AI retrieves AI-readable source context from the same supported exact public-link categories as its default/Claude distribution, including YouTube / Shorts, Instagram Reels and supported public posts, TikTok, individual public X and Bluesky posts, GitHub Issues / pull requests, Hacker News discussions, readable public webpages / articles, and text-layer PDFs. Reddit exact public posts are available only when approved Reddit OAuth Data API credentials are configured. Link2AI preserves source identity, reports incomplete upstream results honestly, and paginates long results without treating delivery chunk size as a source-size limit.
 
 **Developer identity:** Use the verified publisher identity selected in the OpenAI submission portal.
 
@@ -54,21 +54,21 @@ Keep the submission-portal challenge token configured in production and verify t
 
 ## ChatGPT distribution source policy
 
-Allowed on this release:
-- Bluesky public posts / replies through the public AT Protocol API.
-- GitHub public Issues / pull requests through the GitHub API.
-- Hacker News public items / discussions through the official Hacker News Firebase API.
+The ChatGPT distribution intentionally uses the same supported-source matrix as Link2AI's default/Claude distribution.
 
-Blocked on this release:
-- YouTube / Shorts
-- Instagram
-- TikTok
-- X
-- Reddit
-- arbitrary webpages
-- arbitrary PDFs
+Supported exact public sources:
+- YouTube videos and YouTube Shorts.
+- TikTok videos and supported public posts.
+- Instagram Reels and supported public posts.
+- Individual public X posts.
+- Individual public Bluesky posts.
+- Public GitHub Issues / pull requests and their public discussion.
+- Hacker News items / discussions.
+- Readable public HTTPS webpages / articles.
+- Direct public text-layer PDFs.
+- Individual public Reddit posts when approved Reddit OAuth Data API credentials are configured.
 
-The server enforces this before retrieval, cache reuse, or job creation. Existing job ids from another Link2AI distribution are re-checked by platform before any result is returned, so cached content cannot be used to bypass this policy.
+The ChatGPT-specific endpoint may expose a smaller tool surface than the default/Claude distribution, but source availability must not be reduced because of that packaging difference. Link2AI still does not support profiles, feeds, timelines, bulk crawling, private/login-only content, paywall or DRM bypass, or visual-only understanding that is not represented in returned text.
 
 ## Tool review notes
 
@@ -119,19 +119,19 @@ The compatibility `get_video_transcript`, `get_video_time_range`, and `get_video
 
 ## Suggested review prompts
 
-1. **GitHub pull request**
-   - URL: https://github.com/nodejs/node/pull/65472
-   - Ask for the change, the main reviewer concern, and how it was resolved.
+1. **Instagram Reel**
+   - URL: https://www.instagram.com/reel/DdNnHPip4RD/
+   - Ask Link2AI to summarize the main points and specific claims from the Reel.
 
-2. **Hacker News discussion**
+2. **YouTube**
+   - URL: https://www.youtube.com/watch?v=M7lc1UVf-VE
+   - Ask Link2AI to summarize what the video explains.
+
+3. **Hacker News discussion**
    - URL: https://news.ycombinator.com/item?id=37137448
    - Ask for the strongest disagreements and supporting reasons.
 
-3. **Bluesky post**
-   - URL: https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f
-   - Ask for a concise summary of the exact public announcement.
-
-4. **Multi-source comparison**
+4. **Multi-source GitHub comparison**
    - GitHub issue: https://github.com/nodejs/node/issues/65470
    - GitHub pull request: https://github.com/nodejs/node/pull/65472
    - Ask how the issue's reported bug maps to the pull request's fix and reviewer feedback, using `read_public_links` and preserving source attribution.
@@ -141,9 +141,9 @@ The compatibility `get_video_transcript`, `get_video_time_range`, and `get_video
    - Expected: `get_usage` returns `remaining_usage_units`.
 
 Negative review:
-- Use https://www.youtube.com/watch?v=M7lc1UVf-VE and verify that the ChatGPT endpoint returns `PLATFORM_BLOCKED` without retrieval or quota use, while the normal user-facing answer stays plain-language and does not expose logs or diagnostics.
-- Ask to crawl https://bsky.app/profile/bsky.app and verify that Link2AI refuses a profile/feed crawl.
-- Provide https://news.ycombinator.com/item?id=37137448 while explicitly forbidding Link2AI/external fetching and verify no Link2AI tool is invoked.
+- Ask Link2AI to crawl every post from a public profile/feed and verify that broad crawling is refused.
+- Explicitly forbid Link2AI/external fetching and verify no Link2AI tool is invoked.
+- Include a supported URL only as incidental text (for example, "Save this link for later") and verify Link2AI is not invoked merely because a URL is present.
 
 ## Pre-submission gates
 
@@ -154,8 +154,8 @@ Negative review:
 - Reviewer login works from outside the developer's own network without MFA.
 - OpenAI challenge token is configured and externally readable.
 - Privacy / Terms / Support pages return 200.
-- The new reviewer demo uses only the ChatGPT-specific endpoint and the permitted source matrix.
-- The previous Instagram demo is not used for formal submission.
+- The new reviewer demo uses only the ChatGPT-specific endpoint and demonstrates the same source matrix users receive through the default/Claude distribution.
+- The reviewer demo includes at least one high-value media source such as an Instagram Reel or YouTube video.
 - Re-check the final publisher rights/compliance declarations against the deployed ChatGPT-specific source matrix before checking them.
 
 ## Final directory-only requirements
