@@ -54,7 +54,7 @@ Read this Bluesky post with Link2AI and summarize the announcement: https://bsky
 A concise summary of the exact public Bluesky announcement, without inventing visual-only details.
 
 **Fixture**
-`https://bsky.app/profile/bsky.app/post/3mnzmprxpe22y` — a short official Bluesky product-tip announcement suitable for deterministic exact-post reading.
+`https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f` — a short official Bluesky product-tip announcement suitable for deterministic exact-post reading.
 
 ### P4 — Multi-source comparison
 **Prompt**
@@ -94,7 +94,7 @@ Dedicated production reviewer account.
 Read this YouTube video with Link2AI and summarize it: https://www.youtube.com/watch?v=M7lc1UVf-VE
 
 **Expected behavior**
-Return a clear `PLATFORM_BLOCKED` result before retrieval, cache reuse, job creation, or quota consumption. Do not silently fall back to another Link2AI retrieval route.
+The tool result should be `PLATFORM_BLOCKED` before retrieval, cache reuse, job creation, or quota consumption. The normal user-facing answer should translate that into plain language and must not expose server logs, OAuth diagnostics, provider details, or raw tool plumbing. Do not silently fall back to another Link2AI retrieval route.
 
 **Why the plugin must not complete the requested operation**
 Those source categories are intentionally unavailable through the ChatGPT distribution unless a separately authorized retrieval path is added later.
