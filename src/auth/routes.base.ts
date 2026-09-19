@@ -101,6 +101,20 @@ function googleFlowCookie(value:string,maxAge=600):string{
   return `${GOOGLE_FLOW_COOKIE}=${encodeURIComponent(value)}; Path=/auth/google/callback; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
 }
 
+function openAiIssuedResourceOverride(headers:Record<string,string|string[]|undefined>,resource:unknown):string|undefined{
+  const rawUa=Array.isArray(headers['user-agent'])?headers['user-agent'][0]:headers['user-agent'];
+  const ua=String(rawUa??'');
+  const requested=String(resource??'');
+  // OpenAI Plugin Portal currently sends the legacy Link2AI /mcp resource while
+  // exchanging a token for the configured /mcp/openai server. Narrow the issued
+  // token to /mcp/openai for the official OpenAI OAuth client only. This never
+  // broadens access: the token becomes valid for fewer endpoints, not more.
+  if(/^openai-connectors-oauth\/\d+(?:\.\d+)*$/i.test(ua)&&requested===mcpResource()){
+    return mcpResource('openai');
+  }
+  return undefined;
+}
+
 function browserPostOriginOk(headers:Record<string,string|string[]|undefined>):boolean{
   return browserSameOriginOk(headers,env().PUBLIC_BASE_URL,env().NODE_ENV==='production');
 }
@@ -385,11 +399,21 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         const redirectUri=boundedOAuthString(b.redirect_uri,'redirect_uri',2048);
         const codeVerifier=boundedOAuthString(b.code_verifier,'code_verifier',128);
         if(!/^[A-Za-z0-9._~-]{43,128}$/.test(codeVerifier))throw new Link2AIError('AUTH_REQUIRED','Invalid PKCE code_verifier.',400);
-        const result = await exchangeAuthorizationCode({code,clientId,redirectUri,codeVerifier,resource:b.resource?boundedOAuthString(b.resource,'resource',2048):undefined});
+        const resource=b.resource?boundedOAuthString(b.resource,'resource',2048):undefined;
+        const result = await exchangeAuthorizationCode({
+          code,clientId,redirectUri,codeVerifier,resource,
+          issuedResourceOverride:openAiIssuedResourceOverride(req.headers as Record<string,string|string[]|undefined>,resource)
+        });
         return reply.send({ token_type:'Bearer', ...result });
       }
       if (b?.grant_type === 'refresh_token') {
-        const result = await exchangeRefreshToken({refreshToken:boundedOAuthString(b.refresh_token,'refresh token',1024),clientId:boundedOAuthString(b.client_id,'client_id',2048),resource:b.resource?boundedOAuthString(b.resource,'resource',2048):undefined});
+        const resource=b.resource?boundedOAuthString(b.resource,'resource',2048):undefined;
+        const result = await exchangeRefreshToken({
+          refreshToken:boundedOAuthString(b.refresh_token,'refresh token',1024),
+          clientId:boundedOAuthString(b.client_id,'client_id',2048),
+          resource,
+          issuedResourceOverride:openAiIssuedResourceOverride(req.headers as Record<string,string|string[]|undefined>,resource)
+        });
         return reply.send({ token_type:'Bearer', ...result });
       }
       return reply.code(400).send({error:'unsupported_grant_type'});
