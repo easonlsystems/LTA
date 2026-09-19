@@ -283,13 +283,27 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
 
     const tmpDir=await fs.mkdtemp(path.join(os.tmpdir(),'link2ai-'));
     tmp=tmpDir;
-    const audio=await resolver.audio(parsed,tmpDir);
+    let audio:string|undefined;
+    let visualMedia:string|undefined;
+    try{
+      audio=await resolver.audio(parsed,tmpDir);
+    }catch(audioDownloadError){
+      const mapped=asLink2AIError(audioDownloadError);
+      if(mapped.code!=='EXTRACTION_FAILED')throw audioDownloadError;
+      // Silent/video-only sources can legitimately fail the audio-only download route.
+      // Do not fail the whole job before the visual recovery path gets a chance.
+      logEvent('audio_route_unavailable_visual_fallback',{
+        job_id:job.id,platform:job.platform,error_code:mapped.code
+      });
+      visualMedia=await resolver.visual(parsed,tmpDir);
+    }
 
-    // Some public Instagram reels currently resolve successfully but omit duration in
-    // yt-dlp metadata. Probe the actual downloaded media before quota reservation. This
-    // prevents both false failures and under-counting / max-duration bypasses.
+    // Some short-form sources omit duration in metadata. Recover it from whichever
+    // media route actually succeeded before quota reservation.
     if(metadata.durationSeconds<=0){
-      const probedDuration=await probeMediaDurationSeconds(audio);
+      const durationMedia=audio??visualMedia;
+      if(!durationMedia)throw new Link2AIError('EXTRACTION_FAILED','No downloaded media was available for duration recovery.',502,true,{cause_code:'duration_media_missing'});
+      const probedDuration=await probeMediaDurationSeconds(durationMedia);
       await applyDuration(probedDuration);
       logEvent('resolver_duration_recovered',{job_id:job.id,platform:job.platform,duration_seconds:metadata.durationSeconds,source:'ffprobe'});
     }
@@ -314,7 +328,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     }
 
     let partialAsr:Awaited<ReturnType<typeof transcribeAudio>>|undefined;
-    try{
+    if(audio)try{
       const preparedAudio=await normalizeAudioForAsr(audio,tmpDir);
       const asr=await transcribeAudio(preparedAudio,job.language,job.platform);
       const asrCompleteness=videoCompleteness(asr.transcript,metadata.durationSeconds,asr.segments);
@@ -339,7 +353,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       logEvent('visual_ocr_fallback_started',{job_id:job.id,platform:job.platform,audio_error_code:mappedAudio.code});
     }
 
-    const visualMedia=await mediaHasVideoStream(audio)?audio:await resolver.visual(parsed,tmpDir);
+    visualMedia=visualMedia??(audio&&await mediaHasVideoStream(audio)?audio:await resolver.visual(parsed,tmpDir));
     const visualStarted=Date.now();
     try{
       const visual=await extractVisualOcr(visualMedia,tmpDir,metadata.durationSeconds);

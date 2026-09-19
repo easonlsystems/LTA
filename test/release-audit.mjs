@@ -142,7 +142,9 @@ assert.match(dockerSource,/tesseract-ocr-chi-tra/,'Production image must include
 assert.match(ciSource,/for lang in eng chi_tra chi_sim jpn kor; do tesseract --list-langs/,'CI must verify packaged OCR languages');
 assert.match(visualSource,/MAX_FRAMES=18/,'Visual OCR fallback must keep frame sampling bounded');
 assert.match(visualSource,/visual_ocr_empty/,'Visual OCR must fail clearly when sampled frames contain no reliable text');
-assert.match(processorSource,/visual_ocr_fallback_started/,'Silent or untranscribable videos must attempt visual OCR before failing');
+assert.match(processorSource,/visual_ocr_fallback_started/,'Untranscribable videos must attempt visual OCR before failing');
+assert.match(processorSource,/audio_route_unavailable_visual_fallback/,'Silent or video-only sources must reach visual fallback even when the audio download route itself fails');
+assert.match(processorSource,/visualMedia=await resolver\.visual\(parsed,tmpDir\)/,'Audio-route failure must acquire visual media instead of failing the whole source');
 assert.match(processorSource,/source=partialAsr\?'hybrid':'visual'/,'Visual fallback must distinguish OCR-only from audio-plus-visual fusion provenance');
 assert.match(processorSource,/\[Spoken transcript — timeline incomplete\]/,'Incomplete ASR must be preserved and fused with visual OCR instead of discarded');
 assert.match(processorSource,/\?\['visual_semantics','unsampled_frames','spoken_timeline_incomplete'\][\s\S]*:\['visual_semantics','unsampled_frames','spoken_audio'\]/,'OCR and hybrid fallbacks must explicitly retain their missing visual and spoken sections');
