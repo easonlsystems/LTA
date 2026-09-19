@@ -139,7 +139,7 @@ assert.match(ciSource,/docker build -t link2ai-runtime-ci/,'CI must build the pr
 assert.match(ciSource,/gallery-dl --version[\s\S]*pdftotext -v/,'CI runtime smoke must exercise native fallback dependencies');
 assert.match(workerPreflightSource,/Tesseract OCR/,'Worker preflight must verify visual OCR support');
 assert.match(dockerSource,/tesseract-ocr-chi-tra/,'Production image must include Traditional Chinese OCR data');
-assert.match(ciSource,/tesseract --list-langs[\s\S]*chi_tra/,'CI must verify packaged OCR languages');
+assert.match(ciSource,/for lang in eng chi_tra chi_sim jpn kor; do tesseract --list-langs/,'CI must verify packaged OCR languages');
 assert.match(visualSource,/MAX_FRAMES=18/,'Visual OCR fallback must keep frame sampling bounded');
 assert.match(visualSource,/visual_ocr_empty/,'Visual OCR must fail clearly when sampled frames contain no reliable text');
 assert.match(processorSource,/visual_ocr_fallback_started/,'Silent or untranscribable videos must attempt visual OCR before failing');
