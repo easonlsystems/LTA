@@ -31,7 +31,7 @@ const providerHealthMigration=await readFile(new URL('../sql/007_provider_health
 assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News must use the official Firebase API path');
 assert.doesNotMatch(linkSource,/hn\.algolia\.com/,'OpenAI-ready core must not depend on the community Algolia HN adapter');
 assert.match(cacheSource,/CACHE_PROVENANCE_EPOCHS/,'Cache layer must define retrieval-provenance epochs for source migrations');
-assert.match(cacheSource,/hackernews:'2026-09-18T18:03:16\.000Z'/,'HN cache epoch must match the official-API production cutover');
+assert.match(cacheSource,/hackernews:'2026-09-18T18:05:44\.000Z'/,'HN cache epoch must match the official-API production cutover');
 assert.ok(cacheSource.includes("clauses.push('created_at >= $'+params.length+'::timestamptz')"),'Shared HN cache lookup must reject pre-cutover entries');
 assert.ok(cacheSource.includes("clauses.push('c.created_at >= $'+params.length+'::timestamptz')"),'Same-user HN cache lookup must reject pre-cutover entries');
 assert.match(mcpServiceSource,/cacheProvenanceEpoch\(parsed\.platform\)/,'MCP same-user reuse must look up source provenance');
