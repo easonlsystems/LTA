@@ -18,7 +18,7 @@ export interface TranscriptPayload {
   language: string;
   transcript: string;
   segments: TranscriptSegment[];
-  source: 'caption' | 'asr' | 'post' | 'page';
+  source: 'caption' | 'asr' | 'visual' | 'post' | 'page';
   completeness: CompletenessMetadata;
 }
 

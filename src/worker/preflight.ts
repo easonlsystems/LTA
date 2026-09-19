@@ -24,6 +24,7 @@ export async function assertWorkerRuntime():Promise<void>{
   await requireBinary(env().FFMPEG_BIN,['-version'],'FFmpeg');
   await requireBinary(ffprobeBin(env().FFMPEG_BIN),['-version'],'ffprobe');
   await requireBinary('pdftotext',['-v'],'Poppler pdftotext');
+  await requireBinary('tesseract',['--version'],'Tesseract OCR');
   await requireBinary(
     'python3',
     ['-c','import curl_cffi, youtube_transcript_api; print(curl_cffi.__version__)'],

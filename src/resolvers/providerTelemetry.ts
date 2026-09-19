@@ -1,7 +1,7 @@
 import { asLink2AIError } from '../util/errors.js';
 import { logEvent } from '../util/log.js';
 
-export type ProviderOperation='metadata'|'audio'|'transcript'|'text';
+export type ProviderOperation='metadata'|'audio'|'transcript'|'text'|'visual';
 
 export interface ProviderOutcomeInput{
   platform:string;
