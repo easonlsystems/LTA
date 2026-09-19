@@ -45,13 +45,31 @@ app.all('/mcp',async(request,reply)=>{
   if(!originCheck.ok){
     return reply.code(403).send({jsonrpc:'2.0',error:{code:-32000,message:originCheck.message},id:null});
   }
-  const auth=await authInfoFromBearer(request.headers.authorization);
-  if(!auth){
-    reply.header('WWW-Authenticate',`Bearer resource_metadata="${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp", scope="link2ai:read"`);
-    return reply.code(401).send({error:'unauthorized',message:`Connect ${env().PUBLIC_BRAND_NAME} to continue.`});
+
+  // Normal Claude/general Link2AI traffic keeps the original /mcp audience
+  // and full tool surface.
+  const defaultAuth=await authInfoFromBearer(request.headers.authorization,mcpResource());
+  if(defaultAuth){
+    return nodeMcp(Object.assign(request.raw,{auth:defaultAuth}),reply.raw,request.body);
   }
-  // MCP's Node adapter forwards req.auth to ctx.http.authInfo.
-  return nodeMcp(Object.assign(request.raw,{auth}),reply.raw,request.body);
+
+  // ChatGPT can keep an already-installed legacy connector whose runtime still
+  // posts to /mcp even after the Plugin Portal draft is configured for
+  // /mcp/openai. If the bearer token is explicitly scoped to /mcp/openai, route
+  // that request to the restricted OpenAI MCP handler. This does not broaden
+  // access: the OpenAI token never gains the general /mcp tool surface.
+  const openaiAuth=await authInfoFromBearer(request.headers.authorization,mcpResource('openai'));
+  if(openaiAuth){
+    console.info(JSON.stringify({
+      event:'openai_mcp_legacy_alias',
+      method:request.method,
+      user_agent:String(request.headers['user-agent']??'').slice(0,120)
+    }));
+    return nodeOpenaiMcp(Object.assign(request.raw,{auth:openaiAuth}),reply.raw,request.body);
+  }
+
+  reply.header('WWW-Authenticate',`Bearer resource_metadata="${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp", scope="link2ai:read"`);
+  return reply.code(401).send({error:'unauthorized',message:`Connect ${env().PUBLIC_BRAND_NAME} to continue.`});
 });
 
 app.all('/mcp/openai',async(request,reply)=>{
