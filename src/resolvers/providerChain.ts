@@ -2,6 +2,7 @@ import { asLink2AIError } from '../util/errors.js';
 import { logEvent } from '../util/log.js';
 import { shouldTryExternalFallback } from './fallback.js';
 import { noteProviderFailure, noteProviderSuccess, orderProviderAttempts } from './providerCircuit.js';
+import { orderProviderAttemptsByRecentHealth } from './providerHealth.js';
 import { recordProviderOutcome, type ProviderOperation, type ProviderOutcomeInput } from './providerTelemetry.js';
 
 export type ProviderFamily=
@@ -41,10 +42,24 @@ export async function runProviderChain<T>(input:ProviderChainInput<T>):Promise<T
   if(!input.attempts.length)throw new Error('Provider chain requires at least one provider.');
   const shouldFailover=input.shouldFailover??shouldTryExternalFallback;
   const telemetry=input.telemetry??recordProviderOutcome;
-  const attempts=orderProviderAttempts(input.platform,input.operation,input.attempts);
+  const healthOrdered=input.telemetry===undefined
+    ?await orderProviderAttemptsByRecentHealth(input.platform,input.operation,input.attempts)
+    :[...input.attempts];
 
-  if(attempts.length>1&&attempts.some((attempt,index)=>attempt!==input.attempts[index])){
-    const deferred=input.attempts.find((attempt,index)=>attempt!==attempts[index]);
+  if(healthOrdered.length>1&&healthOrdered.some((attempt,index)=>attempt!==input.attempts[index])){
+    const deferred=input.attempts.find((attempt,index)=>attempt!==healthOrdered[index]);
+    if(deferred){
+      logEvent('source_provider_health_deferred',{
+        platform:input.platform,operation:input.operation,
+        provider:deferred.name,provider_family:providerFamily(deferred)
+      });
+    }
+  }
+
+  const attempts=orderProviderAttempts(input.platform,input.operation,healthOrdered);
+
+  if(attempts.length>1&&attempts.some((attempt,index)=>attempt!==healthOrdered[index])){
+    const deferred=healthOrdered.find((attempt,index)=>attempt!==attempts[index]);
     if(deferred){
       logEvent('source_provider_circuit_deferred',{
         platform:input.platform,operation:input.operation,

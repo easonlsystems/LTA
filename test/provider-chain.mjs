@@ -7,6 +7,7 @@ process.env.APP_SECRET='test-secret-that-is-at-least-thirty-two-characters-long'
 
 const {runProviderChain}=await import('../dist/src/resolvers/providerChain.js');
 const {orderProviderAttempts,noteProviderFailure,resetProviderCircuitsForTests}=await import('../dist/src/resolvers/providerCircuit.js');
+const {orderProvidersByHealth,providerIsDegraded}=await import('../dist/src/resolvers/providerHealth.js');
 const {Link2AIError}=await import('../dist/src/util/errors.js');
 const {pool}=await import('../dist/src/db/pool.js');
 
@@ -115,6 +116,20 @@ resetProviderCircuitsForTests();
     ['primary','fallback'],
     'after cooldown, the original provider must be allowed to probe again'
   );
+}
+
+{
+  const attempts=[
+    {name:'cheap_primary',family:'local:yt_dlp'},
+    {name:'healthy_fallback',family:'local:gallery_dl'},
+    {name:'unknown_last',family:'external:media_default'}
+  ];
+  const ordered=orderProvidersByHealth(attempts,[
+    {provider:'cheap_primary',attempts:10,successes:2,retryableFailures:7},
+    {provider:'healthy_fallback',attempts:10,successes:9,retryableFailures:1}
+  ]);
+  assert.deepEqual(ordered.map(x=>x.name),['healthy_fallback','unknown_last','cheap_primary'],'recent health must defer a repeatedly failing route without permanently removing it');
+  assert.equal(providerIsDegraded({provider:'new',attempts:4,successes:0,retryableFailures:4}),false,'small samples must not reorder providers');
 }
 
 await pool.end();

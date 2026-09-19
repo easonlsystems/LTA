@@ -26,6 +26,7 @@ const activationMigration=await readFile(new URL('../sql/006_activation_funnel.s
 const providerChainSource=await readFile(new URL('../src/resolvers/providerChain.ts',import.meta.url),'utf8');
 const providerTelemetrySource=await readFile(new URL('../src/resolvers/providerTelemetry.ts',import.meta.url),'utf8');
 const providerCircuitSource=await readFile(new URL('../src/resolvers/providerCircuit.ts',import.meta.url),'utf8');
+const providerHealthSource=await readFile(new URL('../src/resolvers/providerHealth.ts',import.meta.url),'utf8');
 const orchestratorSource=await readFile(new URL('../src/resolvers/orchestrator.ts',import.meta.url),'utf8');
 const galleryMediaSource=await readFile(new URL('../src/resolvers/galleryDl.ts',import.meta.url),'utf8');
 const providerHealthMigration=await readFile(new URL('../sql/007_provider_health.sql',import.meta.url),'utf8');
@@ -132,6 +133,10 @@ assert.match(providerChainSource,/source_provider_failover/,'Provider transition
 assert.match(providerChainSource,/provider_family/,'Provider transitions must preserve provider-family identity');
 assert.match(providerCircuitSource,/FAILURE_THRESHOLD=3/,'Provider circuit breaker must require repeated failures before deferring a route');
 assert.match(providerCircuitSource,/OPEN_MS=2\*60_000/,'Provider circuit breaker must cool down and probe again instead of permanently disabling a route');
+assert.match(providerChainSource,/orderProviderAttemptsByRecentHealth/,'Provider health telemetry must influence routing instead of remaining dashboard-only');
+assert.match(providerHealthSource,/bucket_start>=now\(\)-interval '2 hours'/,'Health routing must use recent bounded telemetry rather than lifetime history');
+assert.match(providerHealthSource,/attempts<5/,'Health routing must require a minimum sample before deprioritizing a provider');
+assert.match(providerHealthSource,/provider_health_timeout/,'Provider-health lookup must be advisory and timeout quickly');
 assert.match(orchestratorSource,/name:'x_syndication',family:'public:x_syndication'[\s\S]*name:'ytdlp',family:'local:yt_dlp'/,'X audio must preserve independent structured-X then local-extractor failover families');
 assert.match(orchestratorSource,/MEDIA_PROVIDER_URL/,'Managed external provider must remain an optional route, not a required recurring dependency');
 assert.match(orchestratorSource,/name:'gallery_dl_media',family:'local:gallery_dl'/,'Instagram and TikTok media must expose gallery-dl as a separate extractor family');
