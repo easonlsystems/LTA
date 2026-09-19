@@ -404,7 +404,12 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           refreshToken:boundedOAuthString(b.refresh_token,'refresh token',1024),
           clientId:boundedOAuthString(b.client_id,'client_id',2048),
           resource,
-          issuedResourceOverride:openAiIssuedResourceOverride(req.headers as Record<string,string|string[]|undefined>,resource)
+          issuedResourceOverride:openAiIssuedResourceOverride(
+            Array.isArray(req.headers['user-agent'])?req.headers['user-agent'][0]:req.headers['user-agent'],
+            resource,
+            mcpResource(),
+            mcpResource('openai')
+          )
         });
         return reply.send({ token_type:'Bearer', ...result });
       }
