@@ -177,13 +177,17 @@ export function chunkResult(result:ToolJobResult,offset=0,maxChars=MAX_CHARS):Re
   const next=chunk.end<result.transcript.length?chunk.end:null;
   const contentType=kindFor(result);
   const visualOnlyResult=result.transcript_source==='visual';
+  const hybridVisualResult=result.transcript_source==='hybrid';
+  const visualAugmentedResult=visualOnlyResult||hybridVisualResult;
   const visualNotice=contentType==='video'
     ? visualOnlyResult
       ? 'Link2AI recovered sampled on-screen OCR after spoken-text extraction failed. This represents only sampled readable text, not full visual semantics, gestures, objects, charts, or every frame.'
-      : 'Visual-only text, layout, gestures, charts, pairings, and other on-screen relationships may be missing. Do not infer them unless supported by transcript/caption text.'
+      : hybridVisualResult
+        ? 'Link2AI fused an incomplete spoken transcript with sampled on-screen OCR. Both parts are partial; do not infer full visual semantics, unsampled frames, gestures, objects, charts, or missing speech.'
+        : 'Visual-only text, layout, gestures, charts, pairings, and other on-screen relationships may be missing. Do not infer them unless supported by transcript/caption text.'
     : 'Images, visual layout, attached media and other non-text details are not fully represented unless explicitly present in the returned text.';
   const sourceTruncated=Boolean(result.truncated);
-  const timelineCoverageVerified=contentType!=='video'||(!visualOnlyResult&&Boolean(result.segments?.length));
+  const timelineCoverageVerified=contentType!=='video'||(!visualAugmentedResult&&Boolean(result.segments?.length));
   const sourceCompleteness=sourceTruncated?'partial':timelineCoverageVerified?'complete':'unverified';
   const continuationRequired=next!==null;
   const contentComplete=sourceCompleteness==='complete'&&!continuationRequired;
@@ -206,8 +210,8 @@ export function chunkResult(result:ToolJobResult,offset=0,maxChars=MAX_CHARS):Re
     content_sections_truncated:result.content_sections_truncated??[],
     // Keep transcript for backward compatibility with already-connected MCP clients.
     transcript:contentText,
-    content_scope:contentType==='video'?(visualOnlyResult?'sampled_visual_ocr':'spoken_and_caption_text'):contentType==='post'?'public_post_text':'public_page_text',
-    visual_content_included:visualOnlyResult,continuation_notice:continuationNotice,limitation_notice:sourceTruncated
+    content_scope:contentType==='video'?(visualOnlyResult?'sampled_visual_ocr':hybridVisualResult?'spoken_text_plus_sampled_visual_ocr':'spoken_and_caption_text'):contentType==='post'?'public_post_text':'public_page_text',
+    visual_content_included:visualAugmentedResult,continuation_notice:continuationNotice,limitation_notice:sourceTruncated
       ? `Note: The source result is incomplete.${result.pages_extracted!==undefined&&result.pages_available!==undefined?` Processed ${result.pages_extracted} of ${result.pages_available} pages.`:''}${result.content_sections_truncated?.length?` Incomplete sections: ${result.content_sections_truncated.join(', ')}.`:''} ${visualNotice}`
       : sourceCompleteness==='unverified'
         ? `Link2AI received transcript text, but this source did not provide timestamps that can prove timeline coverage. ${visualNotice}`

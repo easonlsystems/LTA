@@ -143,9 +143,10 @@ assert.match(ciSource,/for lang in eng chi_tra chi_sim jpn kor; do tesseract --l
 assert.match(visualSource,/MAX_FRAMES=18/,'Visual OCR fallback must keep frame sampling bounded');
 assert.match(visualSource,/visual_ocr_empty/,'Visual OCR must fail clearly when sampled frames contain no reliable text');
 assert.match(processorSource,/visual_ocr_fallback_started/,'Silent or untranscribable videos must attempt visual OCR before failing');
-assert.match(processorSource,/source:'visual'/,'Visual fallback results must retain explicit provenance');
+assert.match(processorSource,/source=partialAsr\?'hybrid':'visual'/,'Visual fallback must distinguish OCR-only from audio-plus-visual fusion provenance');
+assert.match(processorSource,/\[Spoken transcript — timeline incomplete\]/,'Incomplete ASR must be preserved and fused with visual OCR instead of discarded');
 assert.match(processorSource,/contentSectionsTruncated:\['visual_semantics','unsampled_frames','spoken_audio'\]/,'OCR fallback must never masquerade as full visual understanding');
-assert.match(visualMigration,/source IN \('caption','asr','visual','post','page'\)/,'Cache schema must persist visual provenance explicitly');
+assert.match(visualMigration,/source IN \('caption','asr','visual','hybrid','post','page'\)/,'Cache schema must persist visual and hybrid provenance explicitly');
 assert.doesNotMatch(audioSource,/V1 transcription limit/,'User-facing errors must not expose internal V1 naming');
 assert.doesNotMatch(limitsSource,/EXTRACTION_LIMITS/,'V3 must not impose product-defined text/source caps');
 assert.doesNotMatch(plansSource,/MAX_PROCESSABLE_VIDEO_SECONDS|30\s*\*\s*60|120\s*\*\s*60/,'Plans must not impose product-defined per-video duration caps');
@@ -199,7 +200,8 @@ assert.match(mcpSource,/find_in_link/,'V3 must expose read-only search over proc
 assert.match(mcpSource,/get_video_map/,'V3 must expose a whole-video timeline map for broad questions');
 assert.match(mcpSource,/video matches include timestamps|start_seconds/,'Video source search must preserve time ranges for follow-up context');
 assert.match(mcpSource,/sampled_visual_ocr/,'MCP results must distinguish sampled visual OCR from spoken/caption transcript text');
-assert.match(mcpSource,/visual_content_included:visualOnlyResult/,'Visual OCR provenance must be explicit in user-visible structured output');
+assert.match(mcpSource,/visual_content_included:visualAugmentedResult/,'Visual OCR and hybrid provenance must be explicit in user-visible structured output');
+assert.match(mcpSource,/spoken_text_plus_sampled_visual_ocr/,'Hybrid video results must expose an explicit content scope');
 assert.match(mcpSource,/not full visual semantics/,'Visual OCR fallback must state its semantic limitation instead of implying full video understanding');
 assert.match(mcpSource,/search miss is not proof|zero matches as proof/i,'Source search must not turn lexical misses into false absence claims');
 assert.doesNotMatch(mcpSource,/checkout_url|plan_info_url/,'Public MCP schemas must not expose checkout or plan-purchase URLs for digital subscriptions or credits');

@@ -313,11 +313,13 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       logEvent('caption_incomplete_fallback_asr',{job_id:job.id,platform:job.platform,duration_seconds:metadata.durationSeconds,truncation_reason:completeness.truncationReason??'caption_timeline_incomplete'});
     }
 
+    let partialAsr:Awaited<ReturnType<typeof transcribeAudio>>|undefined;
     try{
       const preparedAudio=await normalizeAudioForAsr(audio,tmpDir);
       const asr=await transcribeAudio(preparedAudio,job.language,job.platform);
       const asrCompleteness=videoCompleteness(asr.transcript,metadata.durationSeconds,asr.segments);
       if(asrCompleteness.truncated){
+        partialAsr=asr;
         throw new Link2AIError('EXTRACTION_FAILED','The full video timeline could not be transcribed reliably. No processing units were charged.',502,true,{
           cause_code:'asr_timeline_incomplete',truncation_reason:asrCompleteness.truncationReason
         });
@@ -345,24 +347,36 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
         platform:job.platform,operation:'visual',provider:'tesseract_ocr',family:'local:tesseract',
         outcome:'success',durationMs:Date.now()-visualStarted,attemptIndex:0
       });
+      const source=partialAsr?'hybrid':'visual';
+      const fusedSegments=partialAsr?.segments?.length
+        ?[
+            ...partialAsr.segments.map(segment=>({...segment,text:`[Speech] ${segment.text}`})),
+            ...visual.segments
+          ].sort((a,b)=>a.start-b.start||a.end-b.end)
+        :visual.segments;
+      const fusedTranscript=partialAsr
+        ?`[Spoken transcript — timeline incomplete]\n${partialAsr.transcript}\n\n[Sampled visual OCR]\n${visual.transcript}`
+        :visual.transcript;
       const completeness={
         truncated:true,
-        truncationReason:'visual_ocr_sampled',
-        extractedTokenEstimate:estimateTokens(visual.transcript),
+        truncationReason:partialAsr?'audio_visual_partial_fusion':'visual_ocr_sampled',
+        extractedTokenEstimate:estimateTokens(fusedTranscript),
         usageUnits:videoUsageUnits(metadata.durationSeconds),
-        contentSectionsTruncated:['visual_semantics','unsampled_frames','spoken_audio']
+        contentSectionsTruncated:partialAsr
+          ?['visual_semantics','unsampled_frames','spoken_timeline_incomplete']
+          :['visual_semantics','unsampled_frames','spoken_audio']
       };
       const cache=await saveCache({
         platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
         title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
-        language:'und',transcript:visual.transcript,segments:visual.segments,source:'visual',completeness
+        language:partialAsr?.language??'und',transcript:fusedTranscript,segments:fusedSegments,source,completeness
       });
       await finalizeQuota(job.user_id,job.id);reserved=false;
       await markCompleted(job.id,cache.id,metadata.durationSeconds);
       logEvent('job_completed',{
-        job_id:job.id,platform:job.platform,source:'visual',resolver:metadata.resolver??'unknown',
+        job_id:job.id,platform:job.platform,source,resolver:metadata.resolver??'unknown',
         duration_seconds:metadata.durationSeconds,sampled_frames:visual.sampledFrames,frames_with_text:visual.framesWithText,
-        usage_units:videoUsageUnits(metadata.durationSeconds),truncated:true,truncation_reason:'visual_ocr_sampled',
+        usage_units:videoUsageUnits(metadata.durationSeconds),truncated:true,truncation_reason:completeness.truncationReason,
         processing_ms:Date.now()-startedAt
       });
       return;
