@@ -202,7 +202,7 @@ assert.match(mcpSource,/find_in_link/,'V3 must expose read-only search over proc
 assert.match(mcpSource,/get_video_map/,'V3 must expose a whole-video timeline map for broad questions');
 assert.match(mcpSource,/video matches include timestamps|start_seconds/,'Video source search must preserve time ranges for follow-up context');
 assert.match(mcpSource,/sampled_visual_ocr/,'MCP results must distinguish sampled visual OCR from spoken/caption transcript text');
-assert.match(mcpSource,/visual_content_included:visualAugmentedResult/,'Visual OCR and hybrid provenance must be explicit in user-visible structured output');
+assert.match(mcpSource,/visual_content_included:contentType==='video'\?videoScope\.visualIncluded:false/,'Visual OCR and hybrid provenance must be explicit in user-visible structured output');
 assert.match(mcpSource,/spoken_text_plus_sampled_visual_ocr/,'Hybrid video results must expose an explicit content scope');
 assert.match(mcpSource,/not full visual semantics/,'Visual OCR fallback must state its semantic limitation instead of implying full video understanding');
 assert.match(mcpSource,/const scope=videoContentScope\(result\)/,'Timed lookup, search, and video-map helpers must preserve video provenance');
