@@ -42,7 +42,11 @@ assert.match(apiSource,/openai_mcp_request_error/,'ChatGPT MCP adapter/request f
 assert.match(apiSource,/authorization_present:Boolean\(authorization\)/,'OpenAI MCP request diagnostics must record only whether authorization is present');
 assert.doesNotMatch(apiSource,/authorization:[^_]/,'OpenAI MCP request diagnostics must not log raw authorization values');
 assert.match(authServiceSource,/oauth_access_token_issued/,'OAuth issuance must log the audience/resource without logging the token');
-assert.doesNotMatch(authServiceSource,/oauth_access_token_issued[\s\S]{0,500}access_token/,'OAuth issuance diagnostic must not include the access token');
+const oauthDiagStart=authServiceSource.indexOf("event:'oauth_access_token_issued'");
+const oauthDiagEnd=authServiceSource.indexOf('}));',oauthDiagStart);
+assert.ok(oauthDiagStart>=0&&oauthDiagEnd>oauthDiagStart,'OAuth issuance diagnostic block must be present');
+const oauthDiagBlock=authServiceSource.slice(oauthDiagStart,oauthDiagEnd);
+assert.doesNotMatch(oauthDiagBlock,/access_token|refresh_token|token_hash|user_id|email/i,'OAuth issuance diagnostic must not include secrets or user identifiers');
 assert.match(apiSource,/error="invalid_token"/,'Rejected ChatGPT bearer tokens must explicitly challenge the client to reauthorize');
 assert.doesNotMatch(apiSource,/isUnauthenticatedMcpDiscoveryRequest/,'ChatGPT MCP route must not bypass OAuth at the transport layer');
 assert.match(linkSource,/safeJsonArrayPages/,'GitHub discussions must paginate through public discussion pages');
