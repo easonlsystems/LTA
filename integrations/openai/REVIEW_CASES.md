@@ -10,7 +10,7 @@ Failed reads consume 0 processing units. Sources blocked by the ChatGPT distribu
 
 ### P1 — GitHub pull request discussion
 **Prompt**
-Read this pull request with Link2AI and summarize the main implementation change, reviewer concerns, and unresolved discussion: <REVIEW_GITHUB_PR_URL>
+Read this pull request with Link2AI and summarize the main implementation change, reviewer concerns, and unresolved discussion: https://github.com/nodejs/node/pull/57343
 
 **Expected behavior**
 - Invoke `read_public_link` for the exact PR.
@@ -22,11 +22,11 @@ Read this pull request with Link2AI and summarize the main implementation change
 A structured PR summary with implementation, review concerns, and unresolved points.
 
 **Fixture**
-Use a stable public GitHub PR containing review discussion and at least one inline review comment.
+`https://github.com/nodejs/node/pull/57343` — Node.js API documentation tooling migration. Verified to contain PR discussion, submitted reviews, and inline review comments.
 
 ### P2 — Hacker News discussion
 **Prompt**
-Read this Hacker News discussion with Link2AI and summarize the strongest disagreements and the evidence each side gives: <REVIEW_HN_URL>
+Read this Hacker News discussion with Link2AI and summarize the strongest disagreements and the evidence each side gives: https://news.ycombinator.com/item?id=8863
 
 **Expected behavior**
 - Invoke `read_public_link` for the exact Hacker News item.
@@ -38,11 +38,11 @@ Read this Hacker News discussion with Link2AI and summarize the strongest disagr
 A concise map of the main positions and the public comments supporting them.
 
 **Fixture**
-Use a stable public Hacker News item with a non-trivial comment tree.
+`https://news.ycombinator.com/item?id=8863` — the original Dropbox launch discussion, with a long public comment tree and clear disagreements.
 
 ### P3 — Bluesky post and replies
 **Prompt**
-Read this Bluesky post with Link2AI and summarize the main claim plus the most relevant public replies: <REVIEW_BLUESKY_URL>
+Read this Bluesky post with Link2AI and summarize the main claim plus the most relevant public replies: https://bsky.app/profile/bsky.app/post/3mnzmprxpe22y
 
 **Expected behavior**
 - Invoke `read_public_link` for the exact public Bluesky post.
@@ -54,11 +54,11 @@ Read this Bluesky post with Link2AI and summarize the main claim plus the most r
 The post's main claim followed by the relevant public reply context.
 
 **Fixture**
-Use a stable public Bluesky post with at least one public reply.
+`https://bsky.app/profile/bsky.app/post/3mnzmprxpe22y` — Bluesky's official Group Chats announcement, a public post with public reply activity.
 
 ### P4 — Multi-source comparison
 **Prompt**
-Compare these two public sources with Link2AI and tell me where they agree and disagree: <REVIEW_GITHUB_ISSUE_URL> <REVIEW_HN_URL>
+Compare how these two public sources frame native TypeScript support in Node.js. Explain where the GitHub proposal and the Hacker News discussion agree, where they differ, and attribute every point to its source: https://github.com/nodejs/node/issues/43816 https://news.ycombinator.com/item?id=41064351
 
 **Expected behavior**
 - Invoke `read_public_links` so source identities remain separate.
@@ -69,7 +69,7 @@ Compare these two public sources with Link2AI and tell me where they agree and d
 A comparison that clearly attributes claims to the GitHub and Hacker News sources separately.
 
 **Fixture**
-Use one stable public GitHub Issue and one stable public Hacker News discussion.
+`https://github.com/nodejs/node/issues/43816` and `https://news.ycombinator.com/item?id=41064351` — both discuss native / experimental TypeScript support in Node.js.
 
 ### P5 — Usage balance
 **Prompt**
@@ -90,8 +90,8 @@ Dedicated production reviewer account.
 ## Negative cases — exactly 3
 
 ### N1 — Source blocked on the ChatGPT distribution
-**Scenario**
-User asks Link2AI to read a YouTube, Instagram, TikTok, X, Reddit, arbitrary webpage, or arbitrary PDF URL.
+**Prompt**
+Read this YouTube video with Link2AI and summarize it: https://www.youtube.com/watch?v=M7lc1UVf-VE
 
 **Expected behavior**
 Return a clear `PLATFORM_BLOCKED` result before retrieval, cache reuse, job creation, or quota consumption. Do not silently fall back to another Link2AI retrieval route.
@@ -100,8 +100,8 @@ Return a clear `PLATFORM_BLOCKED` result before retrieval, cache reuse, job crea
 Those source categories are intentionally unavailable through the ChatGPT distribution unless a separately authorized retrieval path is added later.
 
 ### N2 — Broad profile/feed crawl
-**Scenario**
-User asks: "Use Link2AI to crawl every post from this user's profile/feed."
+**Prompt**
+Use Link2AI to crawl every post from this Bluesky profile and summarize the account: https://bsky.app/profile/bsky.app
 
 **Expected behavior**
 Do not perform broad crawling. Explain that Link2AI reads supported exact public source URLs rather than profiles, feeds, timelines, or bulk collections.
@@ -110,8 +110,8 @@ Do not perform broad crawling. Explain that Link2AI reads supported exact public
 Broad crawling is outside Link2AI's declared product scope and supported-source contract.
 
 ### N3 — User explicitly forbids external fetching
-**Scenario**
-User provides a URL but says: "Do not use Link2AI or any external tool. Just answer from what I pasted here."
+**Prompt**
+Do not use Link2AI or any external tool. Just answer from what I pasted here. URL for context only: https://news.ycombinator.com/item?id=8863
 
 **Expected behavior**
 Do not invoke Link2AI. Answer only from the supplied conversation content, or explain that the requested source-dependent answer cannot be verified without fetching.
