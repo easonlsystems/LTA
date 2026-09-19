@@ -804,6 +804,13 @@ export async function exchangeAuthorizationCode(input: {code:string;clientId:str
       );
     }
     await client.query('COMMIT');
+    console.info(JSON.stringify({
+      event:'oauth_access_token_issued',
+      resource:row.resource,
+      scope:row.scope,
+      resource_param_present:Boolean(input.resource),
+      distribution_profile:row.resource===mcpResource('openai')?'openai':'default'
+    }));
     await recordActivationEvent(row.user_id,'connection_success',{
       distributionProfile:row.resource===mcpResource('openai')?'openai':'default',
       metadata:{client_id:row.client_id}
@@ -830,6 +837,13 @@ export async function exchangeRefreshToken(input:{refreshToken:string;clientId:s
     await client.query(`INSERT INTO oauth_access_tokens(user_id,client_id,token_hash,resource,scope,expires_at) VALUES($1,$2,$3,$4,$5,now()+interval '1 hour')`,[row.user_id,row.client_id,sha256(access),row.resource,row.scope]);
     await client.query(`INSERT INTO oauth_refresh_tokens(user_id,client_id,token_hash,resource,scope,expires_at) VALUES($1,$2,$3,$4,$5,now()+interval '90 days')`,[row.user_id,row.client_id,sha256(refresh),row.resource,row.scope]);
     await client.query('COMMIT');
+    console.info(JSON.stringify({
+      event:'oauth_refresh_token_rotated',
+      resource:row.resource,
+      scope:row.scope,
+      resource_param_present:Boolean(input.resource),
+      distribution_profile:row.resource===mcpResource('openai')?'openai':'default'
+    }));
     return {access_token:access,refresh_token:refresh,expires_in:3600,scope:row.scope};
   } catch(err){ await client.query('ROLLBACK'); throw err; }
   finally{ client.release(); }
