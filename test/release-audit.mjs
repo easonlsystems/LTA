@@ -101,7 +101,7 @@ assert.match(safeHttpSource,/requestDeadline/,'External HTTP address fallback mu
 assert.match(safeHttpSource,/DNS lookup timed out/,'DNS resolution must share the external request timeout budget');
 assert.match(safeHttpSource,/Remote content response was truncated/,'prematurely closed HTTP responses must not become successful partial content');
 assert.match(authServiceSource,/pg_advisory_xact_lock\(hashtext\('link2ai:password-auth:global'\)\)/,'password admission count+insert must be serialized');
-assert.match(workerSource,/event:'job_claim_error'/,'a transient database claim error must not terminate the worker');
+assert.match(workerSource,/logErrorEvent\('job_claim_error'/,'a transient database claim error must not terminate the worker and must use sanitized error logging');
 assert.doesNotMatch(audioSource,/V1 transcription limit/,'User-facing errors must not expose internal V1 naming');
 assert.doesNotMatch(limitsSource,/EXTRACTION_LIMITS/,'V3 must not impose product-defined text/source caps');
 assert.doesNotMatch(plansSource,/MAX_PROCESSABLE_VIDEO_SECONDS|30\s*\*\s*60|120\s*\*\s*60/,'Plans must not impose product-defined per-video duration caps');
