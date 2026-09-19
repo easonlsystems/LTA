@@ -9,6 +9,7 @@ import { registerAuthRoutes } from '../auth/routes.js';
 import { registerBillingRoutes } from '../billing/routes.js';
 import { authInfoFromBearer, beginFounderStepUp, clearFounderStepUpCookie, createFounderStepUpCookie, csrfTokenFromSessionCookie, hasFounderStepUp, invalidateFounderStepUpChallenges, mcpResource, userFromSessionCookie, verifyCsrfToken, verifyFounderStepUp } from '../auth/service.js';
 import { buildMcpServer } from '../mcp/server.js';
+import { isUnauthenticatedMcpDiscoveryRequest } from '../mcp/discovery.js';
 import { readinessIssues } from '../config/readiness.js';
 import { browserSameOriginOk, publicHostAllowlist } from '../config/publicUrl.js';
 import { getUsageSnapshot } from '../quota/service.js';
@@ -59,6 +60,12 @@ app.all('/mcp/openai',async(request,reply)=>{
   }
   const auth=await authInfoFromBearer(request.headers.authorization,mcpResource('openai'));
   if(!auth){
+    // OpenAI's submission scanner must be able to initialize the MCP server and list
+    // tool metadata before a user has linked an account. Keep this narrowly limited
+    // to protocol discovery; any tool execution still receives the normal OAuth 401.
+    if(request.method==='POST'&&isUnauthenticatedMcpDiscoveryRequest(request.body)){
+      return nodeOpenaiMcp(request.raw,reply.raw,request.body);
+    }
     reply.header('WWW-Authenticate',`Bearer resource_metadata="${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp/openai", scope="link2ai:read"`);
     return reply.code(401).send({error:'unauthorized',message:`Connect ${env().PUBLIC_BRAND_NAME} to continue.`});
   }
