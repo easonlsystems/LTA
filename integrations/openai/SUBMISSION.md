@@ -120,26 +120,30 @@ The compatibility `get_video_transcript`, `get_video_time_range`, and `get_video
 ## Suggested review prompts
 
 1. **GitHub pull request**
-   - Provide a stable public GitHub PR with review comments.
+   - URL: https://github.com/nodejs/node/pull/57343
    - Ask for the implementation change, reviewer concerns, and unresolved discussion.
 
 2. **Hacker News discussion**
-   - Provide a stable public Hacker News item.
+   - URL: https://news.ycombinator.com/item?id=8863
    - Ask for the strongest disagreements and supporting reasons.
 
 3. **Bluesky post**
-   - Provide a stable public Bluesky post with replies.
+   - URL: https://bsky.app/profile/bsky.app/post/3mnzmprxpe22y
    - Ask for the main claim and relevant public replies.
 
 4. **Multi-source comparison**
-   - Compare one public GitHub Issue with one public Hacker News discussion using `read_public_links`.
+   - GitHub: https://github.com/nodejs/node/issues/43816
+   - Hacker News: https://news.ycombinator.com/item?id=41064351
+   - Ask how the two sources frame native TypeScript support in Node.js, using `read_public_links` and preserving source attribution.
 
 5. **Usage**
    - Ask: "How many Link2AI processing units do I have left?"
    - Expected: `get_usage` returns `remaining_usage_units`.
 
 Negative review:
-- Give a YouTube, Instagram, TikTok, X, Reddit, arbitrary webpage, or arbitrary PDF URL and verify that the ChatGPT endpoint returns `PLATFORM_BLOCKED` without retrieval or quota use.
+- Use https://www.youtube.com/watch?v=M7lc1UVf-VE and verify that the ChatGPT endpoint returns `PLATFORM_BLOCKED` without retrieval or quota use.
+- Ask to crawl https://bsky.app/profile/bsky.app and verify that Link2AI refuses a profile/feed crawl.
+- Provide https://news.ycombinator.com/item?id=8863 while explicitly forbidding Link2AI/external fetching and verify no Link2AI tool is invoked.
 
 ## Pre-submission gates
 
