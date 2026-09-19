@@ -1,7 +1,7 @@
 import { env } from '../config/env.js';
 import { pool } from '../db/pool.js';
 import { assertPlatformAllowedForProfile, parseAllowedMediaUrl, type DistributionProfile } from './policy.js';
-import { asLink2AIError, Link2AIError } from '../util/errors.js';
+import { asLink2AIError, Link2AIError, publicErrorMessage } from '../util/errors.js';
 import { reserveQuota, finalizeQuota, getUsageSnapshot } from '../quota/service.js';
 import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limits.js';
 import { cacheProvenanceEpoch, findCache } from '../worker/cache.js';
@@ -36,6 +36,8 @@ export interface ToolJobResult {
   pages_available?:number|null;
   pages_extracted?:number|null;
   content_sections_truncated?:string[];
+  remaining_usage_units?:number;
+  plan_info_url?:string;
 }
 
 export async function startTranscriptJob(userId:string,url:string,options:{refresh?:boolean;profile?:DistributionProfile}={}):Promise<ToolJobResult>{
@@ -161,7 +163,7 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
     });
     await recordActivationEvent(userId,'first_successful_read',{
       platform:row.platform,distributionProfile:profile,
-      metadata:{job_id:row.id,source:row.transcript_source??'unknown'}
+      metadata:{source:row.transcript_source??'unknown'}
     });
     const returnedUsageUnits=Number(row.usage_units??0)>0?Number(row.usage_units):(row.transcript_source==='post'||row.transcript_source==='page'?textUsageUnits(estimateTokens(row.transcript)):videoUsageUnits(Number(row.cache_duration??row.duration_seconds??0)));
     return {
@@ -174,27 +176,52 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
       items_available:row.items_available,items_extracted:row.items_extracted,pages_available:row.pages_available,pages_extracted:row.pages_extracted,content_sections_truncated:row.content_sections_truncated??[]
     };
   }
-  if(row.status==='awaiting_payment')return {status:'payment_required',job_id:row.id,duration_seconds:row.duration_seconds??undefined,error_code:row.error_code,message:row.error_message};
-  if(row.status==='failed')return {status:'failed',job_id:row.id,error_code:row.error_code,message:row.error_message};
+  if(row.status==='awaiting_payment'){
+    const usage=await getUsageSnapshot(userId).catch(()=>null);
+    const remaining=usage?.remaining_usage_units;
+    const base=env().PUBLIC_BASE_URL.replace(/\/$/,'');
+    return {
+      status:'payment_required',
+      job_id:row.id,
+      duration_seconds:row.duration_seconds??undefined,
+      error_code:row.error_code??'QUOTA_EXCEEDED',
+      message:`Link2AI could not read the full source because the connected account${remaining===undefined?' does not have enough processing units':` has ${remaining} processing units remaining`}. No processing units were charged for this failed read. Review processing-unit options on the Link2AI website outside ChatGPT.`,
+      usage_units:0,
+      ...(remaining===undefined?{}:{remaining_usage_units:remaining}),
+      plan_info_url:`${base}/pricing`
+    };
+  }
+  if(row.status==='failed')return {
+    status:'failed',
+    job_id:row.id,
+    error_code:row.error_code,
+    message:publicErrorMessage(String(row.error_code??'INTERNAL_ERROR')),
+    retryable:Boolean(row.retryable),
+    usage_units:0
+  };
   return {status:'processing',job_id:row.id,message:`${env().PUBLIC_BRAND_NAME} is reading this link.`,retry_after_seconds:3};
 }
 
 export async function usageForTool(userId:string,profile:DistributionProfile='default'){
   await recordActivationEvent(userId,'connector_enabled',{distributionProfile:profile,metadata:{inferred_from:'usage_tool_call'}});
   const usage=await getUsageSnapshot(userId);
-  return {
+  const authoritative={
     plan:usage.plan,
+    used_usage_units:usage.used_usage_units,
+    limit_usage_units:usage.limit_usage_units,
+    remaining_usage_units:usage.remaining_usage_units,
+    concurrent_jobs:usage.concurrent_jobs,
+    concurrency_limit:usage.concurrency_limit,
+    period_end:usage.period_end
+  };
+  if(profile==='openai')return authoritative;
+  return {
+    ...authoritative,
     used_seconds:usage.used_seconds,
     limit_seconds:usage.limit_seconds,
     remaining_seconds:usage.remaining_seconds,
     used_links:usage.used_videos,
     limit_links:usage.limit_videos,
-    remaining_links:usage.remaining_videos,
-    concurrent_jobs:usage.concurrent_jobs,
-    concurrency_limit:usage.concurrency_limit,
-    period_end:usage.period_end
-    ,used_usage_units:usage.used_usage_units
-    ,limit_usage_units:usage.limit_usage_units
-    ,remaining_usage_units:usage.remaining_usage_units
+    remaining_links:usage.remaining_videos
   };
 }
