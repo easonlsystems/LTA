@@ -3,6 +3,7 @@ import { canPurchaseTopup, createBillingPortalSession, createCheckoutSession, cr
 import { csrfTokenFromSessionCookie, userFromSessionCookie, verifyCsrfToken } from '../auth/service.js';
 import { getUsageSnapshot } from '../quota/service.js';
 import { env } from '../config/env.js';
+import { logErrorEvent } from '../util/log.js';
 import { pool } from '../db/pool.js';
 import { trackWebsiteVisit } from '../analytics/visitors.js';
 import { getFoundingOfferStatus } from './founding.js';
@@ -112,7 +113,10 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
     if(!verifyCsrfToken(req.headers.cookie,String(b?.csrf??'')))return reply.code(403).type('text/html').send(page(`<h1>${esc(env().PUBLIC_BRAND_NAME)}</h1><p>This top-up action expired. Please try again.</p><p><a href="/account">Back</a></p>`));
     const pack:TopupPack=b?.pack==='1500'?'1500':'500';
     try{return reply.redirect(await createTopupCheckoutSession(user.id,pack));}
-    catch(e){return reply.code(400).type('text/html').send(page(`<h1>${esc(env().PUBLIC_BRAND_NAME)}</h1><p>${esc(e instanceof Error?e.message:'Could not start top-up checkout.')}</p><p><a href="/account">Back</a></p>`));}
+    catch(e){
+      logErrorEvent('billing_topup_start_error',e);
+      return reply.code(400).type('text/html').send(page(`<h1>${esc(env().PUBLIC_BRAND_NAME)}</h1><p>Could not start the processing-unit checkout. Please try again from your account.</p><p><a href="/account">Back</a></p>`));
+    }
   });
 
   app.get('/billing/topup/success',async(_req,reply)=>{
