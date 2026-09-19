@@ -78,6 +78,34 @@ export class ResolverOrchestrator {
     return await runProviderChain({platform:input.platform,operation:'metadata',attempts});
   }
 
+  async visual(input:ParsedMediaUrl,outputDir:string):Promise<string>{
+    const attempts:ProviderAttempt<string>[]=input.platform==='x'
+      ?[
+          {
+            name:'x_syndication_visual',family:'public:x_syndication',
+            run:()=>this.xSyndication.downloadAudio(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS}),
+            shouldFailover:shouldFailoverFromXSyndicationAudio
+          },
+          {
+            name:'ytdlp_visual',family:'local:yt_dlp',
+            run:()=>new YtDlpResolver('x').downloadVideo(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS})
+          }
+        ]
+      :[
+          {
+            name:'ytdlp_visual',family:'local:yt_dlp',
+            run:()=>new YtDlpResolver(input.platform).downloadVideo(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS})
+          },
+          ...(input.platform==='instagram'||input.platform==='tiktok'
+            ?[{
+                name:'gallery_dl_visual',family:'local:gallery_dl' as const,
+                run:()=>new GalleryDlMediaResolver(input.platform).downloadVideo(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS})
+              }]
+            :[])
+        ];
+    return await runProviderChain({platform:input.platform,operation:'visual',attempts});
+  }
+
   async audio(input:ParsedMediaUrl,outputDir:string):Promise<string>{
     const attempts:ProviderAttempt<string>[]=input.platform==='x'
       ?[

@@ -171,6 +171,37 @@ export class YtDlpResolver implements MediaResolver {
     };
   }
 
+  async downloadVideo(input:ParsedMediaUrl,outputDir:string,ctx:ResolveContext):Promise<string>{
+    const template=path.join(outputDir,'visual.%(ext)s');
+    let result;
+    try{
+      result=await ytdlp([
+        '--js-runtimes','node','--no-playlist','--no-warnings',
+        '-f','bestvideo*+bestaudio/best','--merge-output-format','mp4',
+        '--max-filesize',String(env().MAX_DOWNLOAD_BYTES),'-o',template,input.normalizedUrl
+      ],ctx);
+    }catch(firstError){
+      try{
+        result=await ytdlp([
+          '--impersonate','chrome','--js-runtimes','node','--no-playlist','--no-warnings',
+          '-f','bestvideo*+bestaudio/best','--merge-output-format','mp4',
+          '--max-filesize',String(env().MAX_DOWNLOAD_BYTES),'-o',template,input.normalizedUrl
+        ],ctx);
+      }catch(secondError){throw preferredExtractionError(firstError,secondError);}
+    }
+    void result;
+    const files=await fs.readdir(outputDir);
+    const video=files.find(file=>file.startsWith('visual.'));
+    if(!video)throw new Link2AIError('EXTRACTION_FAILED','Video extraction completed without an output file.',502,true,{cause_code:'visual_media_missing'});
+    const fullPath=path.join(outputDir,video);
+    const stat=await fs.stat(fullPath);
+    if(stat.size>env().MAX_DOWNLOAD_BYTES){
+      await fs.rm(fullPath,{force:true});
+      throw new Link2AIError('DOWNLOAD_TOO_LARGE','The extracted video exceeds the visual-processing safety limit.',413);
+    }
+    return fullPath;
+  }
+
   async downloadAudio(input: ParsedMediaUrl, outputDir: string, ctx: ResolveContext): Promise<string> {
     const template = path.join(outputDir, 'audio.%(ext)s');
     let result;

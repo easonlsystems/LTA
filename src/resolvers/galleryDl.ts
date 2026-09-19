@@ -95,15 +95,15 @@ export class GalleryDlMediaResolver implements MediaResolver{
     };
   }
 
-  async downloadAudio(input:ParsedMediaUrl,outputDir:string,ctx:ResolveContext):Promise<string>{
+  private async downloadMedia(input:ParsedMediaUrl,outputDir:string,ctx:ResolveContext,prefix:string):Promise<string>{
     await this.probe(input,ctx);
     const result=await runProcess('gallery-dl',[
       '--no-input','--no-colors','--range','1','--directory',outputDir,
-      '--filename','gallery-media.{extension}',input.normalizedUrl
+      '--filename',`${prefix}.{extension}`,input.normalizedUrl
     ],{timeoutMs:ctx.timeoutMs,maxOutputBytes:4_000_000});
     if(result.code!==0)throw mapGalleryError(result.stderr||result.stdout);
     const entries=await fs.readdir(outputDir,{withFileTypes:true});
-    const file=entries.find(entry=>entry.isFile()&&entry.name.startsWith('gallery-media.'));
+    const file=entries.find(entry=>entry.isFile()&&entry.name.startsWith(`${prefix}.`));
     if(!file)throw new Link2AIError('EXTRACTION_FAILED','The secondary media extractor completed without a media file.',502,true,{cause_code:'gallery_dl_no_media'});
     const fullPath=path.join(outputDir,file.name);
     const stat=await fs.stat(fullPath);
@@ -116,5 +116,13 @@ export class GalleryDlMediaResolver implements MediaResolver{
       throw new Link2AIError('DOWNLOAD_TOO_LARGE','The extracted media exceeds the transcription safety limit.',413);
     }
     return fullPath;
+  }
+
+  async downloadAudio(input:ParsedMediaUrl,outputDir:string,ctx:ResolveContext):Promise<string>{
+    return await this.downloadMedia(input,outputDir,ctx,'gallery-media');
+  }
+
+  async downloadVideo(input:ParsedMediaUrl,outputDir:string,ctx:ResolveContext):Promise<string>{
+    return await this.downloadMedia(input,outputDir,ctx,'gallery-visual');
   }
 }
