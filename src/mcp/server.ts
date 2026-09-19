@@ -138,6 +138,16 @@ const usageOutputSchema=z.object({
   remaining_links:z.number().int().nonnegative().nullable().optional().describe('Legacy compatibility field; null means there is no link-count cap. Do not use this field as the processing-unit balance.')
 });
 
+const openaiUsageOutputSchema=z.object({
+  plan:z.enum(['trial','basic','pro']),
+  used_usage_units:z.number().int().nonnegative().describe('Authoritative processing units consumed in the current allowance period.'),
+  limit_usage_units:z.number().int().nonnegative().describe('Authoritative processing-unit allowance currently available to the account for this period, including applicable rollover/bonus units.'),
+  remaining_usage_units:z.number().int().nonnegative().describe('Authoritative processing units remaining. Use this field to answer questions about how many Link2AI processing units are left.'),
+  concurrent_jobs:z.number().int().nonnegative(),
+  concurrency_limit:z.number().int().nonnegative(),
+  period_end:z.string().nullable().optional()
+});
+
 type Link2AIHandlerContext={http?:{authInfo?:AuthInfo & {extra?:{userId?:unknown}}}};
 function userIdFromContext(ctx:Link2AIHandlerContext):string{
   const id=ctx?.http?.authInfo?.extra?.userId;
@@ -405,7 +415,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
   const followupInstructions=openaiProfile
     ? ' For a topic/detail/quote question about a long already-processed source when the relevant location is unclear, use find_in_link to locate likely source regions, then read surrounding context before answering. A search miss is not proof that the source never mentions the topic.'
     : ' For timestamp-specific video questions, use get_video_time_range on the existing job rather than re-reading the video. For a topic/detail/quote question about a long already-processed source when the relevant location is unclear, use find_in_link to locate likely transcript regions, then read surrounding context before answering; video matches include timestamps. For broad questions that may depend on the whole video, use get_video_map to inspect coverage across the full timeline, then read the relevant time ranges. A search miss is not proof that the source never mentions the topic.';
-  const server=new McpServer({name:e.PUBLIC_BRAND_NAME,version:'1.11.0'},{instructions:`${e.PUBLIC_BRAND_NAME} fills source-access gaps for supported public links; it is not a default replacement for source access the connected AI already has. If the AI can already access the complete source needed for the user's request reliably, answer from that source without calling Link2AI or consuming processing units. When the user's question requires source contents that are unavailable, blocked, metadata-only, or incomplete, use read_public_link for one supported ${supportedSources} link. For two or more supported links that genuinely need Link2AI access, use read_public_links so source identities stay separate. If a successful Link2AI result for the exact same source is already present and sufficient in the current conversation, reuse it instead of calling Link2AI again; turn count alone is never a reason to refresh. Call again when the earlier source text is no longer available/sufficient, and use refresh=true only when the user asks for current/updated state or the earlier result is stale, partial, or unverified.${followupInstructions} If a result is payment_required, explain the remaining processing-unit limitation, say that the failed read charged 0 units, and if helpful provide only the returned informational plan_info_url; never initiate checkout or a purchase from ChatGPT. Do not use ${e.PUBLIC_BRAND_NAME} for unrelated URLs, profiles, feeds, timelines, private/login-gated content, broad crawling, or when the user explicitly asks not to fetch external content.${redditReady||openaiProfile?'':' Reddit is not currently advertised because this deployment does not have approved Reddit OAuth Data API credentials configured.'}${distributionNotice}`});
+  const server=new McpServer({name:e.PUBLIC_BRAND_NAME,version:'1.11.0'},{instructions:`${e.PUBLIC_BRAND_NAME} fills source-access gaps for supported public links; it is not a default replacement for source access the connected AI already has. If the AI can already access the complete source needed for the user's request reliably, answer from that source without calling Link2AI or consuming processing units. When the user's question requires source contents that are unavailable, blocked, metadata-only, or incomplete, use read_public_link for one supported ${supportedSources} link. For two or more supported links that genuinely need Link2AI access, use read_public_links so source identities stay separate. If a successful Link2AI result for the exact same source is already present and sufficient in the current conversation, reuse it instead of calling Link2AI again; turn count alone is never a reason to refresh. Call again when the earlier source text is no longer available/sufficient, and use refresh=true only when the user asks for current/updated state or the earlier result is stale, partial, or unverified.${followupInstructions} If a result is payment_required, explain the remaining processing-unit limitation, say that the failed read charged 0 units, and if helpful provide only the returned informational plan_info_url; never initiate checkout or a purchase from ChatGPT. Do not use ${e.PUBLIC_BRAND_NAME} for unrelated URLs, profiles, feeds, timelines, private/login-gated content, broad crawling, or when the user explicitly asks not to fetch external content.${redditReady||openaiProfile?'':' Reddit is not currently advertised because this deployment does not have approved Reddit OAuth Data API credentials configured.'}${distributionNotice} Keep tool plumbing out of the final user-facing answer: do not narrate internal job ids, source keys, raw error codes, authentication diagnostics, or tool-call mechanics unless the user explicitly asks for technical debugging details.`});
 
   const readPublicLinkConfig={
     title:'Read public link',
@@ -574,7 +584,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
     title:`Check ${env().PUBLIC_BRAND_NAME} usage`,
     description:`Return the connected user's current ${env().PUBLIC_BRAND_NAME} plan and authoritative processing-unit balance. For questions about units left, use remaining_usage_units. In the ChatGPT distribution, only the authoritative unit fields are returned; do not infer balance from legacy link/seconds metadata.`,
     inputSchema:{},
-    outputSchema:usageOutputSchema.shape,
+    outputSchema:(openaiProfile?openaiUsageOutputSchema:usageOutputSchema).shape,
     securitySchemes:LINK2AI_OAUTH_SECURITY,
     _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}
