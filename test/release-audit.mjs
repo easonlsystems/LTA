@@ -38,6 +38,11 @@ assert.match(authServiceSource,/input\.resource\?normalizeResource\(input\.resou
 assert.match(authServiceSource,/\^Bearer\\s\+\(\.\+\)\$\/i/,'Bearer scheme parsing must be case-insensitive and whitespace-tolerant');
 assert.match(authServiceSource,/diagnoseBearerAuth/,'OAuth bearer rejection must expose privacy-safe diagnostics without logging tokens');
 assert.match(apiSource,/openai_mcp_auth_rejected/,'ChatGPT MCP auth failures must emit a diagnosable rejection event');
+assert.match(apiSource,/openai_mcp_request_error/,'ChatGPT MCP adapter/request failures must emit a privacy-safe server-side diagnostic');
+assert.match(apiSource,/authorization_present:Boolean\(authorization\)/,'OpenAI MCP request diagnostics must record only whether authorization is present');
+assert.doesNotMatch(apiSource,/authorization:[^_]/,'OpenAI MCP request diagnostics must not log raw authorization values');
+assert.match(authServiceSource,/oauth_access_token_issued/,'OAuth issuance must log the audience/resource without logging the token');
+assert.doesNotMatch(authServiceSource,/oauth_access_token_issued[\s\S]{0,500}access_token/,'OAuth issuance diagnostic must not include the access token');
 assert.match(apiSource,/error="invalid_token"/,'Rejected ChatGPT bearer tokens must explicitly challenge the client to reauthorize');
 assert.doesNotMatch(apiSource,/isUnauthenticatedMcpDiscoveryRequest/,'ChatGPT MCP route must not bypass OAuth at the transport layer');
 assert.match(linkSource,/safeJsonArrayPages/,'GitHub discussions must paginate through public discussion pages');
