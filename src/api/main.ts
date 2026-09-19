@@ -7,9 +7,8 @@ import { env } from '../config/env.js';
 import { pool } from '../db/pool.js';
 import { registerAuthRoutes } from '../auth/routes.js';
 import { registerBillingRoutes } from '../billing/routes.js';
-import { authInfoFromBearer, beginFounderStepUp, clearFounderStepUpCookie, createFounderStepUpCookie, csrfTokenFromSessionCookie, hasFounderStepUp, invalidateFounderStepUpChallenges, mcpResource, userFromSessionCookie, verifyCsrfToken, verifyFounderStepUp } from '../auth/service.js';
+import { authInfoFromBearer, beginFounderStepUp, clearFounderStepUpCookie, createFounderStepUpCookie, csrfTokenFromSessionCookie, diagnoseBearerAuth, hasFounderStepUp, invalidateFounderStepUpChallenges, mcpResource, userFromSessionCookie, verifyCsrfToken, verifyFounderStepUp } from '../auth/service.js';
 import { buildMcpServer } from '../mcp/server.js';
-import { isUnauthenticatedMcpDiscoveryRequest } from '../mcp/discovery.js';
 import { readinessIssues } from '../config/readiness.js';
 import { browserSameOriginOk, publicHostAllowlist } from '../config/publicUrl.js';
 import { getUsageSnapshot } from '../quota/service.js';
@@ -60,13 +59,13 @@ app.all('/mcp/openai',async(request,reply)=>{
   }
   const auth=await authInfoFromBearer(request.headers.authorization,mcpResource('openai'));
   if(!auth){
-    // OpenAI's submission scanner must be able to initialize the MCP server and list
-    // tool metadata before a user has linked an account. Keep this narrowly limited
-    // to protocol discovery; any tool execution still receives the normal OAuth 401.
-    if(request.method==='POST'&&isUnauthenticatedMcpDiscoveryRequest(request.body)){
-      return nodeOpenaiMcp(request.raw,reply.raw,request.body);
-    }
-    reply.header('WWW-Authenticate',`Bearer resource_metadata="${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp/openai", scope="link2ai:read"`);
+    const diagnostic=await diagnoseBearerAuth(request.headers.authorization,mcpResource('openai')).catch(()=>null);
+    app.log.warn({event:'openai_mcp_auth_rejected',...(diagnostic??{diagnostic_unavailable:true})});
+    const resourceMetadata=`${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp/openai`;
+    const challenge=diagnostic?.authorization_present
+      ? `Bearer resource_metadata="${resourceMetadata}", scope="link2ai:read", error="invalid_token", error_description="Access token is invalid for this MCP resource"`
+      : `Bearer resource_metadata="${resourceMetadata}", scope="link2ai:read"`;
+    reply.header('WWW-Authenticate',challenge);
     return reply.code(401).send({error:'unauthorized',message:`Connect ${env().PUBLIC_BRAND_NAME} to continue.`});
   }
   return nodeOpenaiMcp(Object.assign(request.raw,{auth}),reply.raw,request.body);

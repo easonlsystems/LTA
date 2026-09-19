@@ -31,12 +31,15 @@ assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News mu
 assert.doesNotMatch(linkSource,/hn\.algolia\.com/,'OpenAI-ready core must not depend on the community Algolia HN adapter');
 assert.match(policySource,/OPENAI_ALLOWED_PLATFORMS[^\n]*\['bluesky','github','hackernews'\]/,'ChatGPT distribution must default-deny every source outside the reviewed allowlist');
 assert.match(apiSource,/app\.all\('\/mcp\/openai'/,'API must expose a distinct ChatGPT MCP endpoint');
-assert.match(apiSource,/isUnauthenticatedMcpDiscoveryRequest\(request\.body\)/,'ChatGPT MCP endpoint must permit metadata discovery before OAuth');
-assert.match(apiSource,/request\.method==='POST'/,'Unauthenticated ChatGPT MCP access must stay limited to POST discovery requests');
-assert.match(apiSource,/Connect \$\{env\(\)\.PUBLIC_BRAND_NAME\} to continue/,'Authenticated ChatGPT operations must retain the OAuth challenge path');
 assert.match(authServiceSource,/mcpResource\('openai'\)/,'OAuth must define a distinct ChatGPT MCP audience');
 assert.match(authServiceSource,/authInfoFromBearer\(authorization\?: string,expectedResource=mcpResource\(\)\)/,'Bearer validation must accept an explicit expected MCP resource');
 assert.match(authServiceSource,/\[sha256\(token\),expectedResource\]/,'Bearer validation must query the token by the endpoint-specific OAuth resource');
+assert.match(authServiceSource,/input\.resource\?normalizeResource\(input\.resource\):row\.resource/,'OAuth token exchange must preserve the resource already bound to the authorization code when resource is omitted');
+assert.match(authServiceSource,/\^Bearer\\s\+\(\.\+\)\$\/i/,'Bearer scheme parsing must be case-insensitive and whitespace-tolerant');
+assert.match(authServiceSource,/diagnoseBearerAuth/,'OAuth bearer rejection must expose privacy-safe diagnostics without logging tokens');
+assert.match(apiSource,/openai_mcp_auth_rejected/,'ChatGPT MCP auth failures must emit a diagnosable rejection event');
+assert.match(apiSource,/error="invalid_token"/,'Rejected ChatGPT bearer tokens must explicitly challenge the client to reauthorize');
+assert.doesNotMatch(apiSource,/isUnauthenticatedMcpDiscoveryRequest/,'ChatGPT MCP route must not bypass OAuth at the transport layer');
 assert.match(linkSource,/safeJsonArrayPages/,'GitHub discussions must paginate through public discussion pages');
 assert.match(linkSource,/GitHub comments/);
 assert.match(linkSource,/GitHub reviews/);
