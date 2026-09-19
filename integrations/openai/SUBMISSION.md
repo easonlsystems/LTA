@@ -141,7 +141,7 @@ The compatibility `get_video_transcript`, `get_video_time_range`, and `get_video
    - Expected: `get_usage` returns `remaining_usage_units`.
 
 Negative review:
-- Use https://www.youtube.com/watch?v=M7lc1UVf-VE and verify that the ChatGPT endpoint returns `PLATFORM_BLOCKED` without retrieval or quota use.
+- Use https://www.youtube.com/watch?v=M7lc1UVf-VE and verify that the ChatGPT endpoint returns `PLATFORM_BLOCKED` without retrieval or quota use, while the normal user-facing answer stays plain-language and does not expose logs or diagnostics.
 - Ask to crawl https://bsky.app/profile/bsky.app and verify that Link2AI refuses a profile/feed crawl.
 - Provide https://news.ycombinator.com/item?id=37137448 while explicitly forbidding Link2AI/external fetching and verify no Link2AI tool is invoked.
 
