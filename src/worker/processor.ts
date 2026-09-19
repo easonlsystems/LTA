@@ -137,7 +137,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       try{
         const fallback=await resolveYouTubeTranscriptFallback(parsed,job.language,45_000);
         await recordProviderOutcome({
-          platform:'youtube',operation:'transcript',provider:'youtube_transcript',family:'platform_transcript',
+          platform:'youtube',operation:'transcript',provider:'youtube_transcript',family:'public:youtube_transcript',
           outcome:'success',durationMs:Date.now()-transcriptProviderStarted,attemptIndex:1
         });
         metadata=fallback.metadata;
@@ -148,7 +148,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
         });
       }catch(fallbackError){
         await recordProviderOutcome({
-          platform:'youtube',operation:'transcript',provider:'youtube_transcript',family:'platform_transcript',
+          platform:'youtube',operation:'transcript',provider:'youtube_transcript',family:'public:youtube_transcript',
           outcome:'failed',durationMs:Date.now()-transcriptProviderStarted,error:fallbackError,attemptIndex:1
         });
         const mapped=asLink2AIError(fallbackError);
@@ -237,7 +237,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       try{
         const fallback=await resolveYouTubeTranscriptFallback(parsed,job.language,45_000);
         await recordProviderOutcome({
-          platform:'youtube',operation:'transcript',provider:'youtube_transcript',family:'platform_transcript',
+          platform:'youtube',operation:'transcript',provider:'youtube_transcript',family:'public:youtube_transcript',
           outcome:'success',durationMs:Date.now()-transcriptProviderStarted,attemptIndex:0
         });
         caption=fallback.caption;
@@ -249,7 +249,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       }catch(transcriptError){
         const mapped=asLink2AIError(transcriptError);
         await recordProviderOutcome({
-          platform:'youtube',operation:'transcript',provider:'youtube_transcript',family:'platform_transcript',
+          platform:'youtube',operation:'transcript',provider:'youtube_transcript',family:'public:youtube_transcript',
           outcome:'failed',durationMs:Date.now()-transcriptProviderStarted,error:transcriptError,attemptIndex:0
         });
         logEvent('youtube_transcript_secondary_failed',{

@@ -19,7 +19,7 @@ export async function transcribeAudio(
       responseFormat:transcriptionResponseFormat('groq',env().GROQ_TRANSCRIPTION_MODEL)
     });
     attempts.push({
-      name:'groq_asr',family:'asr_groq',
+      name:'groq_asr',family:'asr:groq',
       run:()=>provider.transcribe(filePath,requestedLanguage)
     });
   }
@@ -31,7 +31,7 @@ export async function transcribeAudio(
       responseFormat:transcriptionResponseFormat('openai',env().OPENAI_TRANSCRIPTION_MODEL)
     });
     attempts.push({
-      name:'openai_asr',family:'asr_openai',
+      name:'openai_asr',family:'asr:openai',
       run:()=>provider.transcribe(filePath,requestedLanguage)
     });
   }

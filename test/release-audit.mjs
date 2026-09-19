@@ -34,7 +34,7 @@ const billingRoutesSource=await readFile(new URL('../src/billing/routes.ts',impo
 const transcriptionRouterSource=await readFile(new URL('../src/transcription/router.ts',import.meta.url),'utf8');
 assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News must keep the official Firebase API as its primary route');
 assert.match(linkSource,/hn\.algolia\.com\/api\/v1\/items/,'Hacker News must have an independent fallback route');
-assert.match(linkSource,/name:'hn_firebase',family:'official_api'[\s\S]*name:'hn_algolia',family:'external_provider'/,'Hacker News fallback must cross provider families');
+assert.match(linkSource,/name:'hn_firebase',family:'official:hn_firebase'[\s\S]*name:'hn_algolia',family:'external:hn_algolia'/,'Hacker News fallback must cross provider families');
 assert.doesNotMatch(policySource,/OPENAI_ALLOWED_PLATFORMS/,'ChatGPT must not maintain a narrower source allowlist than the default/Claude distribution');
 assert.match(policySource,/same[\s\S]*source matrix/i,'ChatGPT source policy must explicitly preserve parity with the default/Claude distribution');
 assert.match(apiSource,/app\.all\('\/mcp\/openai'/,'API must expose a distinct ChatGPT MCP endpoint');
@@ -126,7 +126,7 @@ assert.match(providerChainSource,/source_provider_failover/,'Provider transition
 assert.match(providerChainSource,/provider_family/,'Provider transitions must preserve provider-family identity');
 assert.match(providerCircuitSource,/FAILURE_THRESHOLD=3/,'Provider circuit breaker must require repeated failures before deferring a route');
 assert.match(providerCircuitSource,/OPEN_MS=2\*60_000/,'Provider circuit breaker must cool down and probe again instead of permanently disabling a route');
-assert.match(orchestratorSource,/name:'x_syndication',family:'public_structured'[\s\S]*name:'ytdlp',family:'local_extractor'/,'X audio must preserve independent structured-X then local-extractor failover families');
+assert.match(orchestratorSource,/name:'x_syndication',family:'public:x_syndication'[\s\S]*name:'ytdlp',family:'local:yt_dlp'/,'X audio must preserve independent structured-X then local-extractor failover families');
 assert.match(orchestratorSource,/MEDIA_PROVIDER_URL/,'Managed external provider must remain an optional route, not a required recurring dependency');
 assert.match(orchestratorSource,/name:'ytdlp',family:'local:yt_dlp'[\s\S]*name:'gallery_dl_media',family:'local:gallery_dl'/,'Instagram and TikTok media must cross independent extractor families before managed fallback');
 assert.match(galleryMediaSource,/gallery_dl_identity_unverified/,'Secondary media extraction must verify exact source identity before accepting a fallback result');
@@ -134,13 +134,13 @@ assert.match(galleryMediaSource,/gallery-media\.\{extension\}/,'gallery-dl media
 assert.match(linkSource,/name:'gallery_dl'[\s\S]*name:'public_page'/,'Instagram and TikTok text posts must use an explicit primary-to-page fallback chain');
 assert.match(processorSource,/provider:'youtube_transcript'/,'YouTube transcript fallback must report provider health separately from yt-dlp');
 assert.match(processorSource,/youtube_transcript_secondary_success/,'YouTube must try its independent transcript route before downloading audio when normal captions are missing');
-assert.match(processorSource,/family:'platform_transcript'/,'YouTube transcript fallback must be classified as a separate provider family');
+assert.match(processorSource,/family:'public:youtube_transcript'/,'YouTube transcript fallback must be classified as a separate provider family');
 assert.match(providerTelemetrySource,/provider_health_hourly/,'Provider outcomes must feed rolling health telemetry');
 assert.doesNotMatch(providerTelemetrySource,/\b(?:source_url|normalized_url|canonical_media_id|content_text|transcript)\s*:/,'Provider health telemetry must not accept or persist source URLs, identifiers, or source content fields');
 assert.match(providerHealthMigration,/PRIMARY KEY\(bucket_start,platform,operation,provider\)/,'Provider health storage must use bounded hourly aggregates instead of unbounded per-request rows');
 assert.match(transcriptionRouterSource,/runProviderChain/,'ASR providers must use the same health-aware failover chain as source providers');
-assert.match(transcriptionRouterSource,/name:'groq_asr',family:'asr_groq'/,'Groq ASR must have its own provider failure family');
-assert.match(transcriptionRouterSource,/name:'openai_asr',family:'asr_openai'/,'OpenAI ASR must have its own provider failure family');
+assert.match(transcriptionRouterSource,/name:'groq_asr',family:'asr:groq'/,'Groq ASR must have its own provider failure family');
+assert.match(transcriptionRouterSource,/name:'openai_asr',family:'asr:openai'/,'OpenAI ASR must have its own provider failure family');
 assert.match(processorSource,/transcribeAudio\(preparedAudio,job\.language,job\.platform\)/,'ASR health telemetry must retain the source platform dimension');
 assert.match(processorSource,/if\(reserved\)\{await releaseQuota\(job\.id\)/,'Failed provider\/extraction paths must release reserved quota before retry or failure');
 assert.match(billingSource,/j\.error_code='QUOTA_EXCEEDED'/,'A successful top-up must resume quota-blocked jobs');

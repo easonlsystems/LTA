@@ -442,11 +442,11 @@ async function fetchHackerNewsItem(input:ParsedMediaUrl,budget?:TextExtractionBu
     platform:'hackernews',operation:'text',
     attempts:[
       {
-        name:'hn_firebase',family:'official_api',
+        name:'hn_firebase',family:'official:hn_firebase',
         run:async()=>parseHackerNewsItem(input,await fetchHackerNewsOfficialTree(input.canonicalMediaId,budget),budget)
       },
       {
-        name:'hn_algolia',family:'external_provider',
+        name:'hn_algolia',family:'external:hn_algolia',
         run:()=>fetchHackerNewsAlgoliaItem(input,budget)
       }
     ]
@@ -709,8 +709,8 @@ export async function extractTextLink(input:ParsedMediaUrl,budget?:TextExtractio
     return await runProviderChain<LinkTextPayload>({
       platform:input.platform,operation:'text',
       attempts:[
-        {name:'gallery_dl',family:'local_extractor',run:()=>fetchGalleryPost(input,budget)},
-        {name:'public_page',family:'public_html',run:()=>fetchPage(input,budget)}
+        {name:'gallery_dl',family:'local:gallery_dl',run:()=>fetchGalleryPost(input,budget)},
+        {name:'public_page',family:'public:html',run:()=>fetchPage(input,budget)}
       ]
     });
   }

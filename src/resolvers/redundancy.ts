@@ -19,91 +19,93 @@ export const SOURCE_REDUNDANCY={
   youtube_media:{
     state:'redundant',
     routes:[
-      {name:'platform transcript',rootFamily:'platform_transcript'},
-      {name:'local media + ASR',rootFamily:'local_extractor'},
-      {name:'managed media + ASR',rootFamily:'external_provider',conditional:true}
+      {name:'platform transcript',rootFamily:'public:youtube_transcript'},
+      {name:'local media + ASR',rootFamily:'local:yt_dlp'},
+      {name:'managed media + ASR',rootFamily:'external:media_default',conditional:true}
     ],
     note:'Transcript and media/ASR paths fail independently; managed media is optional.'
   },
   instagram_media:{
-    state:'conditional',
+    state:'redundant',
     routes:[
-      {name:'local media + ASR',rootFamily:'local_extractor'},
-      {name:'managed media + ASR',rootFamily:'external_provider',conditional:true}
+      {name:'yt-dlp media + ASR',rootFamily:'local:yt_dlp'},
+      {name:'gallery-dl media + ASR',rootFamily:'local:gallery_dl'},
+      {name:'managed media + ASR',rootFamily:'external:media_default',conditional:true}
     ],
-    note:'Fully redundant only when an independent managed media provider is configured.'
+    note:'Two independent extractor families are available before the optional managed route.'
   },
   instagram_post:{
     state:'redundant',
     routes:[
-      {name:'gallery-dl post extraction',rootFamily:'local_extractor'},
-      {name:'public HTML fallback',rootFamily:'public_html'}
+      {name:'gallery-dl post extraction',rootFamily:'local:gallery_dl'},
+      {name:'public HTML fallback',rootFamily:'public:html'}
     ],
     note:'Two different extraction families.'
   },
   tiktok_media:{
-    state:'conditional',
+    state:'redundant',
     routes:[
-      {name:'local media + ASR',rootFamily:'local_extractor'},
-      {name:'managed media + ASR',rootFamily:'external_provider',conditional:true}
+      {name:'yt-dlp media + ASR',rootFamily:'local:yt_dlp'},
+      {name:'gallery-dl media + ASR',rootFamily:'local:gallery_dl'},
+      {name:'managed media + ASR',rootFamily:'external:media_default',conditional:true}
     ],
-    note:'Fully redundant only when an independent managed media provider is configured.'
+    note:'Two independent extractor families are available before the optional managed route.'
   },
   tiktok_post:{
     state:'redundant',
     routes:[
-      {name:'gallery-dl post extraction',rootFamily:'local_extractor'},
-      {name:'public HTML fallback',rootFamily:'public_html'}
+      {name:'gallery-dl post extraction',rootFamily:'local:gallery_dl'},
+      {name:'public HTML fallback',rootFamily:'public:html'}
     ],
     note:'Two different extraction families.'
   },
   x_post_media:{
     state:'redundant',
     routes:[
-      {name:'X structured syndication',rootFamily:'public_structured'},
-      {name:'local media extractor',rootFamily:'local_extractor'},
-      {name:'managed media provider',rootFamily:'external_provider',conditional:true}
+      {name:'X structured syndication',rootFamily:'public:x_syndication'},
+      {name:'yt-dlp media extractor',rootFamily:'local:yt_dlp'},
+      {name:'managed media provider',rootFamily:'external:media_default',conditional:true}
     ],
     note:'Structured X media and local extraction are separate roots.'
   },
   hackernews:{
     state:'redundant',
     routes:[
-      {name:'official Firebase API',rootFamily:'official_api'},
-      {name:'Algolia HN API',rootFamily:'external_provider'}
+      {name:'official Firebase API',rootFamily:'official:hn_firebase'},
+      {name:'Algolia HN API',rootFamily:'external:hn_algolia'}
     ],
     note:'Official API remains primary; independent search-service API is fallback only.'
   },
   github:{
     state:'single_path',
-    routes:[{name:'GitHub REST API',rootFamily:'official_api'}],
+    routes:[{name:'GitHub REST API',rootFamily:'official:platform_api'}],
     note:'Needs an independent fallback that preserves discussion/diff completeness.'
   },
   bluesky:{
     state:'single_path',
-    routes:[{name:'public AppView API',rootFamily:'official_api'}],
+    routes:[{name:'public AppView API',rootFamily:'official:platform_api'}],
     note:'Needs a direct-PDS or other independent complete-source path.'
   },
   reddit:{
     state:'single_path',
-    routes:[{name:'approved Reddit OAuth Data API',rootFamily:'official_api'}],
+    routes:[{name:'approved Reddit OAuth Data API',rootFamily:'official:platform_api'}],
     note:'Do not add scraping as a fake fallback; second route must be compliant.'
   },
   web:{
     state:'single_path',
-    routes:[{name:'direct SSRF-safe HTML fetch',rootFamily:'public_html'}],
+    routes:[{name:'direct SSRF-safe HTML fetch',rootFamily:'public:html'}],
     note:'Needs an independent rendered/browser retrieval path.'
   },
   pdf:{
     state:'single_path',
-    routes:[{name:'pdf.js text-layer parser',rootFamily:'local_extractor'}],
+    routes:[{name:'pdf.js text-layer parser',rootFamily:'local:yt_dlp'}],
     note:'Needs a second parser; OCR/visual PDF remains a separate capability.'
   },
   speech_to_text:{
     state:'conditional',
     routes:[
-      {name:'Groq ASR',rootFamily:'asr_groq',conditional:true},
-      {name:'OpenAI ASR',rootFamily:'asr_openai',conditional:true}
+      {name:'Groq ASR',rootFamily:'asr:groq',conditional:true},
+      {name:'OpenAI ASR',rootFamily:'asr:openai',conditional:true}
     ],
     note:'The router supports independent ASR vendors; runtime redundancy depends on configuring both.'
   }
