@@ -785,7 +785,7 @@ export async function exchangeAuthorizationCode(input: {code:string;clientId:str
     );
     if (!r.rowCount) throw new Link2AIError('AUTH_REQUIRED','Authorization code is invalid or expired.',401);
     const row = r.rows[0];
-    const requestedResource=normalizeResource(input.resource);
+    const requestedResource=input.resource?normalizeResource(input.resource):row.resource;
     if (row.client_id !== input.clientId || row.redirect_uri !== input.redirectUri || pkceS256(input.codeVerifier) !== row.code_challenge || row.resource !== requestedResource) {
       throw new Link2AIError('AUTH_REQUIRED','OAuth code verification failed.',401);
     }
@@ -823,7 +823,8 @@ export async function exchangeRefreshToken(input:{refreshToken:string;clientId:s
     );
     if (!r.rowCount || r.rows[0].client_id !== input.clientId) throw new Link2AIError('AUTH_REQUIRED','Refresh token is invalid.',401);
     const row = r.rows[0];
-    if (row.resource !== normalizeResource(input.resource)) throw new Link2AIError('AUTH_REQUIRED','Refresh token resource mismatch.',401);
+    const requestedResource=input.resource?normalizeResource(input.resource):row.resource;
+    if (row.resource !== requestedResource) throw new Link2AIError('AUTH_REQUIRED','Refresh token resource mismatch.',401);
     await client.query('UPDATE oauth_refresh_tokens SET revoked_at=now() WHERE id=$1',[row.id]);
     const access = randomToken(32), refresh = randomToken(40);
     await client.query(`INSERT INTO oauth_access_tokens(user_id,client_id,token_hash,resource,scope,expires_at) VALUES($1,$2,$3,$4,$5,now()+interval '1 hour')`,[row.user_id,row.client_id,sha256(access),row.resource,row.scope]);
@@ -836,9 +837,71 @@ export async function exchangeRefreshToken(input:{refreshToken:string;clientId:s
 
 export type Link2AIAuthInfo = AuthInfo & { extra: { userId:string } };
 
+function bearerTokenFromAuthorization(authorization?:string):string|null{
+  if(!authorization)return null;
+  const match=/^Bearer\s+(.+)$/i.exec(authorization.trim());
+  const token=match?.[1]?.trim()??'';
+  return token||null;
+}
+
+export interface BearerAuthDiagnostic{
+  authorization_present:boolean;
+  bearer_scheme_valid:boolean;
+  token_found:boolean;
+  expected_resource:string;
+  stored_resource?:string;
+  scope_has_read?:boolean;
+  expired?:boolean;
+  revoked?:boolean;
+  user_disabled?:boolean;
+}
+
+export async function diagnoseBearerAuth(authorization?:string,expectedResource=mcpResource()):Promise<BearerAuthDiagnostic>{
+  const authorizationPresent=Boolean(authorization?.trim());
+  const token=bearerTokenFromAuthorization(authorization);
+  if(!token){
+    return {
+      authorization_present:authorizationPresent,
+      bearer_scheme_valid:false,
+      token_found:false,
+      expected_resource:expectedResource
+    };
+  }
+  const r=await pool.query<{
+    resource:string;scope:string;expires_at:Date;revoked_at:Date|null;account_status:string;
+  }>(
+    `SELECT t.resource,t.scope,t.expires_at,t.revoked_at,u.account_status
+     FROM oauth_access_tokens t JOIN users u ON u.id=t.user_id
+     WHERE t.token_hash=$1
+     ORDER BY t.created_at DESC
+     LIMIT 1`,
+    [sha256(token)]
+  );
+  if(!r.rowCount){
+    return {
+      authorization_present:true,
+      bearer_scheme_valid:true,
+      token_found:false,
+      expected_resource:expectedResource
+    };
+  }
+  const row=r.rows[0];
+  const scopes=row.scope.split(/\s+/).filter(Boolean);
+  return {
+    authorization_present:true,
+    bearer_scheme_valid:true,
+    token_found:true,
+    expected_resource:expectedResource,
+    stored_resource:row.resource,
+    scope_has_read:scopes.includes('link2ai:read'),
+    expired:new Date(row.expires_at).getTime()<=Date.now(),
+    revoked:row.revoked_at!==null,
+    user_disabled:row.account_status==='disabled'
+  };
+}
+
 export async function authInfoFromBearer(authorization?: string,expectedResource=mcpResource()): Promise<Link2AIAuthInfo | null> {
-  if (!authorization?.startsWith('Bearer ')) return null;
-  const token = authorization.slice(7).trim();
+  const token=bearerTokenFromAuthorization(authorization);
   if (!token) return null;
   const r = await pool.query<{user_id:string;client_id:string;scope:string;expires_at:Date}>(
     `SELECT t.user_id,t.client_id,t.scope,t.expires_at
