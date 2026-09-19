@@ -77,9 +77,12 @@ export const SOURCE_REDUNDANCY={
     note:'Official API remains primary; independent search-service API is fallback only.'
   },
   github:{
-    state:'single_path',
-    routes:[{name:'GitHub REST API',rootFamily:'official:platform_api'}],
-    note:'Needs an independent fallback that preserves discussion/diff completeness.'
+    state:'conditional',
+    routes:[
+      {name:'GitHub REST API',rootFamily:'official:github_api'},
+      {name:'GitHub public HTML + .diff fallback',rootFamily:'public:github_html',conditional:true}
+    ],
+    note:'HTML fallback keeps the source readable when the API path fails, but marks discussion structure as partial.'
   },
   bluesky:{
     state:'single_path',

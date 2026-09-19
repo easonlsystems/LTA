@@ -339,7 +339,7 @@ export function parseGitHubDiscussion(input:ParsedMediaUrl,itemValue:unknown,com
   const title=jsonString(item.title);return complete({platform:'github',canonicalMediaId:input.canonicalMediaId,sourceUrl:jsonString(item.html_url)||input.normalizedUrl,title:clipExternalText(title,METADATA_LIMITS.title),creator:clipExternalText(jsonString(user?.login),METADATA_LIMITS.creator),caption:clipExternalText(jsonString(item.body),METADATA_LIMITS.description),language:'und',text:rawText,source:'post'},contentClass,{itemsAvailable:allDiscussion.length,itemsExtracted:discussionCandidates.length,truncated:sourceTruncated,contentSectionsTruncated:sourceTruncated?['upstream_discussion']:undefined},budget);
 }
 
-async function fetchGitHubDiscussion(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+async function fetchGitHubApiDiscussion(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
   const [owner,repo,type,number]=input.canonicalMediaId.split('/');const apiBase=`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
   const isPr=type==='pull';
   const item=await safeJson(`${apiBase}/${isPr?'pulls':'issues'}/${number}`,'GitHub',API_PAGE_BYTES,budget);
@@ -352,6 +352,49 @@ async function fetchGitHubDiscussion(input:ParsedMediaUrl,budget?:TextExtraction
   const sourceTruncated=commentsPage.truncated||reviewsPage.truncated||reviewCommentsPage.truncated;
   let diff='';if(isPr){const response=await safeGetForBudget(`${apiBase}/pulls/${number}`,{floorBytes:8_000_000,timeoutMs:20_000,maxRedirects:3,userAgent:BROWSER_UA,accept:'application/vnd.github.v3.diff'},budget,'github_diff');diff=response.bytes.toString('utf8');}
   return parseGitHubDiscussion(input,item,combined,[],diff,sourceTruncated,budget);
+}
+
+async function fetchGitHubHtmlDiscussion(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  const [owner,repo,type,number]=input.canonicalMediaId.split('/');
+  const isPr=type==='pull';
+  const response=await safeGetForBudget(input.normalizedUrl,{
+    floorBytes:12_000_000,timeoutMs:20_000,maxRedirects:5,userAgent:BROWSER_UA,
+    accept:'text/html,application/xhtml+xml'
+  },budget,'github_html_fallback');
+  const doc=pageTextFromHtml(response.bytes.toString('utf8'));
+  let diff='';
+  let diffMissing=false;
+  if(isPr){
+    const diffUrl=`https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pull/${encodeURIComponent(number)}.diff`;
+    try{
+      const diffResponse=await safeGetForBudget(diffUrl,{
+        floorBytes:16_000_000,timeoutMs:20_000,maxRedirects:5,userAgent:BROWSER_UA,
+        accept:'text/plain,application/vnd.github.v3.diff,*/*;q=0.2'
+      },budget,'github_html_diff_fallback');
+      diff=diffResponse.bytes.toString('utf8');
+    }catch{diffMissing=true;}
+  }
+  const sections=[doc.text,isPr&&diff?`Pull request diff:\n${diff}`:''].filter(Boolean);
+  const text=cleanText(sections.join('\n\n'));
+  if(text.length<80)throw new Link2AIError('EXTRACTION_FAILED','GitHub public HTML fallback did not expose enough readable content.',502,true,{cause_code:'github_html_too_thin'});
+  const truncatedSections=['discussion_structure',...(isPr&&diffMissing?['pull_request_diff']:[])];
+  return complete({
+    platform:'github',canonicalMediaId:input.canonicalMediaId,sourceUrl:response.finalUrl,
+    title:doc.title,creator:doc.creator,caption:doc.description,language:doc.language,text,source:'post'
+  },isPr?'github_pr':'github_issue',{
+    truncated:true,truncationReason:'github_html_fallback',
+    contentSectionsTruncated:truncatedSections
+  },budget);
+}
+
+async function fetchGitHubDiscussion(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  return await runProviderChain<LinkTextPayload>({
+    platform:'github',operation:'text',
+    attempts:[
+      {name:'github_api',family:'official:github_api',run:()=>fetchGitHubApiDiscussion(input,budget)},
+      {name:'github_html',family:'public:github_html',run:()=>fetchGitHubHtmlDiscussion(input,budget)}
+    ]
+  });
 }
 
 type HnRendered={lines:string[];count:number};
