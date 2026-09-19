@@ -14,7 +14,7 @@ assert.doesNotMatch(cases,/<REVIEW_[A-Z0-9_]+>/,'OpenAI review cases must not co
 assert.match(cases,/https:\/\/github\.com\/nodejs\/node\/pull\/57343/,'OpenAI GitHub PR review fixture must be pinned');
 assert.match(cases,/https:\/\/news\.ycombinator\.com\/item\?id=8863/,'OpenAI Hacker News review fixture must be pinned');
 assert.match(cases,/https:\/\/bsky\.app\/profile\/bsky\.app\/post\/3mnzmprxpe22y/,'OpenAI Bluesky review fixture must be pinned');
-assert.match(cases,/https:\/\/github\.com\/nodejs\/node\/issues\/43816[\s\S]*https:\/\/news\.ycombinator\.com\/item\?id=41064351/,'OpenAI multi-source fixture must compare related Node.js TypeScript sources');
+assert.match(cases,/https:\/\/github\.com\/nodejs\/node\/issues\/43816[\s\S]*https:\/\/news\.ycombinator\.com\/item\?id=41064351/,'OpenAI multi-source fixture must compare a compact related Node.js issue/PR pair');
 const positiveCases=cases.split('## Negative cases')[0];
 assert.match(positiveCases,/GitHub pull request/);
 assert.match(positiveCases,/Hacker News discussion/);
