@@ -25,7 +25,7 @@ resetProviderCircuitsForTests();
   });
   assert.equal(result,'ok');
   assert.deepEqual(calls,['primary']);
-  assert.deepEqual(telemetry.map(x=>[x.provider,x.family,x.outcome]),[['primary','local_extractor','success']]);
+  assert.deepEqual(telemetry.map(x=>[x.provider,x.family,x.outcome]),[['primary','local:yt_dlp','success']]);
 }
 
 {
@@ -42,8 +42,8 @@ resetProviderCircuitsForTests();
   assert.equal(result,'audio.mp3');
   assert.deepEqual(calls,['primary','fallback']);
   assert.deepEqual(telemetry.map(x=>[x.provider,x.family,x.outcome]),[
-    ['primary','local_extractor','failed'],
-    ['fallback','external_provider','success']
+    ['primary','local:yt_dlp','failed'],
+    ['fallback','external:media_default','success']
   ]);
 }
 

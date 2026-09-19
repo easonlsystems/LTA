@@ -98,7 +98,7 @@ export const SOURCE_REDUNDANCY={
   },
   pdf:{
     state:'single_path',
-    routes:[{name:'pdf.js text-layer parser',rootFamily:'local:yt_dlp'}],
+    routes:[{name:'pdf.js text-layer parser',rootFamily:'local:pdfjs'}],
     note:'Needs a second parser; OCR/visual PDF remains a separate capability.'
   },
   speech_to_text:{
