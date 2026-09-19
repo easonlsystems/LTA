@@ -28,7 +28,7 @@ assert.match(openaiSubmission,/Contains MCP/);
 assert.match(openaiSubmission,/Universal/);
 assert.match(openaiSubmission,/\.well-known\/openai-apps-challenge/);
 assert.match(openaiSubmission,/\/mcp\/openai/);
-assert.match(openaiSubmission,/Bluesky.*GitHub.*Hacker News/s);
+assert.match(openaiSubmission,/YouTube.*Instagram.*TikTok.*GitHub.*Hacker News.*webpage.*PDF/s);
 assert.match(openaiSubmission,/reviewer email\/password/i);
 assert.match(openaiSubmission,/must not require MFA/i);
 assert.match(openaiSubmission,/security schemes, output schemas, and accurate annotations/i);
