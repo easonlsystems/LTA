@@ -19,5 +19,6 @@ assert.equal(SOURCE_REDUNDANCY.tiktok_media.state,'redundant');
 assert.equal(SOURCE_REDUNDANCY.pdf.state,'redundant');
 assert.equal(SOURCE_REDUNDANCY.github.state,'conditional');
 assert.equal(SOURCE_REDUNDANCY.reddit.state,'single_path');
+assert.equal(SOURCE_REDUNDANCY.video_visual_ocr.state,'single_path');
 
 console.log('source redundancy audit PASS');

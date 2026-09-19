@@ -120,6 +120,11 @@ export const SOURCE_REDUNDANCY={
       {name:'OpenAI ASR',rootFamily:'asr:openai',conditional:true}
     ],
     note:'The router supports independent ASR vendors; runtime redundancy depends on configuring both.'
+  },
+  video_visual_ocr:{
+    state:'single_path',
+    routes:[{name:'sampled Tesseract OCR',rootFamily:'local:tesseract'}],
+    note:'Fallback only when spoken-text extraction fails. It reads sampled on-screen text, not full visual semantics.'
   }
 } as const satisfies Record<string,SourceRedundancyEntry>;
 

@@ -5,6 +5,7 @@ import { parseMediaUrl } from '../media/url.js';
 import { extractTextLink, resolveRedditSharePost } from '../content/linkText.js';
 import { fetchBestCaption } from '../media/captions.js';
 import { normalizeAudioForAsr, probeMediaDurationSeconds } from '../media/audio.js';
+import { extractVisualOcr, mediaHasVideoStream } from '../media/visual.js';
 import { ResolverOrchestrator } from '../resolvers/orchestrator.js';
 import { resolveYouTubeTranscriptFallback } from '../resolvers/youtubeTranscript.js';
 import type { MediaMetadata, TranscriptSegment } from '../media/types.js';
@@ -312,22 +313,70 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       logEvent('caption_incomplete_fallback_asr',{job_id:job.id,platform:job.platform,duration_seconds:metadata.durationSeconds,truncation_reason:completeness.truncationReason??'caption_timeline_incomplete'});
     }
 
-    const preparedAudio=await normalizeAudioForAsr(audio,tmpDir);
-    const asr=await transcribeAudio(preparedAudio,job.language,job.platform);
-    const asrCompleteness=videoCompleteness(asr.transcript,metadata.durationSeconds,asr.segments);
-    if(asrCompleteness.truncated){
-      throw new Link2AIError('EXTRACTION_FAILED','The full video timeline could not be transcribed reliably. No processing units were charged.',502,true,{
-        cause_code:'asr_timeline_incomplete',truncation_reason:asrCompleteness.truncationReason
+    try{
+      const preparedAudio=await normalizeAudioForAsr(audio,tmpDir);
+      const asr=await transcribeAudio(preparedAudio,job.language,job.platform);
+      const asrCompleteness=videoCompleteness(asr.transcript,metadata.durationSeconds,asr.segments);
+      if(asrCompleteness.truncated){
+        throw new Link2AIError('EXTRACTION_FAILED','The full video timeline could not be transcribed reliably. No processing units were charged.',502,true,{
+          cause_code:'asr_timeline_incomplete',truncation_reason:asrCompleteness.truncationReason
+        });
+      }
+      const cache=await saveCache({
+        platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
+        title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
+        language:asr.language,transcript:asr.transcript,segments:asr.segments,source:'asr',completeness:asrCompleteness
       });
+      await finalizeQuota(job.user_id,job.id);reserved=false;
+      await markCompleted(job.id,cache.id,metadata.durationSeconds);
+      logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'asr',resolver:metadata.resolver??'unknown',transcription_provider:asr.provider,duration_seconds:metadata.durationSeconds,extracted_token_estimate:estimateTokens(asr.transcript),usage_units:videoUsageUnits(metadata.durationSeconds),truncated:false,processing_ms:Date.now()-startedAt});
+      return;
+    }catch(audioTextError){
+      const mappedAudio=asLink2AIError(audioTextError);
+      if(!['TRANSCRIPTION_FAILED','EXTRACTION_FAILED'].includes(mappedAudio.code))throw audioTextError;
+      logEvent('visual_ocr_fallback_started',{job_id:job.id,platform:job.platform,audio_error_code:mappedAudio.code});
     }
-    const cache=await saveCache({
-      platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
-      title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
-      language:asr.language,transcript:asr.transcript,segments:asr.segments,source:'asr',completeness:asrCompleteness
-    });
-    await finalizeQuota(job.user_id,job.id); reserved=false;
-    await markCompleted(job.id,cache.id,metadata.durationSeconds);
-    logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'asr',resolver:metadata.resolver??'unknown',transcription_provider:asr.provider,duration_seconds:metadata.durationSeconds,extracted_token_estimate:estimateTokens(asr.transcript),usage_units:videoUsageUnits(metadata.durationSeconds),truncated:false,processing_ms:Date.now()-startedAt});
+
+    const visualMedia=await mediaHasVideoStream(audio)?audio:await resolver.visual(parsed,tmpDir);
+    const visualStarted=Date.now();
+    try{
+      const visual=await extractVisualOcr(visualMedia,tmpDir,metadata.durationSeconds);
+      await recordProviderOutcome({
+        platform:job.platform,operation:'visual',provider:'tesseract_ocr',family:'local:tesseract',
+        outcome:'success',durationMs:Date.now()-visualStarted,attemptIndex:0
+      });
+      const completeness={
+        truncated:true,
+        truncationReason:'visual_ocr_sampled',
+        extractedTokenEstimate:estimateTokens(visual.transcript),
+        usageUnits:videoUsageUnits(metadata.durationSeconds),
+        contentSectionsTruncated:['visual_semantics','unsampled_frames','spoken_audio']
+      };
+      const cache=await saveCache({
+        platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
+        title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
+        language:'und',transcript:visual.transcript,segments:visual.segments,source:'visual',completeness
+      });
+      await finalizeQuota(job.user_id,job.id);reserved=false;
+      await markCompleted(job.id,cache.id,metadata.durationSeconds);
+      logEvent('job_completed',{
+        job_id:job.id,platform:job.platform,source:'visual',resolver:metadata.resolver??'unknown',
+        duration_seconds:metadata.durationSeconds,sampled_frames:visual.sampledFrames,frames_with_text:visual.framesWithText,
+        usage_units:videoUsageUnits(metadata.durationSeconds),truncated:true,truncation_reason:'visual_ocr_sampled',
+        processing_ms:Date.now()-startedAt
+      });
+      return;
+    }catch(visualError){
+      await recordProviderOutcome({
+        platform:job.platform,operation:'visual',provider:'tesseract_ocr',family:'local:tesseract',
+        outcome:'failed',durationMs:Date.now()-visualStarted,error:visualError,attemptIndex:0
+      });
+      throw new Link2AIError(
+        'TRANSCRIPTION_FAILED',
+        'Link2AI could not recover reliable spoken text or readable on-screen text from this video. No processing units were charged.',
+        502,true,{cause_code:'audio_and_visual_unreadable'}
+      );
+    }
   }catch(e){
     const err=asLink2AIError(e);
     if(reserved){await releaseQuota(job.id).catch(()=>{});reserved=false;}

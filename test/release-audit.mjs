@@ -38,6 +38,8 @@ const releaseSource=await readFile(new URL('../src/config/release.ts',import.met
 const runtimeMigration=await readFile(new URL('../sql/008_worker_release.sql',import.meta.url),'utf8');
 const dockerSource=await readFile(new URL('../Dockerfile',import.meta.url),'utf8');
 const ciSource=await readFile(new URL('../.github/workflows/ci.yml',import.meta.url),'utf8');
+const visualSource=await readFile(new URL('../src/media/visual.ts',import.meta.url),'utf8');
+const visualMigration=await readFile(new URL('../sql/009_visual_source.sql',import.meta.url),'utf8');
 const transcriptionRouterSource=await readFile(new URL('../src/transcription/router.ts',import.meta.url),'utf8');
 assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News must keep the official Firebase API as its primary route');
 assert.match(linkSource,/hn\.algolia\.com\/api\/v1\/items/,'Hacker News must have an independent fallback route');
@@ -135,6 +137,15 @@ assert.match(workerPreflightSource,/ffprobe/,'Worker preflight must verify media
 assert.match(dockerSource,/poppler-utils/,'Production image must include Poppler for PDF fallback');
 assert.match(ciSource,/docker build -t link2ai-runtime-ci/,'CI must build the production runtime image, not only TypeScript');
 assert.match(ciSource,/gallery-dl --version[\s\S]*pdftotext -v/,'CI runtime smoke must exercise native fallback dependencies');
+assert.match(workerPreflightSource,/Tesseract OCR/,'Worker preflight must verify visual OCR support');
+assert.match(dockerSource,/tesseract-ocr-chi-tra/,'Production image must include Traditional Chinese OCR data');
+assert.match(ciSource,/tesseract --list-langs[\s\S]*chi_tra/,'CI must verify packaged OCR languages');
+assert.match(visualSource,/MAX_FRAMES=18/,'Visual OCR fallback must keep frame sampling bounded');
+assert.match(visualSource,/visual_ocr_empty/,'Visual OCR must fail clearly when sampled frames contain no reliable text');
+assert.match(processorSource,/visual_ocr_fallback_started/,'Silent or untranscribable videos must attempt visual OCR before failing');
+assert.match(processorSource,/source:'visual'/,'Visual fallback results must retain explicit provenance');
+assert.match(processorSource,/contentSectionsTruncated:\['visual_semantics','unsampled_frames','spoken_audio'\]/,'OCR fallback must never masquerade as full visual understanding');
+assert.match(visualMigration,/source IN \('caption','asr','visual','post','page'\)/,'Cache schema must persist visual provenance explicitly');
 assert.doesNotMatch(audioSource,/V1 transcription limit/,'User-facing errors must not expose internal V1 naming');
 assert.doesNotMatch(limitsSource,/EXTRACTION_LIMITS/,'V3 must not impose product-defined text/source caps');
 assert.doesNotMatch(plansSource,/MAX_PROCESSABLE_VIDEO_SECONDS|30\s*\*\s*60|120\s*\*\s*60/,'Plans must not impose product-defined per-video duration caps');
