@@ -9,6 +9,7 @@ import {
 } from './service.js';
 import { linkWebsiteVisitorToUser, trackWebsiteEvent, trackWebsiteVisit } from '../analytics/visitors.js';
 import { recordActivationEvent } from '../analytics/product.js';
+import { openAiIssuedResourceOverride } from './openaiCompat.js';
 
 function escapeHtml(v: unknown): string {
   return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]!));
@@ -385,11 +386,31 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         const redirectUri=boundedOAuthString(b.redirect_uri,'redirect_uri',2048);
         const codeVerifier=boundedOAuthString(b.code_verifier,'code_verifier',128);
         if(!/^[A-Za-z0-9._~-]{43,128}$/.test(codeVerifier))throw new Link2AIError('AUTH_REQUIRED','Invalid PKCE code_verifier.',400);
-        const result = await exchangeAuthorizationCode({code,clientId,redirectUri,codeVerifier,resource:b.resource?boundedOAuthString(b.resource,'resource',2048):undefined});
+        const resource=b.resource?boundedOAuthString(b.resource,'resource',2048):undefined;
+        const result = await exchangeAuthorizationCode({
+          code,clientId,redirectUri,codeVerifier,resource,
+          issuedResourceOverride:openAiIssuedResourceOverride(
+            Array.isArray(req.headers['user-agent'])?req.headers['user-agent'][0]:req.headers['user-agent'],
+            resource,
+            mcpResource(),
+            mcpResource('openai')
+          )
+        });
         return reply.send({ token_type:'Bearer', ...result });
       }
       if (b?.grant_type === 'refresh_token') {
-        const result = await exchangeRefreshToken({refreshToken:boundedOAuthString(b.refresh_token,'refresh token',1024),clientId:boundedOAuthString(b.client_id,'client_id',2048),resource:b.resource?boundedOAuthString(b.resource,'resource',2048):undefined});
+        const resource=b.resource?boundedOAuthString(b.resource,'resource',2048):undefined;
+        const result = await exchangeRefreshToken({
+          refreshToken:boundedOAuthString(b.refresh_token,'refresh token',1024),
+          clientId:boundedOAuthString(b.client_id,'client_id',2048),
+          resource,
+          issuedResourceOverride:openAiIssuedResourceOverride(
+            Array.isArray(req.headers['user-agent'])?req.headers['user-agent'][0]:req.headers['user-agent'],
+            resource,
+            mcpResource(),
+            mcpResource('openai')
+          )
+        });
         return reply.send({ token_type:'Bearer', ...result });
       }
       return reply.code(400).send({error:'unsupported_grant_type'});

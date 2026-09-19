@@ -775,7 +775,7 @@ export async function createAuthorizationCode(input: {userId:string;clientId:str
   return code;
 }
 
-export async function exchangeAuthorizationCode(input: {code:string;clientId:string;redirectUri:string;codeVerifier:string;resource?:string}): Promise<{access_token:string;refresh_token?:string;expires_in:number;scope:string}> {
+export async function exchangeAuthorizationCode(input: {code:string;clientId:string;redirectUri:string;codeVerifier:string;resource?:string;issuedResourceOverride?:string}): Promise<{access_token:string;refresh_token?:string;expires_in:number;scope:string}> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -786,33 +786,38 @@ export async function exchangeAuthorizationCode(input: {code:string;clientId:str
     if (!r.rowCount) throw new Link2AIError('AUTH_REQUIRED','Authorization code is invalid or expired.',401);
     const row = r.rows[0];
     const requestedResource=input.resource?normalizeResource(input.resource):row.resource;
-    if (row.client_id !== input.clientId || row.redirect_uri !== input.redirectUri || pkceS256(input.codeVerifier) !== row.code_challenge || row.resource !== requestedResource) {
+    const override=input.issuedResourceOverride?normalizeResource(input.issuedResourceOverride):null;
+    const compatibilityNarrowing=override===mcpResource('openai')&&requestedResource===mcpResource()&&row.resource===mcpResource();
+    if (row.client_id !== input.clientId || row.redirect_uri !== input.redirectUri || pkceS256(input.codeVerifier) !== row.code_challenge || (!compatibilityNarrowing&&row.resource !== requestedResource)) {
       throw new Link2AIError('AUTH_REQUIRED','OAuth code verification failed.',401);
     }
+    const issuedResource=compatibilityNarrowing?mcpResource('openai'):row.resource;
     await client.query('UPDATE oauth_codes SET consumed_at=now() WHERE id=$1',[row.id]);
     const access = randomToken(32);
     await client.query(
       `INSERT INTO oauth_access_tokens(user_id,client_id,token_hash,resource,scope,expires_at) VALUES($1,$2,$3,$4,$5,now() + interval '1 hour')`,
-      [row.user_id,row.client_id,sha256(access),row.resource,row.scope]
+      [row.user_id,row.client_id,sha256(access),issuedResource,row.scope]
     );
     let refresh:string|undefined;
     if(row.scope.split(/\s+/).includes('offline_access')){
       refresh=randomToken(40);
       await client.query(
         `INSERT INTO oauth_refresh_tokens(user_id,client_id,token_hash,resource,scope,expires_at) VALUES($1,$2,$3,$4,$5,now() + interval '90 days')`,
-        [row.user_id,row.client_id,sha256(refresh),row.resource,row.scope]
+        [row.user_id,row.client_id,sha256(refresh),issuedResource,row.scope]
       );
     }
     await client.query('COMMIT');
     console.info(JSON.stringify({
       event:'oauth_access_token_issued',
-      resource:row.resource,
+      resource:issuedResource,
+      requested_resource:requestedResource,
+      compatibility_narrowing:compatibilityNarrowing,
       scope:row.scope,
       resource_param_present:Boolean(input.resource),
-      distribution_profile:row.resource===mcpResource('openai')?'openai':'default'
+      distribution_profile:issuedResource===mcpResource('openai')?'openai':'default'
     }));
     await recordActivationEvent(row.user_id,'connection_success',{
-      distributionProfile:row.resource===mcpResource('openai')?'openai':'default',
+      distributionProfile:issuedResource===mcpResource('openai')?'openai':'default',
       metadata:{client_id:row.client_id}
     });
     return { access_token: access, ...(refresh?{refresh_token:refresh}:{}), expires_in: 3600, scope: row.scope };
@@ -820,7 +825,7 @@ export async function exchangeAuthorizationCode(input: {code:string;clientId:str
   finally { client.release(); }
 }
 
-export async function exchangeRefreshToken(input:{refreshToken:string;clientId:string;resource?:string}): Promise<{access_token:string;refresh_token:string;expires_in:number;scope:string}> {
+export async function exchangeRefreshToken(input:{refreshToken:string;clientId:string;resource?:string;issuedResourceOverride?:string}): Promise<{access_token:string;refresh_token:string;expires_in:number;scope:string}> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -831,18 +836,23 @@ export async function exchangeRefreshToken(input:{refreshToken:string;clientId:s
     if (!r.rowCount || r.rows[0].client_id !== input.clientId) throw new Link2AIError('AUTH_REQUIRED','Refresh token is invalid.',401);
     const row = r.rows[0];
     const requestedResource=input.resource?normalizeResource(input.resource):row.resource;
-    if (row.resource !== requestedResource) throw new Link2AIError('AUTH_REQUIRED','Refresh token resource mismatch.',401);
+    const override=input.issuedResourceOverride?normalizeResource(input.issuedResourceOverride):null;
+    const compatibilityNarrowing=override===mcpResource('openai')&&requestedResource===mcpResource()&&row.resource===mcpResource('openai');
+    if (!compatibilityNarrowing&&row.resource !== requestedResource) throw new Link2AIError('AUTH_REQUIRED','Refresh token resource mismatch.',401);
+    const issuedResource=compatibilityNarrowing?mcpResource('openai'):row.resource;
     await client.query('UPDATE oauth_refresh_tokens SET revoked_at=now() WHERE id=$1',[row.id]);
     const access = randomToken(32), refresh = randomToken(40);
-    await client.query(`INSERT INTO oauth_access_tokens(user_id,client_id,token_hash,resource,scope,expires_at) VALUES($1,$2,$3,$4,$5,now()+interval '1 hour')`,[row.user_id,row.client_id,sha256(access),row.resource,row.scope]);
-    await client.query(`INSERT INTO oauth_refresh_tokens(user_id,client_id,token_hash,resource,scope,expires_at) VALUES($1,$2,$3,$4,$5,now()+interval '90 days')`,[row.user_id,row.client_id,sha256(refresh),row.resource,row.scope]);
+    await client.query(`INSERT INTO oauth_access_tokens(user_id,client_id,token_hash,resource,scope,expires_at) VALUES($1,$2,$3,$4,$5,now()+interval '1 hour')`,[row.user_id,row.client_id,sha256(access),issuedResource,row.scope]);
+    await client.query(`INSERT INTO oauth_refresh_tokens(user_id,client_id,token_hash,resource,scope,expires_at) VALUES($1,$2,$3,$4,$5,now()+interval '90 days')`,[row.user_id,row.client_id,sha256(refresh),issuedResource,row.scope]);
     await client.query('COMMIT');
     console.info(JSON.stringify({
       event:'oauth_refresh_token_rotated',
-      resource:row.resource,
+      resource:issuedResource,
+      requested_resource:requestedResource,
+      compatibility_narrowing:compatibilityNarrowing,
       scope:row.scope,
       resource_param_present:Boolean(input.resource),
-      distribution_profile:row.resource===mcpResource('openai')?'openai':'default'
+      distribution_profile:issuedResource===mcpResource('openai')?'openai':'default'
     }));
     return {access_token:access,refresh_token:refresh,expires_in:3600,scope:row.scope};
   } catch(err){ await client.query('ROLLBACK'); throw err; }
