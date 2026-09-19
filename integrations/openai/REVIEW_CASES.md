@@ -62,7 +62,7 @@ Compare this Node.js issue with the pull request that fixed it. Explain the repo
 
 **Expected behavior**
 - Invoke `read_public_links` so source identities remain separate.
-- Preserve each source's own `source_key`, `job_id`, completeness state, and continuation state.
+- Preserve each source's own `source_key`, `job_id`, completeness state, and continuation state inside tool state so continuation remains reliable; do not narrate internal IDs in the normal user-facing answer.
 - Continue any source whose `continuation_required` value is true before making a claim that depends on omitted content.
 
 **Expected result structure**
