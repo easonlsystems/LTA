@@ -419,4 +419,4 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 }
 
 function oauthError(reply:FastifyReply,e:unknown){ const err=e instanceof Link2AIError?e:new Link2AIError('INTERNAL_ERROR','OAuth error',500); return reply.code(err.status).send({error:err.status===401?'invalid_grant':'invalid_request',error_description:err.message}); }
-function friendlyError(reply:FastifyReply,e:unknown){ const err=e instanceof Error?e.message:'Something went wrong.'; return reply.code(400).type('text/html').send(html(`<h1>${escapeHtml(env().PUBLIC_BRAND_NAME)}</h1><p>${escapeHtml(err)}</p><p><a href="/login">Try again</a></p>`)); }
+function friendlyError(reply:FastifyReply,e:unknown){ const message=e instanceof Link2AIError?e.message:'Something went wrong. Please try again.'; return reply.code(e instanceof Link2AIError?e.status:400).type('text/html').send(html(`<h1>${escapeHtml(env().PUBLIC_BRAND_NAME)}</h1><p>${escapeHtml(message)}</p><p><a href="/login">Try again</a></p>`)); }
