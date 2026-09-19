@@ -15,7 +15,7 @@ Record one continuous desktop capture, approximately 2–4 minutes, showing the 
 5. Show the tool call returning the exact GitHub source identity and source text.
 6. Paste `https://news.ycombinator.com/item?id=37137448` and ask: “Read this Hacker News discussion with Link2AI and summarize the strongest disagreements and the evidence each side gives.” If the source requires continuation, show at least one `get_transcript_result` continuation call.
 7. Ask "How many Link2AI processing units do I have left?" and show `get_usage`.
-8. Paste `https://www.youtube.com/watch?v=M7lc1UVf-VE` and ask Link2AI to summarize it. Show the explicit `PLATFORM_BLOCKED` result with no fabricated content and no processing-unit charge.
+8. Paste `https://www.youtube.com/watch?v=M7lc1UVf-VE` and ask Link2AI to summarize it. Show that Link2AI clearly says the YouTube source is unavailable in this ChatGPT distribution, with no fabricated content and no processing-unit charge. Do not surface server logs, OAuth diagnostics, provider details, or other internal tool plumbing in the user-facing answer.
 9. End on the working ChatGPT answer for one of the supported sources.
 
 ## Recording rules
