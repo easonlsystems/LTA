@@ -145,7 +145,7 @@ assert.match(visualSource,/visual_ocr_empty/,'Visual OCR must fail clearly when 
 assert.match(processorSource,/visual_ocr_fallback_started/,'Silent or untranscribable videos must attempt visual OCR before failing');
 assert.match(processorSource,/source=partialAsr\?'hybrid':'visual'/,'Visual fallback must distinguish OCR-only from audio-plus-visual fusion provenance');
 assert.match(processorSource,/\[Spoken transcript — timeline incomplete\]/,'Incomplete ASR must be preserved and fused with visual OCR instead of discarded');
-assert.match(processorSource,/contentSectionsTruncated:\['visual_semantics','unsampled_frames','spoken_audio'\]/,'OCR fallback must never masquerade as full visual understanding');
+assert.match(processorSource,/\?\['visual_semantics','unsampled_frames','spoken_timeline_incomplete'\][\s\S]*:\['visual_semantics','unsampled_frames','spoken_audio'\]/,'OCR and hybrid fallbacks must explicitly retain their missing visual and spoken sections');
 assert.match(visualMigration,/source IN \('caption','asr','visual','hybrid','post','page'\)/,'Cache schema must persist visual and hybrid provenance explicitly');
 assert.doesNotMatch(audioSource,/V1 transcription limit/,'User-facing errors must not expose internal V1 naming');
 assert.doesNotMatch(limitsSource,/EXTRACTION_LIMITS/,'V3 must not impose product-defined text/source caps');
