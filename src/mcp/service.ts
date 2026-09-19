@@ -38,7 +38,6 @@ export interface ToolJobResult {
   pages_extracted?:number|null;
   content_sections_truncated?:string[];
   remaining_usage_units?:number;
-  plan_info_url?:string;
 }
 
 export async function startTranscriptJob(userId:string,url:string,options:{refresh?:boolean;profile?:DistributionProfile}={}):Promise<ToolJobResult>{
@@ -180,16 +179,14 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
   if(row.status==='awaiting_payment'){
     const usage=await getUsageSnapshot(userId).catch(()=>null);
     const remaining=usage?.remaining_usage_units;
-    const base=env().PUBLIC_BASE_URL.replace(/\/$/,'');
     return {
       status:'payment_required',
       job_id:row.id,
       duration_seconds:row.duration_seconds??undefined,
       error_code:row.error_code??'QUOTA_EXCEEDED',
-      message:`Link2AI could not read the full source because the connected account${remaining===undefined?' does not have enough processing units':` has ${remaining} processing units remaining`}. Processing units for text sources are based on the amount of source text Link2AI must retrieve, so large discussions or pull-request diffs can require multiple units. Link2AI does not intentionally return a partial source just to fit the remaining balance. No processing units were charged for this failed read. Review processing-unit options on the Link2AI website outside ChatGPT.`,
+      message:`Link2AI could not read the full source because the connected account${remaining===undefined?' does not have enough processing units':` has ${remaining} processing units remaining`}. Processing units for text sources are based on the amount of source text Link2AI must retrieve, so large discussions or pull-request diffs can require multiple units. Link2AI does not intentionally return a partial source just to fit the remaining balance. No processing units were charged for this failed read. To review plan or processing-unit options, open the Link2AI website in your browser and go to Account.`,
       usage_units:0,
-      ...(remaining===undefined?{}:{remaining_usage_units:remaining}),
-      plan_info_url:`${base}/pricing`
+      ...(remaining===undefined?{}:{remaining_usage_units:remaining})
     };
   }
   if(row.status==='failed')return {
