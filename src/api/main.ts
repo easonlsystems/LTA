@@ -443,9 +443,8 @@ app.get('/start',async(req,reply)=>{
   const from=['nav','hero','footer','faq','pricing'].includes(fromRaw)?fromRaw:'other';
   await trackWebsiteEvent(req,'cta_start','/',{from});
   const current=await userFromSessionCookie(req.headers.cookie).catch(()=>null);
-  // Do not send an already-authenticated account back through signup.
-  if(current?.email)return reply.redirect('/connect');
-  return reply.redirect('/signup?return_to=%2Fconnect');
+  if(current?.id)await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude',from}});
+  return reply.redirect(claudeInstallUrl());
 });
 app.get('/connect/start',async(req,reply)=>{
   await trackWebsiteEvent(req,'connect_install_click','/connect');
@@ -460,9 +459,9 @@ app.get('/',async(req,reply)=>{
     <section class="experience-hero" id="simulation">
       <div class="home-inner">
         <div class="experience-copy reveal">
-          <span class="experience-kicker">Source infrastructure for AI</span>
-          <h1><span class="hero-line hero-line-plain">Give your AI the source.</span><span class="hero-line hero-line-accent">LTA makes it readable.</span></h1>
-          <p class="experience-lede">Turn supported public links into AI-ready source context. Use LTA from supported AI clients, agents, workflows, research tools, or apps through the same source engine.</p>
+          <span class="experience-kicker">Public links → AI-readable source</span>
+          <h1><span class="hero-line hero-line-plain">Paste the link.</span><span class="hero-line hero-line-accent">Let your AI actually read it.</span></h1>
+          <p class="experience-lede">Connect LTA once. Then use Instagram Reels, YouTube, X, GitHub, webpages and PDFs inside your AI without manually copying the content first.</p>
         </div>
         <div class="sim-shell reveal" id="comparison-demo" aria-label="Interactive LTA comparison simulation">
           <div class="sim-tabs" role="tablist" aria-label="Choose a source for the comparison">
@@ -478,25 +477,25 @@ app.get('/',async(req,reply)=>{
           </div>
           <div class="sim-meta sim-meta-simple">
             <div class="sim-prompt-card">
-              <span>Try this question</span>
+              <span>Real LTA test case</span>
               <p class="sim-user-question">Summarize this Instagram Reel.</p>
-              <strong class="sim-source-name" id="sim-source-name" hidden>Instagram Reel</strong><code class="sim-url" id="sim-url" hidden>instagram.com/reel/…</code>
+              <strong class="sim-source-name" id="sim-source-name">Instagram Reel</strong><code class="sim-url" id="sim-url">instagram.com/reel/Ddx6Q_MJNyg/</code>
             </div>
             <div class="sim-actions"><button class="sim-run" id="sim-run" type="button" aria-expanded="false" aria-controls="sim-comparison-panels">See the difference →</button><button class="sim-reset" id="sim-reset" type="button" hidden>Reset</button></div>
           </div>
           <div class="sim-grid" id="sim-comparison-panels" aria-live="polite" hidden>
             <article class="sim-panel without">
               <div class="sim-panel-head"><div><div class="sim-panel-title">Without LTA</div><span class="sim-panel-sub">Same AI assistant · same public link</span></div><span class="sim-state" id="sim-left-state">Ready</span></div>
-              <div class="sim-body"><div class="sim-chat-user"><span>You</span><code class="sim-user-link">https://www.instagram.com/reel/C9xDemoLTA/</code><p class="sim-user-question">Summarize this Instagram Reel.</p></div><div class="sim-answer sim-fail" id="sim-left-answer"></div></div>
+              <div class="sim-body"><div class="sim-chat-user"><span>You</span><code class="sim-user-link">https://www.instagram.com/reel/Ddx6Q_MJNyg/</code><p class="sim-user-question">Summarize this Instagram Reel.</p></div><div class="sim-answer sim-fail" id="sim-left-answer"></div></div>
             </article>
             <article class="sim-panel with">
               <div class="sim-panel-head"><div><div class="sim-panel-title">With LTA</div><span class="sim-panel-sub">Same AI assistant · LTA connected</span></div><span class="sim-state" id="sim-right-state">Ready</span></div>
-              <div class="sim-body"><div class="sim-chat-user"><span>You</span><code class="sim-user-link">https://www.instagram.com/reel/C9xDemoLTA/</code><p class="sim-user-question">Summarize this Instagram Reel.</p></div><div class="sim-tool" id="sim-tool">LTA · Reading source…</div><div class="sim-answer" id="sim-right-answer"></div></div>
+              <div class="sim-body"><div class="sim-chat-user"><span>You</span><code class="sim-user-link">https://www.instagram.com/reel/Ddx6Q_MJNyg/</code><p class="sim-user-question">Summarize this Instagram Reel.</p></div><div class="sim-tool" id="sim-tool">LTA · Reading source…</div><div class="sim-answer" id="sim-right-answer"></div></div>
             </article>
           </div>
           <div class="sim-conclusion" id="sim-conclusion" hidden>Same AI. Same link. <strong>Missing context fixed.</strong></div>
         </div>
-        <div class="experience-hero-cta reveal"><a class="btn purple" href="/start?from=hero-simulation">Connect to Claude →</a><a class="btn alt" href="/developers#mcp">Use MCP</a><a class="btn alt" href="/account">API key</a><span class="micro">10 processing units · No card required · Failed reads cost 0</span></div>
+        <div class="experience-hero-cta reveal"><a class="btn purple" href="/start?from=hero">Add LTA to Claude →</a><a class="btn alt" href="/developers#mcp">Use MCP</a><a class="btn alt" href="/account">API key</a><span class="micro">10 processing units free · No card · Failed reads cost 0</span></div>
         <div class="clarity-strip reveal" aria-label="How to start using LTA">
           <div class="clarity-item"><b>1</b><div><strong>Connect LTA</strong><span>Use the button above to connect directly today. We are also preparing a Claude Connector Directory listing, but you do not need to wait for it to start.</span></div></div>
           <div class="clarity-item"><b>2</b><div><strong>Enable it in the chat</strong><span>Claude can say Connected before LTA is turned on for the specific conversation. Open + → Connectors → LTA once in that chat.</span></div></div>
@@ -531,7 +530,7 @@ const homeExperienceJs=`(()=>{
         reddit:{name:'Reddit thread',url:'reddit.com/r/ClaudeAI/comments/…',question:'What are people disagreeing about in this Reddit thread?',fail:'I can’t reliably access the contents of that Reddit page. If you paste the content here, I can help.',lead:'The thread splits around where the access failure actually happens.',points:['One group treats Reddit access itself as the blocker.','Another group points to whether the connector is loaded and invoked.','The useful follow-up is separating source availability from tool-selection behavior.']},
         youtube:{name:'YouTube / Shorts',url:'youtube.com/watch?v=…',question:'What is this YouTube video arguing, and what evidence does it use?',fail:'I can see the YouTube URL, but I do not have enough of the video content to summarize its argument reliably.',lead:'The video argues that AI agents are becoming capable faster than the workflows around them are improving.',points:['Coding agents can now complete longer multi-step tasks with less supervision.','Research and tool-use examples show the bottleneck shifting from model capability to the surrounding workflow.','The conclusion argues that better orchestration matters as much as stronger models.']},
         tiktok:{name:'TikTok post',url:'tiktok.com/@creator/video/…',question:'What is this TikTok claiming, and what evidence does the clip actually give?',fail:'I can see the TikTok URL, but I do not have enough of the clip itself to answer from the source reliably.',lead:'The clip makes one central claim and backs it with two concrete examples.',points:['The opening states the claim directly.','The examples support one part of the claim but not every implication.','The ending adds a broader conclusion than the clip fully demonstrates.']},
-        instagram:{name:'Instagram Reel',url:'https://www.instagram.com/reel/C9xDemoLTA/',question:'Summarize this Instagram Reel.',fail:'I can’t directly access the Instagram Reel from this link, so I can’t reliably summarize what is in the video. If you paste the caption or describe the clip, I can help.',lead:'The post makes a specific claim and supports it with details from the caption and clip.',points:['The caption gives the central claim.','The media adds one concrete example.','The strongest conclusion goes slightly beyond what is directly shown.']},
+        instagram:{name:'Instagram Reel',url:'https://www.instagram.com/reel/Ddx6Q_MJNyg/',question:'Summarize this Instagram Reel.',fail:'I can’t directly access the Instagram Reel from this link, so I can’t reliably summarize what is in the video. If you paste the caption or describe the clip, I can help.',lead:'The Reel is a rapid-fire interview with entrepreneur Marcus Lemonis about money, employees, networking and success.',points:['He says he became a millionaire at 27 and describes a strong year at roughly $900M in profit for his public company.','His financial rule is to keep cash available so he can act when opportunities appear.','He says happy employees matter more than customers and values frontline feedback over networking with billionaires.']},
         x:{name:'X post',url:'x.com/creator/status/…',question:'What exactly is this post claiming, and what context matters?',fail:'I can see the X URL, but I do not have enough of the exact post content to answer confidently.',lead:'The post makes one direct claim, with context that changes how strongly it should be read.',points:['The wording is narrower than the headline interpretation.','One linked detail supports the factual part of the claim.','The broader conclusion is still the author’s interpretation.']},
         bluesky:{name:'Bluesky post',url:'bsky.app/profile/…/post/…',question:'Summarize this Bluesky post and the context around its claim.',fail:'I can see the Bluesky URL, but I do not have enough exact post content to summarize it reliably.',lead:'The post states a clear position and gives enough surrounding context to explain what it is reacting to.',points:['The main claim is explicit in the post text.','The surrounding context explains what prompted it.','The useful distinction is between the factual event and the author’s judgment.']},
         hn:{name:'Hacker News discussion',url:'news.ycombinator.com/item?id=…',question:'Where do commenters in this Hacker News discussion actually disagree?',fail:'I can open the story, but I do not have enough of the discussion thread to summarize the disagreement reliably.',lead:'The discussion splits into a few recurring arguments rather than one consensus.',points:['One group accepts the article’s central premise.','Another challenges whether the evidence supports that conclusion.','A third group focuses on practical consequences instead of the original claim.']},
@@ -577,8 +576,56 @@ app.get('/home.js',async(_req,reply)=>reply.header('Cache-Control','no-cache, ma
 
 app.get('/connect',async(req,reply)=>{
   await trackWebsiteVisit(req,reply,'/connect');
-  const install='/connect/start';
-  return reply.type('text/html').send(siteShell(`<main id="main-content"><section class="connect-hero"><span class="badge"><span class="badge-dot"></span>Claude connector</span><h1>Connect LTA. Then finish one step in Claude.</h1><p>When Claude says <strong>Connected</strong>, your account is authorized. Return to the Claude conversation where you want to use LTA and confirm it is available from <strong>+ → Connectors</strong>.</p><div class="guide-status"><span>About 2 minutes</span><span>10 units free</span><span>No card</span></div><div class="coming" style="max-width:900px;margin:24px auto 0;text-align:left"><div><strong>Using Grok or another Remote MCP client?</strong><span>In the client's Custom MCP / connector setup, use <code>${env().PUBLIC_BASE_URL.replace(/\/$/,'')}/mcp</code>. MCP uses LTA OAuth — do not paste an API key into the connector.</span></div><a class="btn alt sm" href="/developers#mcp">MCP setup →</a></div></section><section class="setup-shell"><div class="setup-main"><h2>Set up LTA in three steps.</h2><p>The button opens Claude's custom-connector setup with LTA's name and MCP URL prefilled. You do not need to copy the URL or enter a client secret.</p><div class="setup-cta"><a class="btn purple" id="claude-install" href="${install}" target="_blank" rel="noopener">Add LTA to Claude →</a><span class="setup-note" id="connect-state">Claude should open Add custom connector with <strong>${env().PUBLIC_BRAND_NAME}</strong> and its MCP URL prefilled. Confirm it, then finish LTA sign-in when prompted.</span></div><div class="guide-grid"><div class="guide-card"><div class="guide-copy"><span class="guide-num">1</span><h3>Add the prefilled LTA connector.</h3><p>Confirm <strong>${env().PUBLIC_BRAND_NAME}</strong> and the prefilled MCP URL, then press <strong>Add</strong> or <strong>Connect</strong>.</p><span class="tiny-pill">Name + MCP URL prefilled</span></div><div class="guide-shot" style="min-height:250px;display:grid;place-items:center;padding:28px"><div style="max-width:360px;width:100%;background:white;border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:0 16px 45px rgba(31,26,44,.08)"><span class="badge"><span class="badge-dot"></span>Claude custom connector</span><h3 style="font-size:27px;margin:18px 0 9px">LTA</h3><p style="color:var(--muted);line-height:1.55">The connector name and LTA MCP server URL are prefilled. Confirm them, then add the connector.</p></div></div></div><div class="guide-card reverse"><div class="guide-shot" style="min-height:250px;display:grid;place-items:center;padding:28px"><div style="max-width:360px;width:100%;background:white;border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:0 16px 45px rgba(31,26,44,.08)"><span class="badge"><span class="badge-dot"></span>LTA account</span><h3 style="font-size:27px;margin:18px 0 9px">Sign in once</h3><p style="color:var(--muted);line-height:1.55">Your trial, usage and plan stay attached to the same account.</p></div></div><div class="guide-copy"><span class="guide-num">2</span><h3>Sign in to LTA.</h3><p>Claude will open LTA authorization. Sign in or create your LTA account, then approve the connection.</p><p class="micro"><strong>Connected = authorization finished.</strong> It does not guarantee LTA is already loaded in the Claude conversation you are using.</p></div></div><div class="guide-card"><div class="guide-copy"><span class="guide-num">3</span><h3>Confirm LTA in the Claude conversation.</h3><p>Return to the Claude chat and open <strong>+ → Connectors</strong>. Confirm LTA is available there, then paste the public link into Claude's normal message box and ask your question.</p><p class="micro">If Claude does not load LTA reliably, open <strong>+ → Connectors → Tool access</strong>. Claude may show <strong>Load tools when needed</strong>; you can switch to <strong>Tools already loaded</strong> so LTA is loaded from the start.</p><span class="tiny-pill">Connected first. Use it from Claude second.</span></div><div class="guide-shot"><img loading="lazy" decoding="async" src="/guide/claude-tool-access.png" alt="Claude Connectors and Tool access menu used to make LTA available in a conversation"></div></div></div><div class="why-write"><strong>Why Claude may ask before “Read public link”:</strong> a successful read creates a LTA processing job and can use processing units. It does <strong>not</strong> edit or delete the source link, your Claude chats, or your files.</div><div id="setup-complete" hidden class="coming" style="margin-bottom:16px"><div><strong>Connected ✓ Authorization is done.</strong><span>Return to Claude and open <strong>+ → Connectors</strong>. Confirm LTA is available, then paste the public link into Claude's normal message box and ask your question. If Claude does not load it, use <strong>Tool access → Tools already loaded</strong>.</span></div><a class="btn purple sm" href="https://claude.ai" target="_blank" rel="noopener">Open Claude →</a></div><div class="coming"><div><strong>Your first 30-second test</strong><span>After LTA is enabled in the conversation, paste a supported public link in Claude and try: “What are the main claims in this video?” or “Review this GitHub Issue and suggest the next fix.”</span></div><a class="btn alt sm" href="/examples">See examples</a></div><div class="coming" style="margin-top:12px"><div><strong>Still not seeing LTA?</strong><span>Open <strong>+ → Connectors</strong> in that Claude conversation and confirm LTA is toggled on before retrying the link.</span></div><a class="btn alt sm" href="/support">Need help?</a></div></div></section><script>(()=>{const button=document.getElementById('claude-install');const state=document.getElementById('connect-state');let since=Number(sessionStorage.getItem('link2ai_connect_started')||0);let timer=null;const check=async()=>{if(!since)return;try{const response=await fetch('/api/connect/status?since='+encodeURIComponent(String(since)),{cache:'no-store',credentials:'same-origin'});if(!response.ok)return;const data=await response.json();if(data.connected){if(state)state.textContent='Connected ✓ Authorization is complete. Return to Claude, open + → Connectors, confirm LTA is available, then paste your link.';clearInterval(timer);const done=document.getElementById('setup-complete');if(done)done.hidden=false;return;}if(data.authenticated&&state)state.textContent='Signed in. Finish Claude authorization; after Connected, return to Claude and confirm LTA under + → Connectors.';}catch{}};button?.addEventListener('click',()=>{since=Date.now();sessionStorage.setItem('link2ai_connect_started',String(since));if(state)state.textContent='Claude connector setup opened. Confirm LTA, add/connect it, and finish sign-in; this page will keep checking.';clearInterval(timer);timer=setInterval(check,1500);setTimeout(check,500);});if(since){timer=setInterval(check,1500);check();}})();</script></main>`, `Connect ${env().PUBLIC_BRAND_NAME} to Claude`, `/connect`));
+  const mcpUrl=env().PUBLIC_BASE_URL.replace(/\/$/,'')+'/mcp';
+  return reply.type('text/html').send(siteShell(`<main id="main-content">
+    <section class="connect-hero connect-fast">
+      <span class="badge"><span class="badge-dot"></span>Claude connector</span>
+      <h1>Add LTA to Claude.</h1>
+      <p>One click opens Claude with LTA's name and MCP URL prefilled. Claude will ask you to sign in to LTA only when authorization is needed.</p>
+      <div class="guide-status"><span>10 units free</span><span>No card</span><span>OAuth sign-in</span></div>
+      <div class="setup-cta" style="justify-content:center;margin-top:26px">
+        <a class="btn purple" id="claude-install" href="/connect/start" target="_blank" rel="noopener">Add LTA to Claude →</a>
+      </div>
+      <p class="micro" id="connect-state">After Claude opens, confirm the connector and finish LTA sign-in. Then paste a supported public link into Claude and ask normally.</p>
+    </section>
+
+    <section class="setup-shell connect-help-shell">
+      <div class="setup-main connect-help">
+        <details>
+          <summary><strong>Need help connecting?</strong><span>Show the steps</span></summary>
+          <div class="connect-help-body">
+            <ol>
+              <li>Confirm the prefilled <strong>LTA</strong> connector in Claude.</li>
+              <li>Finish LTA sign-in and press <strong>Connect and return</strong> when authorization appears.</li>
+              <li>Back in the Claude conversation, open <strong>+ → Connectors</strong> if LTA is not already available.</li>
+            </ol>
+            <p>If Claude still does not load it, open <strong>+ → Connectors → Tool access</strong> and choose <strong>Tools already loaded</strong>.</p>
+            <p><a href="/support"><strong>Open support →</strong></a></p>
+          </div>
+        </details>
+        <details>
+          <summary><strong>Using Grok or another Remote MCP client?</strong><span>Show MCP URL</span></summary>
+          <div class="connect-help-body">
+            <code style="display:block;padding:13px 14px;border-radius:12px;background:#17151f;color:#fff;overflow-wrap:anywhere">${mcpUrl}</code>
+            <p>Remote MCP · OAuth. No LTA API key goes in the connector.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <script>(()=>{const button=document.getElementById('claude-install');const state=document.getElementById('connect-state');let since=Number(sessionStorage.getItem('link2ai_connect_started')||0);let timer=null;const check=async()=>{if(!since)return;try{const response=await fetch('/api/connect/status?since='+encodeURIComponent(String(since)),{cache:'no-store',credentials:'same-origin'});if(!response.ok)return;const data=await response.json();if(data.connected){if(state)state.textContent='Connected ✓ Return to Claude and paste a supported public link.';clearInterval(timer);return;}if(data.authenticated&&state)state.textContent='Signed in. Finish Claude authorization, then return to Claude.';}catch{}};button?.addEventListener('click',()=>{since=Date.now();sessionStorage.setItem('link2ai_connect_started',String(since));if(state)state.textContent='Claude opened. Confirm LTA and finish authorization when prompted.';clearInterval(timer);timer=setInterval(check,1500);setTimeout(check,500);});if(since){timer=setInterval(check,1500);check();}})();</script>
+
+    <style>
+      .connect-fast{padding-bottom:24px}.connect-fast .setup-cta{display:flex}.connect-fast .btn{min-width:230px}
+      .connect-help-shell{margin-top:10px}.connect-help{padding:0;overflow:hidden;background:rgba(255,255,255,.84)}
+      .connect-help details{border-bottom:1px solid var(--line)}.connect-help details:last-child{border-bottom:0}
+      .connect-help summary{list-style:none;display:flex;justify-content:space-between;gap:18px;align-items:center;padding:18px 20px;cursor:pointer}
+      .connect-help summary::-webkit-details-marker{display:none}.connect-help summary span{font-size:11px;color:var(--muted)}
+      .connect-help-body{padding:0 20px 20px;color:var(--muted);font-size:13px;line-height:1.6}
+      .connect-help-body ol{margin:0;padding-left:20px}.connect-help-body li{margin:7px 0}
+      @media(max-width:620px){.connect-fast{padding-top:48px}.connect-fast .setup-cta{display:block}.connect-fast .btn{width:100%;min-width:0}.connect-help summary{align-items:flex-start}}
+    </style>
+  </main>`, `Connect ${env().PUBLIC_BRAND_NAME} to Claude`, '/connect'));
 });
 
 app.get('/api/connect/status',async(req,reply)=>{
