@@ -94,9 +94,9 @@ try{
   assert.equal(account.response.status,200);
   assert.match(account.text,/Key name/,'account must label the API key input as a name');
   assert.match(account.text,/Generate API key/,'account must make server-generated key creation explicit');
-  assert.match(account.text,/Link2AI generates the secret for you/,'account must explain that the user is not entering the secret');
+  assert.match(account.text,/LTA generates the secret for you/,'account must explain that the user is not entering the secret');
   assert.match(account.text,/Do you need an API key\?/,'account must explain who the Developer API is for');
-  assert.match(account.text,/I just want Link2AI in an AI/,'account must route ordinary AI use to connection setup');
+  assert.match(account.text,/I just want LTA in an AI/,'account must route ordinary AI use to connection setup');
   const csrf=hidden(account.text,'csrf');
   const created=await web('/account/api-keys',{
     method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},
