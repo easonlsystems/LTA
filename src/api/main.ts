@@ -403,9 +403,9 @@ app.get('/',async(req,reply)=>{
     <section class="experience-hero" id="simulation">
       <div class="home-inner">
         <div class="experience-copy reveal">
-          <span class="experience-kicker">Interactive comparison · Claude-first</span>
-          <h1>Connect Link2AI to Claude. <span>Then paste a link in Claude.</span></h1>
-          <p class="experience-lede">Link2AI adds source-reading to Claude. Connect it once, enable it in the conversation you want to use, then paste public links into Claude's normal chat — there is no separate Link2AI paste box.</p>
+          <span class="experience-kicker">Source infrastructure for AI</span>
+          <h1>Give your AI the source. <span>Link2AI makes it readable.</span></h1>
+          <p class="experience-lede">Turn supported public links into AI-ready source context. Connect Link2AI to Claude, or use the same source engine from your agent, workflow, research tool, or app through the API.</p>
         </div>
         <div class="sim-shell reveal" id="comparison-demo" aria-label="Interactive Link2AI comparison simulation">
           <div class="sim-tabs" role="tablist" aria-label="Choose a source for the comparison">
@@ -439,7 +439,7 @@ app.get('/',async(req,reply)=>{
           </div>
           <div class="sim-conclusion" id="sim-conclusion" hidden>Same AI. Same link. <strong>Missing context fixed.</strong></div>
         </div>
-        <div class="experience-hero-cta reveal"><a class="btn purple" href="/start?from=hero-simulation">Connect Link2AI to Claude →</a><span class="micro">10 processing units · No card required · Failed reads cost 0</span></div>
+        <div class="experience-hero-cta reveal"><a class="btn purple" href="/start?from=hero-simulation">Connect to Claude →</a><a class="btn alt" href="/developers">Use the API</a><span class="micro">10 processing units · No card required · Failed reads cost 0</span></div>
         <div class="clarity-strip reveal" aria-label="How to start using Link2AI">
           <div class="clarity-item"><b>1</b><div><strong>Connect Link2AI</strong><span>Use the button above to connect directly today. We are also preparing a Claude Connector Directory listing, but you do not need to wait for it to start.</span></div></div>
           <div class="clarity-item"><b>2</b><div><strong>Enable it in the chat</strong><span>Claude can say Connected before Link2AI is turned on for the specific conversation. Open + → Connectors → Link2AI once in that chat.</span></div></div>
@@ -449,7 +449,7 @@ app.get('/',async(req,reply)=>{
     </section>
 
     <script src="/home.js?v=20260917-homeonly2" defer></script>
-  </main>`, `${env().PUBLIC_BRAND_NAME} — Connect to Claude. Then paste a link.`, `/`));
+  </main>`, `${env().PUBLIC_BRAND_NAME} — Public links to AI-ready source context`, `/`));
 });
 
 
