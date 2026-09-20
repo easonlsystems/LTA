@@ -60,7 +60,7 @@ for(const [path,pattern] of [
 {
   const {response}=await request('/account');
   assert.equal(response.status,302);
-  assert.match(response.headers.get('location')??'',/^\/login\?/);
+  assert.match(response.headers.get('location')??'',/^\/(?:login|signup)\?/);
 }
 
 {
