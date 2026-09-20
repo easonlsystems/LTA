@@ -25,7 +25,9 @@ assert.match(source,/requires \$\{required\}/,'quota guidance must tell users ho
 
 assert.match(main,/app\.get\('\/developers'/);
 assert.match(docs,/POST \/v1\/read/);
-assert.match(docs,/GET \/v1\/jobs\/\{id\}/);
+assert.match(docs,/Remote MCP/);
+assert.match(docs,/Authorization: Bearer &lt;API_KEY&gt;/);
+assert.doesNotMatch(docs,/GET \/v1\/jobs\/\{id\}|Windows PowerShell|JavaScript and Python/);
 assert.match(main,/href="\/developers"/);
 assert.match(main,/API-key hashes and non-secret key prefixes/);
 
