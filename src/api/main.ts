@@ -487,11 +487,11 @@ app.get('/',async(req,reply)=>{
           <div class="sim-grid" id="sim-comparison-panels" aria-live="polite" hidden>
             <article class="sim-panel without">
               <div class="sim-panel-head"><div><div class="sim-panel-title">Without Link2AI</div><span class="sim-panel-sub">Same AI assistant · same public link</span></div><span class="sim-state" id="sim-left-state">Ready</span></div>
-              <div class="sim-body"><div class="sim-chat-user"><span>You</span><p class="sim-user-question">What is this YouTube video arguing, and what evidence does it use?</p></div><div class="sim-answer sim-fail" id="sim-left-answer"></div></div>
+              <div class="sim-body"><div class="sim-chat-user"><span>You</span><p class="sim-user-question">Summarize this Instagram Reel.</p></div><div class="sim-answer sim-fail" id="sim-left-answer"></div></div>
             </article>
             <article class="sim-panel with">
               <div class="sim-panel-head"><div><div class="sim-panel-title">With Link2AI</div><span class="sim-panel-sub">Same AI assistant · Link2AI connected</span></div><span class="sim-state" id="sim-right-state">Ready</span></div>
-              <div class="sim-body"><div class="sim-chat-user"><span>You</span><p class="sim-user-question">What is this YouTube video arguing, and what evidence does it use?</p></div><div class="sim-tool" id="sim-tool">Link2AI · Reading source…</div><div class="sim-answer" id="sim-right-answer"></div></div>
+              <div class="sim-body"><div class="sim-chat-user"><span>You</span><p class="sim-user-question">Summarize this Instagram Reel.</p></div><div class="sim-tool" id="sim-tool">Link2AI · Reading source…</div><div class="sim-answer" id="sim-right-answer"></div></div>
             </article>
           </div>
           <div class="sim-conclusion" id="sim-conclusion" hidden>Same AI. Same link. <strong>Missing context fixed.</strong></div>
