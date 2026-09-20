@@ -375,6 +375,58 @@ nav.scrolled:not(.home-nav){background:rgba(248,247,252,.88)!important;backdrop-
   body[data-path="/support"] .support-grid{margin-bottom:24px}
 }
 
+/* Homepage responsive architecture · 2026-09-20 */
+.home-only .home-inner{width:min(calc(100vw - 64px),1240px);max-width:1240px;padding-left:0;padding-right:0}
+.home-only .home-nav{width:min(calc(100vw - 64px),1240px)}
+.home-only .experience-hero{min-height:auto;padding:112px 0 64px;align-items:flex-start}
+.home-only .experience-copy{max-width:1040px;margin-bottom:24px}
+.home-only .experience-hero h1{font-size:clamp(60px,5vw,78px);line-height:.94;letter-spacing:-.065em;white-space:normal;max-width:1040px;margin:18px 0}
+.home-only .experience-hero h1 .hero-line{display:block}
+.home-only .experience-hero h1 .hero-line-plain{color:var(--ink);background:none;-webkit-text-fill-color:currentColor}
+.home-only .experience-hero h1 .hero-line-accent{background:linear-gradient(118deg,#5e47dd 8%,#7f63ef 46%,#4d7df0 92%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.home-only .experience-lede{max-width:820px;font-size:17px}
+.home-only .sim-shell{width:100%;max-width:none;margin-top:24px;border-radius:26px}
+.home-only .sim-panel{min-height:150px;padding:18px}
+.home-only .sim-panel-sub{display:block}
+.home-only .sim-chat-user{display:block;max-width:78%;padding:11px 13px}
+.home-only .clarity-strip{margin-top:24px}
+.home-only .experience-hero-cta{margin-top:20px}
+@media(max-width:1279px) and (min-width:901px){
+  .home-only .home-inner,.home-only .home-nav{width:min(calc(100vw - 48px),1120px)}
+  .home-only .experience-hero{padding-top:104px}
+  .home-only .experience-hero h1{font-size:clamp(54px,5.6vw,68px);max-width:920px}
+  .home-only .experience-copy{max-width:920px}
+  .home-only .sim-tab{padding:8px 11px;font-size:11px}
+  .home-only .sim-panel{min-height:142px}
+}
+@media(max-width:900px) and (min-width:651px){
+  .home-only .home-inner,.home-only .home-nav{width:min(calc(100vw - 40px),820px)}
+  .home-only .experience-hero{padding:96px 0 52px}
+  .home-only .experience-hero h1{font-size:clamp(50px,7vw,62px);max-width:760px}
+  .home-only .experience-lede{max-width:700px}
+  .home-only .sim-grid{grid-template-columns:1fr 1fr}
+  .home-only .sim-panel{min-height:160px}
+  .home-only .sim-chat-user{max-width:88%}
+  .home-only .clarity-strip{grid-template-columns:1fr 1fr}
+  .home-only .clarity-item:last-child{grid-column:1/-1}
+}
+@media(max-width:650px){
+  .home-only .home-inner{width:100%;padding-left:18px;padding-right:18px}
+  .home-only .home-nav{width:auto}
+  .home-only .experience-hero{padding:88px 0 42px}
+  .home-only .experience-hero h1{font-size:clamp(39px,11vw,48px);line-height:.98;max-width:10.5ch;margin:14px 0}
+  .home-only .experience-hero h1 .hero-line{display:inline}
+  .home-only .experience-hero h1 .hero-line-plain:after{content:" "}
+  .home-only .experience-lede{font-size:15px}
+  .home-only .sim-shell{margin-top:22px;border-radius:20px}
+  .home-only .sim-grid{grid-template-columns:1fr}
+  .home-only .sim-panel{min-height:0;padding:14px}
+  .home-only .sim-panel-sub{display:none}
+  .home-only .sim-chat-user{display:block;max-width:94%;padding:10px 11px}
+  .home-only .clarity-strip{grid-template-columns:1fr}
+  .home-only .clarity-item:last-child{grid-column:auto}
+}
+
 @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}.sim-line.live:after{animation:none}.sim-answer.show,.sim-tool.show,.sim-conclusion.show{animation:none}}
 
 `;
@@ -404,7 +456,7 @@ app.get('/',async(req,reply)=>{
       <div class="home-inner">
         <div class="experience-copy reveal">
           <span class="experience-kicker">Source infrastructure for AI</span>
-          <h1>Give your AI the source. <span>Link2AI makes it readable.</span></h1>
+          <h1><span class="hero-line hero-line-plain">Give your AI the source.</span><span class="hero-line hero-line-accent">Link2AI makes it readable.</span></h1>
           <p class="experience-lede">Turn supported public links into AI-ready source context. Connect Link2AI to Claude, or use the same source engine from your agent, workflow, research tool, or app through the API.</p>
         </div>
         <div class="sim-shell reveal" id="comparison-demo" aria-label="Interactive Link2AI comparison simulation">
