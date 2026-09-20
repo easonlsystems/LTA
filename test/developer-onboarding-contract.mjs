@@ -36,5 +36,7 @@ assert.doesNotMatch(cert,/console\.log\([^)]*(apiKey|password|cookie)/i,'certifi
 assert.match(workflow,/workflow_dispatch/);
 assert.match(workflow,/secrets\.LINK2AI_CERT_EMAIL/);
 assert.match(workflow,/secrets\.LINK2AI_CERT_PASSWORD/);
+assert.match(workflow,/LINK2AI_EXPECTED_REVISION:\s*\$\{\{\s*github\.sha\s*\}\}/,'authenticated production workflow must certify the dispatched revision');
+assert.match(cert,/data\?\.revision===expectedRevision/,'authenticated API lifecycle must wait for the exact production revision');
 
 console.log('developer onboarding and authenticated certification contract tests PASS');
