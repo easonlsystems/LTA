@@ -61,7 +61,8 @@ try{
       assert.match(body,/href="\/sources"/);
       assert.match(body,/href="\/pricing"/);
       assert.match(body,/href="\/developers"/);
-      assert.match(body,/Use the API/);
+      assert.match(body,/Use MCP/);
+      assert.match(body,/API key/);
       assert.match(body,/src="\/home\.js\?v=20260920-reel-proof3" defer/);
       assert.doesNotMatch(body,/One missing layer/i);
       assert.doesNotMatch(body,/What do you want Claude to read\?/);
