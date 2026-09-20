@@ -57,6 +57,8 @@ await eventually('production revision availability',async()=>{
   assert.match(developers.text,/Give your app the source\./,'production developer docs must lead with product value');
   assert.match(developers.text,/From zero to source text in three steps\./,'production developer docs must expose the short quickstart');
   assert.match(developers.text,/Generate API key/,'production developer docs must use generated-key onboarding');
+  assert.match(developers.text,/I just want Link2AI inside an AI/,'production docs must route non-developers to the connection flow');
+  assert.match(developers.text,/Windows PowerShell/,'production docs must expose a runnable Windows quickstart');
   return true;
 });
 
