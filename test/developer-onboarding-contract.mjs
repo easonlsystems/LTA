@@ -39,6 +39,14 @@ assert.match(billing,/This is only a label so you know where the key is used/,'a
 assert.match(billing,/Your API key is ready\./,'one-time key screen should read as a product handoff');
 assert.match(billing,/copy-api-key/,'one-time key screen should offer a copy action');
 assert.doesNotMatch(billing,/Claude and API reads share the same jobs/,'account API copy must not imply a Claude-only product');
+assert.match(docs,/I just want Link2AI inside an AI/,'developer docs must tell non-developers they do not need the API');
+assert.match(docs,/No API key needed/,'developer docs must clearly separate connected-AI use from Developer API use');
+assert.match(docs,/Windows PowerShell/,'quickstart must include a runnable Windows path');
+assert.match(docs,/Invoke-RestMethod/,'PowerShell quickstart must show the actual first request');
+assert.match(billing,/Do you need an API key\?/,'account must explain whether the Developer API is relevant');
+assert.match(billing,/I just want Link2AI in an AI/,'account must route ordinary AI users away from API key creation');
+assert.match(billing,/What do I do with this\?/,'one-time key screen must explain the next action');
+assert.match(billing,/PASTE_YOUR_KEY_HERE/,'one-time key screen must include a directly runnable terminal example');
 
 for(const required of ['/auth/reviewer','/account/api-keys','/v1/usage','/v1/sources','/v1/read','/v1/jobs/','/account/api-keys/revoke']){
   assert.ok(cert.includes(required),`production cert must exercise ${required}`);
