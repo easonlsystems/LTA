@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 const base=(process.env.LINK2AI_PRODUCTION_URL||'https://api-production-0383e.up.railway.app').replace(/\/$/,'');
 const attempts=Number(process.env.LINK2AI_PROD_CERT_ATTEMPTS||20);
 const delayMs=Number(process.env.LINK2AI_PROD_CERT_DELAY_MS||15000);
+const expectedRevision=(process.env.LINK2AI_EXPECTED_REVISION||'').trim();
+
+if(!expectedRevision)throw new Error('Production certification requires LINK2AI_EXPECTED_REVISION.');
 
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
@@ -24,10 +27,16 @@ async function eventually(label,check){
   throw new Error(label+' failed after '+attempts+' attempts: '+(last instanceof Error?last.message:String(last)));
 }
 
-// Do not let an old production release satisfy this gate. The homepage copy can
-// remain stable across releases, so require a marker introduced by the release
-// being certified before running the rest of the one-shot assertions.
-await eventually('production release availability',async()=>{
+// Bind certification to the exact revision that triggered this workflow.
+// Stable page copy is not a release gate: an older healthy deployment can expose
+// the same homepage/developer markers and would otherwise create a false PASS.
+await eventually('production revision availability',async()=>{
+  const health=await request('/healthz');
+  assert.equal(health.response.status,200);
+  const healthData=JSON.parse(health.text);
+  assert.equal(healthData.ok,true);
+  assert.equal(healthData.revision,expectedRevision,'production is not running the triggering commit yet');
+
   const home=await request('/');
   assert.equal(home.response.status,200);
   assert.match(home.text,/Source infrastructure for AI/);
@@ -44,6 +53,7 @@ await eventually('production release availability',async()=>{
   assert.equal(response.status,200);
   const data=JSON.parse(text);
   assert.equal(data.ok,true);
+  assert.equal(data.revision,expectedRevision);
 }
 
 {
