@@ -851,7 +851,7 @@ export async function exchangeRefreshToken(input:{refreshToken:string;clientId:s
   finally{ client.release(); }
 }
 
-export type Link2AIAuthInfo = AuthInfo & { extra: { userId:string } };
+export type Link2AIAuthInfo = AuthInfo & { extra: { userId:string; clientSource?:string } };
 
 function bearerTokenFromAuthorization(authorization?:string):string|null{
   if(!authorization)return null;
