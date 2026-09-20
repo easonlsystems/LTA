@@ -6,9 +6,9 @@ export function normalizeClientSource(value:unknown):ClientSource{
   return 'mcp';
 }
 
-export function inferMcpClientSource(clientId:unknown,userAgent:unknown,profile:unknown='default'):ClientSource{
+export function inferMcpClientSource(clientId:unknown,userAgent:unknown,profile:unknown='default',clientName:unknown=''):ClientSource{
   if(String(profile??'').toLowerCase()==='openai')return 'chatgpt';
-  const haystack=`${String(clientId??'')} ${String(userAgent??'')}`.toLowerCase();
+  const haystack=`${String(clientId??'')} ${String(userAgent??'')} ${String(clientName??'')}`.toLowerCase();
   if(/claude|anthropic/.test(haystack))return 'claude';
   if(/\bgrok\b|x\.ai|xai/.test(haystack))return 'grok';
   if(/chatgpt|openai/.test(haystack))return 'chatgpt';
