@@ -84,14 +84,6 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
       }
     }
     const topupEligible=await canPurchaseTopup(user.id);
-    const apiKeys=await listPublicApiKeys(user.id);
-    const recentJobs=await pool.query<{id:string;platform:string;status:string;created_at:Date;completed_at:Date|null;error_code:string|null;usage_units:number|null}>(\`
-      SELECT j.id,j.platform,j.status,j.created_at,j.completed_at,j.error_code,c.usage_units
-      FROM transcript_jobs j LEFT JOIN transcript_cache c ON c.id=j.transcript_cache_id
-      WHERE j.user_id=$1 ORDER BY j.created_at DESC LIMIT 15\`,[user.id]);
-    const apiKeyRows=apiKeys.map(key=>\`<div style="display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)"><div><strong>${esc(key.name)}</strong><div class="fine" style="margin:3px 0 0"><code>${esc(key.key_prefix)}••••••••</code> · created ${esc(new Date(key.created_at).toLocaleDateString())}${key.last_used_at?\` · last used ${esc(new Date(key.last_used_at).toLocaleString())}\`:''}${key.revoked_at?' · revoked':''}</div></div>${key.revoked_at?'':\`<form method="post" action="/account/api-keys/revoke">${csrf}<input type="hidden" name="key_id" value="${esc(key.id)}"><button class="secondary" type="submit">Revoke</button></form>\`}</div>\`).join('')||'<p class="muted">No API keys yet.</p>';
-    const jobRows=recentJobs.rows.map(job=>\`<tr><td><code>${esc(job.id.slice(0,8))}…</code></td><td>${esc(job.platform)}</td><td>${esc(job.status)}</td><td>${esc(job.usage_units??0)}</td><td>${esc(job.error_code??'—')}</td><td>${esc(new Date(job.created_at).toLocaleString())}</td></tr>\`).join('')||'<tr><td colspan="6">No jobs yet.</td></tr>';
-    const developerSection=\`<section class="card"><h2>Developer API</h2><p class="muted">Create an API key for agents, workflows, n8n, or your own SaaS. The full key is shown only once when created.</p><form method="post" action="/account/api-keys" style="display:flex;gap:10px;flex-wrap:wrap;margin:14px 0"><input name="name" maxlength="60" placeholder="Production" style="flex:1;min-width:180px;border:1px solid var(--line);border-radius:13px;padding:12px 14px;font:inherit">${csrf}<button class="primary" type="submit">Create API key</button></form><div>${apiKeyRows}</div><div class="actions"><a class="btn secondary" href="/developers">API quickstart</a></div></section><section class="card"><h2>Recent jobs</h2><p class="muted">Connector and API reads share the same source jobs, cache, quota, and billing.</p><div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="text-align:left;padding:8px">Job</th><th style="text-align:left;padding:8px">Source</th><th style="text-align:left;padding:8px">Status</th><th style="text-align:left;padding:8px">Units</th><th style="text-align:left;padding:8px">Error</th><th style="text-align:left;padding:8px">Created</th></tr></thead><tbody>${jobRows}</tbody></table></div></section>\`;
     return reply.type('text/html').send(page(`${topbar(user.email)}<section class="hero"><span class="eyebrow">Upgrade</span><div class="pricing-intro"><h1>Pick based on processing capacity and concurrency — not content type or video length.</h1><p class="muted">Basic and Pro read the same supported content types. Pro mainly gives you more units each billing cycle and higher concurrency. Unused paid units roll over while your paid subscription stays active.</p></div>${plans('checkout')}<p class="plan-note">Only successfully processed content consumes usage. Unsupported, inaccessible, login-required, empty or failed reads use 0 processing units. You can manage or cancel a paid subscription from your account.</p></section>${topupEligible?topupSection(req.headers.cookie):''}`,`${esc(env().PUBLIC_BRAND_NAME)} Pricing`));
   });
 
@@ -163,6 +155,7 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
   });
 
 
+
   app.post('/account/api-keys',async(req,reply)=>{
     const user=await requireWebUser(req,reply,'/account'); if(!user)return;
     const b=req.body as any;
@@ -178,6 +171,7 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
     await revokePublicApiKey(user.id,String(b?.key_id??''));
     return reply.redirect('/account');
   });
+
 
   app.post('/billing/portal',async(req,reply)=>{
     const user=await requireWebUser(req,reply); if(!user)return;
