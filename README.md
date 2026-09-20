@@ -1,8 +1,8 @@
 # Link2AI
 
-> **Paste a link. Your AI can read it.**
+> **Public URL in. AI-ready source context out.**
 
-Link2AI is a thin remote MCP access layer that turns supported public links into AI-readable source context when the assistant cannot reliably access the content on its own. The founding beta is Claude-first, with ChatGPT as the next distribution surface; the protocol remains usable by compatible remote-MCP clients.
+Link2AI is source infrastructure that turns supported public links into AI-readable source context. Claude is the first end-user client, while the same read engine is also exposed through a public REST API for agents, workflows, research tools and SaaS products.
 
 Link2AI does not summarize, translate, fact-check or run its own chatbot. The host AI still does the reasoning and produces the answer.
 
@@ -113,6 +113,26 @@ The public interface intentionally stays small:
 - `get_usage()` — return the connected account's plan and quota.
 
 A supported URL appearing in conversation does not automatically mean the tool should be called. The host AI should invoke it only when the user's request actually depends on the content behind the link and the AI does not already have sufficient access.
+
+## Public API beta
+
+Create an API key from the Link2AI account page. The full key is shown once and only a hash is stored.
+
+```bash
+curl https://api-production-0383e.up.railway.app/v1/read \
+  -H "Authorization: Bearer l2ai_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://www.youtube.com/watch?v=..."}'
+```
+
+Public beta endpoints:
+
+- `POST /v1/read` — submit one supported public URL.
+- `GET /v1/jobs/{job_id}` — poll an asynchronous read.
+- `GET /v1/usage` — authoritative processing-unit balance.
+- `GET /v1/sources` — current supported source surface.
+
+Connectors and API clients share the same jobs, cache, quota, provenance, billing and source engine.
 
 ## Requirements
 
