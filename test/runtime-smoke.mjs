@@ -51,9 +51,12 @@ try{
     if(route==='/'){
       assert.match(body,/<nav class="home-nav" aria-label="Primary">/);
       assert.match(body,/class="experience-home home-only"/);
-      assert.match(body,/Give your AI the source\./);
-      assert.match(body,/LTA makes it readable\./);
-      assert.match(body,/Source infrastructure for AI/);
+      assert.match(body,/Paste the link\./);
+      assert.match(body,/Let your AI actually read it\./);
+      assert.match(body,/Public links → AI-readable source/);
+      assert.match(body,/Add LTA to Claude/);
+      assert.match(body,/Real LTA test case/);
+      assert.match(body,/Ddx6Q_MJNyg/);
       assert.match(body,/See the difference/);
       for(const source of ['youtube','tiktok','instagram','x','bluesky','hn','pdf','web'])assert.match(body,new RegExp(`data-sim-source=\"${source}\"`),`homepage should expose ${source} simulation`);
       assert.match(body,/href="\/examples"/);
@@ -73,7 +76,7 @@ try{
     if(route==='/use-cases'){assert.match(body,/Use the link normally/);assert.match(body,/Summaries grounded in the source/);}
     if(route==='/sources'){assert.match(body,/Supported sources/);assert.match(body,/Video & social/);assert.match(body,/Reddit/);assert.match(body,/Paused until approved Reddit OAuth Data API credentials are configured/);}
     if(route==='/pricing'){assert.match(body,/Founding offer/);assert.match(body,/First 50 paid users get 50% more usage/);assert.match(body,/500 paid units \+ 250 founding bonus/);assert.match(body,/2,000 paid units \+ 1,000 founding bonus/);assert.match(body,/Unused paid units roll over while subscribed/);assert.match(body,/founding bonus resets each billing cycle and does not roll over/);assert.match(body,/No plan-specific video length limit/);assert.match(body,/What does 1 processing unit mean/);assert.match(body,/Units depend on content size, not platform/);}
-    if(route==='/connect'){assert.match(body,/Add LTA to Claude/);assert.match(body,/custom-connector setup/);assert.match(body,/prefilled/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Load tools when needed/);assert.match(body,/Tools already loaded/);assert.doesNotMatch(body,/available in Claude's Connectors Directory|Open Claude Connectors Directory|Use the published connector|Search “LTA”|Choose the published LTA connector/);}
+    if(route==='/connect'){assert.match(body,/Add LTA to Claude/);assert.match(body,/One click opens Claude/);assert.match(body,/prefilled/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Need help connecting\?/);assert.match(body,/Tools already loaded/);assert.match(body,/Using Grok or another Remote MCP client\?/);assert.doesNotMatch(body,/Set up LTA in three steps|available in Claude's Connectors Directory|Open Claude Connectors Directory|Use the published connector|Search “LTA”|Choose the published LTA connector/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render|google-client-secret-must-not-render/);
   }
 
@@ -180,10 +183,10 @@ try{
   simTab('instagram').listeners.click();
   ids['sim-run'].listeners.click();
   runAllTimers();
-  assert.match(ids['sim-right-answer'].innerHTML,/specific claim and supports it with details from the caption and clip/,'Instagram With-LTA answer should keep the original generic result');
+  assert.match(ids['sim-right-answer'].innerHTML,/rapid-fire interview with entrepreneur Marcus Lemonis/,'Instagram With-LTA answer should reproduce the recorded real result');
   assert.match(ids['sim-left-answer'].innerHTML,/can’t directly access the Instagram Reel/,'Instagram without-LTA side should explain the source-access limitation');
   assert.match(ids['sim-left-answer'].innerHTML,/paste the caption or describe the clip/,'Instagram failure should give a realistic fallback');
-  assert.match(ids['sim-right-answer'].innerHTML,/caption gives the central claim/,'Instagram With-LTA answer should keep the original supporting points');
+  assert.match(ids['sim-right-answer'].innerHTML,/millionaire at 27/,'Instagram With-LTA answer should preserve a concrete point from the recorded result');
   assert.doesNotMatch(ids['sim-right-answer'].innerHTML,/Claude/,'comparison answer labels must remain AI-client neutral');
   // Switching source during a run must invalidate old-source callbacks.
   ids['sim-run'].listeners.click();
@@ -216,15 +219,20 @@ try{
 
   const start=await fetch(`http://127.0.0.1:${port}/start?from=hero`,{headers:{host:'link2ai.example'},redirect:'manual'});
   assert.equal(start.status,302);
-  assert.equal(start.headers.get('location'),'/signup?return_to=%2Fconnect');
+  const startLocation=start.headers.get('location')??'';
+  assert.match(startLocation,/^https:\/\/claude\.ai\/customize\/connectors\?/,'homepage CTA should go directly to Claude connector setup');
+  assert.match(startLocation,/connectorName=LaunchBrand/);
+  assert.match(startLocation,/connectorUrl=https%3A%2F%2Flink2ai\.example%2Fmcp/);
 
   const connectPage=await fetch(`http://127.0.0.1:${port}/connect`,{headers:{host:'link2ai.example'}});
   assert.equal(connectPage.status,200);
   const connectPageText=await connectPage.text();
-  assert.match(connectPageText,/\+ → Connectors/,'post-connect page must show where to confirm LTA availability');
-  assert.match(connectPageText,/normal message box/,'post-connect page must say where to paste the source link');
-  assert.match(connectPageText,/Connected = authorization finished/,'post-connect page must distinguish authorization from tool availability');
-  assert.match(connectPageText,/Connected ✓ Authorization is done/,'Connected must be presented as authorization completion, not the end of Claude setup');
+  assert.match(connectPageText,/One click opens Claude/,'connect page must lead with the one-click setup');
+  assert.match(connectPageText,/Need help connecting\?/,'detailed setup instructions should be collapsed behind help');
+  assert.match(connectPageText,/\+ → Connectors/,'help must still show where to confirm LTA availability');
+  assert.match(connectPageText,/paste a supported public link/,'connect page must say what to do after authorization');
+  assert.doesNotMatch(connectPageText,/Connected = authorization finished/,'first-run surface should not front-load internal connector-state explanation');
+  assert.match(connectPageText,/Connected ✓ Return to Claude/,'Connected state must give one concise next action');
 
   const connectStart=await fetch(`http://127.0.0.1:${port}/connect/start`,{headers:{host:'link2ai.example'},redirect:'manual'});
   assert.equal(connectStart.status,302);
