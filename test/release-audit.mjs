@@ -4,7 +4,7 @@ const [linkSource,limitsSource,mcpSource,mcpServiceSource,apiSource,authWrapperS
   readFile(new URL('../src/content/linkText.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/content/limits.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/mcp/server.ts',import.meta.url),'utf8'),
-  readFile(new URL('../src/mcp/service.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/source/service.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/api/main.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/auth/routes.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/auth/routes.base.ts',import.meta.url),'utf8'),
