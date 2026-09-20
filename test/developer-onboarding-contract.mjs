@@ -21,7 +21,7 @@ assert.match(main,/id="sim-comparison-panels"[^>]*hidden/,'homepage comparison m
 assert.match(main,/resetDemo\(false,false\)/,'initial homepage state must wait for the user to run the comparison');
 assert.doesNotMatch(main,/Simulated Claude conversation/,'general homepage comparison must not imply LTA only works with Claude');
 assert.match(main,/Same AI assistant · LTA connected/);
-assert.match(main,/specific claim and supports it with details from the caption and clip/,'homepage comparison should preserve the original With LTA Instagram answer');
+assert.match(main,/rapid-fire interview with entrepreneur Marcus Lemonis/,'homepage comparison should use the recorded real Instagram proof instead of generic filler');
 assert.match(billing,/data-api-key-id/,'one-time API key page must expose its non-secret key id for lifecycle management');
 assert.match(docs,/Connect LTA your way\./,'developer page should lead with the two supported integration paths');
 assert.match(docs,/Use LTA from your app\./,'developer page should expose REST API without teaching basic API usage');
@@ -75,3 +75,6 @@ assert.match(workflow,/LINK2AI_EXPECTED_REVISION:\s*\$\{\{\s*github\.sha\s*\}\}/
 assert.match(cert,/data\?\.revision===expectedRevision/,'authenticated API lifecycle must wait for the exact production revision');
 
 console.log('developer onboarding and authenticated certification contract tests PASS');
+
+assert.match(main,/return reply\.redirect\(claudeInstallUrl\(\)\)/,'primary Claude CTA must open Claude setup before asking for an LTA account');
+assert.doesNotMatch(main,/return reply\.redirect\('\/signup\?return_to=%2Fconnect'\)/,'primary Claude CTA must not force signup before connector setup');
