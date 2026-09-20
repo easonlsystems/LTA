@@ -59,7 +59,7 @@ async function requireApiKey(req:FastifyRequest,reply:FastifyReply){
   const auth=await authenticateApiKey(req.headers.authorization);
   if(auth)return auth;
   reply.header('WWW-Authenticate','Bearer');
-  reply.code(401).send(errorPayload('unauthorized','Use a valid Link2AI API key.'));
+  reply.code(401).send(errorPayload('unauthorized','Use a valid LTA API key.'));
   return null;
 }
 
