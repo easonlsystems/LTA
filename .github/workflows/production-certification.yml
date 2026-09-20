@@ -30,4 +30,5 @@ jobs:
           LINK2AI_PRODUCTION_URL: https://api-production-0383e.up.railway.app
           LINK2AI_PROD_CERT_ATTEMPTS: 20
           LINK2AI_PROD_CERT_DELAY_MS: 15000
+          LINK2AI_EXPECTED_REVISION: ${{ github.sha }}
         run: node test/production-public-cert.mjs
