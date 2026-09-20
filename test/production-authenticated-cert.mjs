@@ -92,24 +92,29 @@ try{
 
   const account=await web('/account');
   assert.equal(account.response.status,200);
-  assert.match(account.text,/Key name/,'account must label the API key input as a name');
-  assert.match(account.text,/Generate API key/,'account must make server-generated key creation explicit');
-  assert.match(account.text,/LTA generates the secret for you/,'account must explain that the user is not entering the secret');
-  assert.match(account.text,/Do you need an API key\?/,'account must explain who the Developer API is for');
-  assert.match(account.text,/I just want LTA in an AI/,'account must route ordinary AI use to connection setup');
+  assert.match(account.text,/API keys/,'account must expose API key management');
+  assert.match(account.text,/Key name/,'account must only ask for a key name');
+  assert.match(account.text,/Generate API key/,'account must generate the secret server-side');
+  assert.match(account.text,/full key is shown once and cannot be viewed again/i,'account must explain one-time key visibility');
+  assert.doesNotMatch(account.text,/Do you need an API key\?|Invoke-RestMethod|View API quickstart/,'account key management must not be an API tutorial');
   const csrf=hidden(account.text,'csrf');
   const created=await web('/account/api-keys',{
     method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},
     body:new URLSearchParams({csrf,name:`Production certification ${new Date().toISOString()}`})
   });
   assert.equal(created.response.status,200);
-  assert.match(created.text,/Your API key is ready\./,'one-time key screen must use the product handoff');
-  assert.match(created.text,/Copy key/,'one-time key screen must expose a copy action');
-  assert.match(created.text,/What do I do with this\?/,'one-time key screen must explain the next action');
-  assert.match(created.text,/Invoke-RestMethod/,'one-time key screen must include a runnable first request');
+  assert.match(created.text,/API key generated\./,'one-time key screen must identify key creation');
+  assert.match(created.text,/Copy once/,'one-time key screen must expose a one-time copy action');
+  assert.match(created.text,/never be shown again/i,'one-time key screen must warn that the secret cannot be recovered');
+  assert.doesNotMatch(created.text,/What do I do with this\?|Invoke-RestMethod|Open step-by-step quickstart/,'one-time key screen must stay focused on the secret');
   apiKey=created.text.match(/l2ai_live_[A-Za-z0-9_-]+/)?.[0]||'';
   apiKeyId=created.text.match(/data-api-key-id="([0-9a-f-]+)"/i)?.[1]||'';
   assert.ok(apiKey&&apiKeyId,'created key and non-secret key id must be present');
+  const keyPrefix=apiKey.slice(0,'l2ai_live_'.length+8);
+  const accountAfterCreate=await web('/account');
+  assert.equal(accountAfterCreate.response.status,200);
+  assert.ok(accountAfterCreate.text.includes(keyPrefix),'account should show only the non-secret key prefix');
+  assert.ok(!accountAfterCreate.text.includes(apiKey),'full API key must never be shown again after the creation response');
 
   const before=await api('/v1/usage');
   assert.equal(before.response.status,200);
@@ -145,6 +150,9 @@ try{
   assert.match(recent.text,new RegExp(jobId.slice(0,8)),'recent jobs must expose the API job');
 
   await revoke();
+  const accountAfterDelete=await web('/account');
+  assert.equal(accountAfterDelete.response.status,200);
+  assert.ok(!accountAfterDelete.text.includes(keyPrefix),'deleted API key must disappear from the active key list');
   const revoked=await api('/v1/usage');
   assert.equal(revoked.response.status,401);
   assert.equal(revoked.data.error,'unauthorized');
