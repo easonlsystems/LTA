@@ -55,7 +55,7 @@ export function parseCimdDocument(clientId:string,input:unknown):ResolvedOAuthCl
     throw new Link2AIError('AUTH_REQUIRED','Client metadata must support the authorization_code grant.',400);
   }
   if(b.token_endpoint_auth_method!==undefined&&b.token_endpoint_auth_method!=='none'){
-    throw new Link2AIError('AUTH_REQUIRED','Link2AI only supports public OAuth clients with token_endpoint_auth_method=none.',400);
+    throw new Link2AIError('AUTH_REQUIRED','LTA only supports public OAuth clients with token_endpoint_auth_method=none.',400);
   }
   if(b.application_type!==undefined&&!['web','native'].includes(String(b.application_type))){
     throw new Link2AIError('AUTH_REQUIRED','Unsupported OAuth application_type.',400);
