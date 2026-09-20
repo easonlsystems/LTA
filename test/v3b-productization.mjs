@@ -21,7 +21,7 @@ assert.match(billing,/j\.id=\$1 AND j\.user_id=\$2/,'job detail must stay scoped
 assert.match(billing,/usage\.remaining_usage_units/,'dashboard must use authoritative processing-unit accounting');
 assert.match(billing,/Units required/,'job detail must show the processing units required for quota-blocked reads');
 assert.match(source,/required_usage_units/,'quota-blocked source results must expose the units required');
-assert.match(source,/requires \$\{required\}/,'quota guidance must tell users how many units the source needs when known');
+assert.match(source,/needs \$\{required\} processing units/,'quota guidance must tell users how many units the source needs when known');
 
 assert.match(main,/app\.get\('\/developers'/);
 assert.match(docs,/POST \/v1\/read/);
@@ -31,8 +31,8 @@ assert.doesNotMatch(docs,/GET \/v1\/jobs\/\{id\}|Windows PowerShell|JavaScript a
 assert.match(main,/href="\/developers"/);
 assert.match(main,/API-key hashes and non-secret key prefixes/);
 
-assert.match(source,/PUBLIC_BASE_URL/);
-assert.match(source,/\/account in your browser/);
+assert.match(source,/Open LTA → Account/,'quota guidance must give a branded account next action');
+assert.doesNotMatch(source,/PUBLIC_BASE_URL[^\n]*\/account|\/account in your browser/,'quota guidance must not expose the raw production host');
 
 assert.match(keys,/key_hash/);
 assert.doesNotMatch(keys,/INSERT INTO api_keys\([^)]*key[^_h]/i,'API key persistence must not store plaintext secrets');
