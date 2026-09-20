@@ -8,6 +8,7 @@ import { pool } from '../db/pool.js';
 import { trackWebsiteVisit } from '../analytics/visitors.js';
 import { getFoundingOfferStatus } from './founding.js';
 import { FOUNDING_LIMIT } from './foundingPolicy.js';
+import { createApiKey, listApiKeys, revokeApiKey } from '../api/apiKeys.js';
 
 function esc(v:unknown){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]!));}
 function page(body:string,title=`${env().PUBLIC_BRAND_NAME}`){return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${esc(title)}</title><meta name="description" content="Simple Link2AI pricing for turning supported public links into source context inside your AI."><meta name="theme-color" content="#fbfaf8"><link rel="icon" href="/logo.svg"><style>
@@ -131,7 +132,7 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
   app.get('/account',async(req,reply)=>{
     const user=await requireWebUser(req,reply); if(!user)return;
     const usage=await getUsageSnapshot(user.id);
-    const unitsUsed=Math.ceil(usage.used_seconds/60), unitsLimit=Math.round(usage.limit_seconds/60), unitsRemaining=Math.max(0,unitsLimit-unitsUsed);
+    const unitsUsed=usage.used_usage_units, unitsLimit=usage.limit_usage_units, unitsRemaining=usage.remaining_usage_units;
     const csrf=csrfField(req.headers.cookie);
     const legacyIdentity=!user.email?`<div class="legacy card"><h2>Finish your account</h2><p class="muted">Add an email and password so your usage and Claude connection follow you across devices.</p><a class="btn primary" href="/signup?return_to=%2Faccount">Add email account</a></div>`:'';
     const pct=unitsLimit>0?Math.min(100,Math.max(0,Math.round((unitsUsed/unitsLimit)*100))):0;
@@ -142,7 +143,49 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
       : `<div class="actions"><form method="post" action="/billing/portal">${csrf}<button>Manage subscription</button></form><a class="btn secondary" href="/connect">Connection setup</a></div>`;
     const rolloverLine=usage.plan==='trial'?'':` Unused paid subscription and purchased top-up units persist while subscribed; the founding bonus does not.`;
     const topupEligible=await canPurchaseTopup(user.id);
-    return reply.type('text/html').send(page(`<div class="topbar"><div class="brand"><img src="/logo.svg" alt=""><span>${esc(env().PUBLIC_BRAND_NAME)}</span></div>${user.email?`<div class="email">${esc(user.email)}</div>`:''}</div>${legacyIdentity}<section class="hero"><span class="eyebrow">Your account</span><div class="planrow"><div><h1>${esc(planLabel)}</h1><p class="muted">Your Link2AI processing usage and plan at a glance.</p></div></div><div class="stats"><div class="stat"><strong>${unitsRemaining}</strong><span>processing units available</span></div><div class="stat"><strong>${unitsUsed}</strong><span>units used this billing cycle</span></div><div class="stat"><strong>${esc(planLabel)}</strong><span>current plan · no fixed link-count cap</span></div></div><div class="progress"><span style="width:${pct}%"></span></div><p class="fine">Video uses 1 unit per started processed minute. Text uses about 1 unit per 2,500 estimated tokens successfully returned to the AI. Failed or unsupported reads use 0 units.${rolloverLine}</p>${renew}${trialActions}${topupEligible?topupSection(req.headers.cookie):''}<p class="fine">${esc(env().PUBLIC_BRAND_NAME)} keeps temporary media/audio only while processing. Source-context cache expires automatically.</p><div class="actions"><form method="post" action="/auth/logout">${csrf}<button class="secondary">Sign out</button></form></div></section>`));
+    const apiKeys=await listApiKeys(user.id);
+    const jobs=await pool.query<{id:string;platform:string;status:string;created_at:Date;completed_at:Date|null;error_code:string|null;usage_units:number|null}>(`
+      SELECT j.id,j.platform,j.status,j.created_at,j.completed_at,j.error_code,c.usage_units
+      FROM transcript_jobs j
+      LEFT JOIN transcript_cache c ON c.id=j.transcript_cache_id
+      WHERE j.user_id=$1
+      ORDER BY j.created_at DESC
+      LIMIT 20`,[user.id]);
+    const keyRows=apiKeys.map(key=>`<div style="display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)"><div><strong>${esc(key.name)}</strong><div class="fine" style="margin:3px 0 0"><code>${esc(key.key_prefix)}••••••••</code> · created ${esc(new Date(key.created_at).toLocaleDateString())}${key.last_used_at?` · last used ${esc(new Date(key.last_used_at).toLocaleString())}`:''}${key.revoked_at?' · revoked':''}</div></div>${key.revoked_at?'':`<form method="post" action="/account/api-keys/revoke">${csrf}<input type="hidden" name="key_id" value="${esc(key.id)}"><button class="secondary" type="submit">Revoke</button></form>`}</div>`).join('')||'<p class="muted">No API keys yet.</p>';
+    const jobRows=jobs.rows.map(job=>`<tr><td style="padding:8px"><a href="/account/jobs/${esc(job.id)}"><code>${esc(job.id.slice(0,8))}…</code></a></td><td style="padding:8px">${esc(job.platform)}</td><td style="padding:8px">${esc(job.status)}</td><td style="padding:8px">${esc(job.usage_units??0)}</td><td style="padding:8px">${esc(job.error_code??'—')}</td><td style="padding:8px">${esc(new Date(job.created_at).toLocaleString())}</td></tr>`).join('')||'<tr><td colspan="6" style="padding:8px">No jobs yet.</td></tr>';
+    const developerSection=`<section class="card"><h2>Developer API</h2><p class="muted">Create an API key for agents, workflows, n8n, or your own SaaS. The full key is shown only once.</p><form method="post" action="/account/api-keys" style="display:flex;gap:10px;flex-wrap:wrap;margin:14px 0"><input name="name" maxlength="60" placeholder="Production" style="flex:1;min-width:180px;border:1px solid var(--line);border-radius:13px;padding:12px 14px;font:inherit">${csrf}<button class="primary" type="submit">Create API key</button></form><div>${keyRows}</div><div class="actions"><a class="btn secondary" href="/developers">API quickstart</a></div></section><section class="card"><h2>Recent jobs</h2><p class="muted">Claude and API reads share the same jobs, cache, quota and billing.</p><div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="text-align:left;padding:8px">Job</th><th style="text-align:left;padding:8px">Source</th><th style="text-align:left;padding:8px">Status</th><th style="text-align:left;padding:8px">Units</th><th style="text-align:left;padding:8px">Error</th><th style="text-align:left;padding:8px">Created</th></tr></thead><tbody>${jobRows}</tbody></table></div></section>`;
+    return reply.type('text/html').send(page(`<div class="topbar"><div class="brand"><img src="/logo.svg" alt=""><span>${esc(env().PUBLIC_BRAND_NAME)}</span></div>${user.email?`<div class="email">${esc(user.email)}</div>`:''}</div>${legacyIdentity}<section class="hero"><span class="eyebrow">Your account</span><div class="planrow"><div><h1>${esc(planLabel)}</h1><p class="muted">Your Link2AI usage, API keys and recent jobs in one place.</p></div></div><div class="stats"><div class="stat"><strong>${unitsRemaining}</strong><span>processing units available</span></div><div class="stat"><strong>${unitsUsed}</strong><span>units used this billing cycle</span></div><div class="stat"><strong>${esc(planLabel)}</strong><span>current plan · no fixed link-count cap</span></div></div><div class="progress"><span style="width:${pct}%"></span></div><p class="fine">Video uses 1 unit per started processed minute. Text uses about 1 unit per 2,500 estimated tokens successfully returned to the AI. Failed or unsupported reads use 0 units.${rolloverLine}</p>${renew}${trialActions}${topupEligible?topupSection(req.headers.cookie):''}${developerSection}<p class="fine">${esc(env().PUBLIC_BRAND_NAME)} keeps temporary media/audio only while processing. Source-context cache expires automatically.</p><div class="actions"><form method="post" action="/auth/logout">${csrf}<button class="secondary">Sign out</button></form></div></section>`));
+  });
+
+  app.post('/account/api-keys',async(req,reply)=>{
+    const user=await requireWebUser(req,reply,'/account'); if(!user)return;
+    const b=req.body as any;
+    if(!verifyCsrfToken(req.headers.cookie,String(b?.csrf??'')))return reply.code(403).type('text/html').send(page('<h1>Request expired.</h1><p><a href="/account">Back to account</a></p>'));
+    const created=await createApiKey(user.id,b?.name);
+    return reply.type('text/html').send(page(`<section class="hero"><span class="eyebrow">API key created</span><h1>Copy this key now.</h1><p class="muted">For security, Link2AI will not show the full key again.</p><div class="card"><code style="display:block;overflow-wrap:anywhere;font-size:15px">${esc(created.key)}</code></div><div class="actions"><a class="btn primary" href="/developers">Open API quickstart</a><a class="btn secondary" href="/account">Back to account</a></div></section>`,`${esc(env().PUBLIC_BRAND_NAME)} API key`));
+  });
+
+  app.post('/account/api-keys/revoke',async(req,reply)=>{
+    const user=await requireWebUser(req,reply,'/account'); if(!user)return;
+    const b=req.body as any;
+    if(!verifyCsrfToken(req.headers.cookie,String(b?.csrf??'')))return reply.code(403).type('text/plain').send('Invalid request');
+    await revokeApiKey(user.id,String(b?.key_id??''));
+    return reply.redirect('/account');
+  });
+
+  app.get('/account/jobs/:jobId',async(req,reply)=>{
+    const user=await requireWebUser(req,reply,'/account'); if(!user)return;
+    const jobId=String((req.params as {jobId?:unknown}).jobId??'');
+    const job=await pool.query<{id:string;platform:string;status:string;created_at:Date;completed_at:Date|null;error_code:string|null;retryable:boolean;source_url:string|null;normalized_url:string|null;duration_seconds:number|null;usage_units:number|null;source:string|null;truncated:boolean|null;truncation_reason:string|null}>(`
+      SELECT j.id,j.platform,j.status,j.created_at,j.completed_at,j.error_code,j.retryable,j.source_url,j.normalized_url,j.duration_seconds,
+             c.usage_units,c.source,c.truncated,c.truncation_reason
+      FROM transcript_jobs j
+      LEFT JOIN transcript_cache c ON c.id=j.transcript_cache_id
+      WHERE j.id=$1 AND j.user_id=$2
+      LIMIT 1`,[jobId,user.id]);
+    if(!job.rowCount)return reply.code(404).type('text/html').send(page('<h1>Job not found.</h1><p><a href="/account">Back to account</a></p>'));
+    const j=job.rows[0];
+    return reply.type('text/html').send(page(`<section class="hero"><span class="eyebrow">Job detail</span><h1><code>${esc(j.id)}</code></h1><div class="card"><p><strong>Status:</strong> ${esc(j.status)}</p><p><strong>Source:</strong> ${esc(j.platform)}</p><p><strong>Units:</strong> ${esc(j.usage_units??0)}</p><p><strong>Provenance:</strong> ${esc(j.source??'—')}</p><p><strong>Complete:</strong> ${j.truncated?'No':'Yes'}</p><p><strong>Error:</strong> ${esc(j.error_code??'—')}</p><p><strong>Retryable:</strong> ${j.retryable?'Yes':'No'}</p><p><strong>Created:</strong> ${esc(new Date(j.created_at).toLocaleString())}</p><p><strong>Completed:</strong> ${esc(j.completed_at?new Date(j.completed_at).toLocaleString():'—')}</p><p><strong>URL:</strong> ${j.normalized_url?`<a href="${esc(j.normalized_url)}" target="_blank" rel="noopener">${esc(j.normalized_url)}</a>`:'expired/scrubbed'}</p><p><strong>Limitation:</strong> ${esc(j.truncation_reason??'—')}</p></div><div class="actions"><a class="btn secondary" href="/account">Back to account</a></div></section>`));
   });
 
 

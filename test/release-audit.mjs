@@ -141,7 +141,7 @@ assert.match(mcpSource,/video matches include timestamps|start_seconds/,'Video s
 assert.match(mcpSource,/search miss is not proof|zero matches as proof/i,'Source search must not turn lexical misses into false absence claims');
 assert.doesNotMatch(mcpSource,/checkout_url|plan_info_url/,'Public MCP schemas must not expose checkout or plan-purchase URLs for digital subscriptions or credits');
 assert.doesNotMatch(mcpServiceSource,/plan_info_url|\/pricing/,'ChatGPT tool results must not return upgrade, top-up, or plan-purchase links');
-assert.match(mcpServiceSource,/go to Account/,'Quota exhaustion must tell users where to manage their Link2AI account without initiating a purchase');
+assert.match(mcpServiceSource,/PUBLIC_BASE_URL[^\n]*\/account|\/account in your browser/,'Quota exhaustion must direct users to the Link2AI account page without initiating a purchase');
 assert.doesNotMatch(billingRoutesSource,/e instanceof Error\?e\.message:'Could not start top-up checkout\.'/,'Billing UI must not echo raw provider error messages to users');
 assert.doesNotMatch(mcpServiceSource,/createCheckoutSession|createTopupCheckoutSession|checkout_url:row\.checkout_url/,'MCP service must not create or return purchase flows');
 assert.doesNotMatch(processorSource,/createCheckoutSession|createTopupCheckoutSession|paymentUrl\(/,'Worker must not create purchase sessions when quota is exceeded');
