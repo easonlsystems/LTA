@@ -13,7 +13,7 @@ assert.doesNotMatch(sourceService,/\.\.\/mcp\//,'shared source service must not 
 assert.doesNotMatch(sourcePolicy,/\.\.\/mcp\//,'shared source policy must not depend on the MCP transport layer');
 assert.match(mcpServer,/\.\.\/source\/service\.js/,'MCP must consume the shared source service');
 assert.match(mcpServer,/\.\.\/source\/policy\.js/,'MCP must consume the shared source policy');
-assert.match(mcpService,/from '\.\.\/source\/service\.js'/,'legacy MCP service module must only re-export the shared service');
-assert.match(mcpPolicy,/from '\.\.\/source\/policy\.js'/,'legacy MCP policy module must only re-export the shared policy');
+assert.match(mcpService,/export \* from '\.\.\/source\/service\.js'/,'legacy MCP service module must only re-export the shared service');
+assert.match(mcpPolicy,/export \* from '\.\.\/source\/policy\.js'/,'legacy MCP policy module must only re-export the shared policy');
 
 console.log('shared source engine architecture tests PASS');
