@@ -10,8 +10,8 @@ const [billing,main,source,keys,docs]=await Promise.all([
 ]);
 
 assert.match(billing,/Developer API/);
-assert.match(billing,/Create API key/);
-assert.match(billing,/full key is shown only once/i);
+assert.match(billing,/Generate API key/);
+assert.match(billing,/full generated secret is shown once/i);
 assert.match(billing,/\/account\/api-keys\/revoke/);
 assert.match(billing,/Recent jobs/);
 assert.match(billing,/\/account\/jobs\/:jobId/);
