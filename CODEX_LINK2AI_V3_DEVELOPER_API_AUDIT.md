@@ -26,9 +26,10 @@ The developer guide documents bearer authentication, synchronous and asynchronou
 
 ## Production certification infrastructure
 
-`test/production-authenticated-cert.mjs` exercises a real deployed lifecycle with a dedicated account:
+`test/production-authenticated-cert.mjs` exercises a real deployed lifecycle through the production reviewer authentication path:
 
-- sign in without printing credentials;
+- sign in through `/auth/reviewer` without printing credentials;
+- send same-origin browser-form POSTs with the production origin so CSRF/origin protections remain exercised rather than bypassed;
 - create a one-time API key;
 - call usage and sources;
 - submit a controlled supported source and poll to completion;
@@ -37,7 +38,17 @@ The developer guide documents bearer authentication, synchronous and asynchronou
 - revoke the created key; and
 - verify the revoked key receives 401.
 
-The manual GitHub Actions workflow reads credentials only from repository secrets and the script revokes its created key in a `finally` cleanup. Production authenticated certification is blocked until these secrets exist: `LINK2AI_PRODUCTION_URL`, `LINK2AI_CERT_EMAIL`, and `LINK2AI_CERT_PASSWORD`. `LINK2AI_CERT_SOURCE_URL` is optional and defaults to the stable Hacker News thread `https://news.ycombinator.com/item?id=8863`.
+The reviewer path is intentionally used because production normally has Google sign-in enabled, which disables `/auth/password/login`. This keeps certification compatible with the real deployed authentication configuration.
+
+The manual GitHub Actions workflow reads credentials only from repository secrets and the script revokes its created key in a `finally` cleanup. Production authenticated certification is blocked until these GitHub Actions secrets exist:
+
+- `LINK2AI_PRODUCTION_URL`
+- `LINK2AI_CERT_EMAIL` — copy of the production reviewer email credential
+- `LINK2AI_CERT_PASSWORD` — copy of the production reviewer password credential
+
+`LINK2AI_CERT_SOURCE_URL` is optional and defaults to the stable Hacker News thread `https://news.ycombinator.com/item?id=8863`.
+
+Do not commit or print any of these credentials.
 
 ## Homepage acceptance
 
@@ -49,4 +60,4 @@ The interactive comparison now renders a meaningful representative before/after 
 - Complete repository test suite, including security and log-privacy tests.
 - Added developer-onboarding, compatibility-alias, authenticated-lifecycle, and initial-demo regressions.
 - Public production certification remains unauthenticated and secret-free; authenticated production certification is separate and explicitly credential-gated.
-
+- Independent follow-up review fixed two production-only issues in the original authenticated certification implementation: password login is unavailable when Google sign-in is configured, and browser-form POSTs require a valid same-origin signal.
