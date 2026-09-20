@@ -203,7 +203,11 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
       job_id:row.id,
       duration_seconds:row.duration_seconds??undefined,
       error_code:row.error_code??'QUOTA_EXCEEDED',
-      message:`LTA could not read the full source because the connected account${remaining===undefined?' does not have enough processing units':` has ${remaining} processing units remaining`}${required===undefined?'':`, but this source requires ${required}`}. Processing units for text sources are based on the amount of source text LTA must retrieve, so large discussions or pull-request diffs can require multiple units. LTA does not intentionally return a partial source just to fit the remaining balance. No processing units were charged for this failed read. To add units or review plan options, open ${env().PUBLIC_BASE_URL}/account in your browser.`,
+      message:required!==undefined&&remaining!==undefined
+        ? `LTA needs ${required} processing units to read this source, but your connected account has ${remaining}. This attempt used 0 units. Open LTA → Account to add units or review your plan, then retry the same link.`
+        : remaining!==undefined
+          ? `LTA needs more processing units than the ${remaining} available on your connected account. This attempt used 0 units. Open LTA → Account to add units or review your plan, then retry the same link.`
+          : `LTA does not have enough processing units on the connected account to read this source. This attempt used 0 units. Open LTA → Account to add units or review your plan, then retry the same link.`,
       usage_units:0,
       ...(remaining===undefined?{}:{remaining_usage_units:remaining}),
       ...(required===undefined?{}:{required_usage_units:required})
