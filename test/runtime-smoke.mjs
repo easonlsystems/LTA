@@ -126,13 +126,13 @@ try{
   const runNextTimer=()=>{const entry=[...timers.entries()].sort((a,b)=>a[1].ms-b[1].ms||a[0]-b[0])[0];if(!entry)return false;timers.delete(entry[0]);entry[1].fn();return true;};
   const runAllTimers=()=>{let guard=0;while(runNextTimer()){if(++guard>100)throw new Error('timer loop');}};
   assert.doesNotThrow(()=>new Function('document','window','setTimeout','clearTimeout',homeJs)(fakeDocument,fakeWindow,queuedTimer,queuedClear),'homepage interaction JS must execute');
-  // The comparison must stay idle until the visitor explicitly presses the button.
-  assert.equal(ids['sim-left-state'].textContent,'Ready','simulation should initialize left side as Ready');
-  assert.equal(ids['sim-right-state'].textContent,'Ready','simulation should initialize right side as Ready');
+  // The comparison must show a meaningful static preview without autoplay.
+  assert.equal(ids['sim-left-state'].textContent,'Link only','simulation should initialize with the link-only limitation visible');
+  assert.equal(ids['sim-right-state'].textContent,'Source ready','simulation should initialize with the loaded-source benefit visible');
   assert.equal(timers.size,0,'simulation must not autoplay');
   runAllTimers();
-  assert.equal(ids['sim-left-state'].textContent,'Ready','idle comparison must stay Ready');
-  assert.equal(ids['sim-right-state'].textContent,'Ready','idle comparison must stay Ready');
+  assert.equal(ids['sim-left-state'].textContent,'Link only','idle comparison must preserve its preview');
+  assert.equal(ids['sim-right-state'].textContent,'Source ready','idle comparison must preserve its preview');
   // Reddit is intentionally unavailable without OAuth credentials. Selecting it and then pressing Run must never turn it into a fake success.
   simTab('reddit').listeners.click();
   assert.equal(ids['sim-right-state'].textContent,'Temporarily paused','Reddit tab must show paused when credentials are absent');
@@ -144,8 +144,8 @@ try{
   assert.match(ids['sim-right-answer'].innerHTML,/paused on this deployment/);
   assert.equal(ids['sim-conclusion'].hidden,true,'paused Reddit must not show the success conclusion');
   simTab('youtube').listeners.click();
-  assert.equal(ids['sim-left-state'].textContent,'Ready','selecting a supported source must not start the comparison');
-  assert.equal(ids['sim-right-state'].textContent,'Ready','selecting a supported source must keep the comparison idle');
+  assert.equal(ids['sim-left-state'].textContent,'Link only','selecting a supported source must show its static limitation preview');
+  assert.equal(ids['sim-right-state'].textContent,'Source ready','selecting a supported source must show its static loaded preview');
   assert.equal(timers.size,0,'source tabs must not enqueue an automatic run');
   // A real Run starts only after the visitor explicitly presses the comparison button.
   ids['sim-run'].listeners.click();
@@ -156,8 +156,8 @@ try{
   // Reset in the middle of a run must invalidate every stale callback.
   ids['sim-reset'].listeners.click();
   runAllTimers();
-  assert.equal(ids['sim-left-state'].textContent,'Ready','mid-run Reset must defeat stale left callbacks');
-  assert.equal(ids['sim-right-state'].textContent,'Ready','mid-run Reset must defeat stale right callbacks');
+  assert.equal(ids['sim-left-state'].textContent,'Link only','mid-run Reset must defeat stale left callbacks');
+  assert.equal(ids['sim-right-state'].textContent,'Source ready','mid-run Reset must defeat stale right callbacks');
   assert.equal(ids['sim-conclusion'].hidden,true,'mid-run Reset must keep conclusion hidden');
   // Run again after Reset and complete the whole comparison.
   ids['sim-run'].listeners.click();
@@ -175,22 +175,22 @@ try{
   simTab('hn').listeners.click();
   runAllTimers();
   assert.match(ids['sim-url'].textContent,/news\.ycombinator\.com/,'source tabs must switch simulation content');
-  assert.equal(ids['sim-left-state'].textContent,'Ready','switching source must cancel the old run and return left to Ready');
-  assert.equal(ids['sim-right-state'].textContent,'Ready','switching source must not autoplay the new source');
+  assert.equal(ids['sim-left-state'].textContent,'Link only','switching source must cancel the old run and show the new preview');
+  assert.equal(ids['sim-right-state'].textContent,'Source ready','switching source must not autoplay the new source');
   assert.equal(timers.size,0,'switching source must leave no stale or automatic timers');
   ids['sim-run'].listeners.click();
   runAllTimers();
   assert.equal(ids['sim-right-state'].textContent,'Source loaded','explicit Run must complete the newly selected source');
   ids['sim-reset'].listeners.click();
-  assert.equal(ids['sim-left-state'].textContent,'Ready','final Reset must restore left state');
-  assert.equal(ids['sim-right-state'].textContent,'Ready','final Reset must restore right state');
-  assert.match(ids['sim-tool'].innerHTML,/Reading source/,'Reset must restore the tool card before another run');
+  assert.equal(ids['sim-left-state'].textContent,'Link only','final Reset must restore left preview');
+  assert.equal(ids['sim-right-state'].textContent,'Source ready','final Reset must restore right preview');
+  assert.match(ids['sim-tool'].innerHTML,/Source loaded/,'Reset must restore the meaningful tool preview');
   assert.equal(ids['sim-run'].textContent,'See the difference →','Reset should restore the initial comparison CTA');
   // Every advertised supported source must have a runnable comparison, not a dead tab.
   for(const source of ['tiktok','instagram','x','bluesky','hn','pdf','web']){
     simTab(source).listeners.click();
-    assert.equal(ids['sim-left-state'].textContent,'Ready',source+' should initialize left side as Ready');
-    assert.equal(ids['sim-right-state'].textContent,'Ready',source+' should initialize right side as Ready');
+    assert.equal(ids['sim-left-state'].textContent,'Link only',source+' should initialize its left-side preview');
+    assert.equal(ids['sim-right-state'].textContent,'Source ready',source+' should initialize its right-side preview');
     ids['sim-run'].listeners.click();
     runAllTimers();
     assert.equal(ids['sim-right-state'].textContent,'Source loaded',source+' comparison should load the Link2AI side');

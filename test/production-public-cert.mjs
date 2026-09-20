@@ -47,7 +47,7 @@ await eventually('production release availability',async()=>{
 }
 
 for(const [path,pattern] of [
-  ['/developers',/Public API beta/],
+  ['/developers',/Public REST API/],
   ['/connect',/Connected = authorization finished/],
   ['/sources',/Supported sources/],
   ['/privacy',/API-key hashes and non-secret key prefixes/]
@@ -93,6 +93,7 @@ for(const [method,path,body] of [
   assert.equal(response.status,401,method+' '+path+' must reject missing API key');
   const data=JSON.parse(text);
   assert.equal(data.error,'unauthorized');
+  assert.equal(data.error_code,'unauthorized');
   assert.doesNotMatch(text,/DATABASE_URL|APP_SECRET|REVIEWER_PASSWORD|Authorization: Bearer/i);
 }
 

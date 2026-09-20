@@ -162,7 +162,7 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
     const b=req.body as any;
     if(!verifyCsrfToken(req.headers.cookie,String(b?.csrf??'')))return reply.code(403).type('text/html').send(page('<h1>Request expired.</h1><p><a href="/account">Back to account</a></p>'));
     const created=await createApiKey(user.id,b?.name);
-    return reply.type('text/html').send(page(`<section class="hero"><span class="eyebrow">API key created</span><h1>Copy this key now.</h1><p class="muted">For security, Link2AI will not show the full key again.</p><div class="card"><code style="display:block;overflow-wrap:anywhere;font-size:15px">${esc(created.key)}</code></div><div class="actions"><a class="btn primary" href="/developers">Open API quickstart</a><a class="btn secondary" href="/account">Back to account</a></div></section>`,`${esc(env().PUBLIC_BRAND_NAME)} API key`));
+    return reply.type('text/html').send(page(`<section class="hero"><span class="eyebrow">API key created</span><h1>Copy this key now.</h1><p class="muted">For security, Link2AI will not show the full key again.</p><div class="card"><code data-api-key-id="${esc(created.id)}" style="display:block;overflow-wrap:anywhere;font-size:15px">${esc(created.key)}</code></div><div class="actions"><a class="btn primary" href="/developers#quickstart">Open API quickstart</a><a class="btn secondary" href="/account">Back to account</a></div></section>`,`${esc(env().PUBLIC_BRAND_NAME)} API key`));
   });
 
   app.post('/account/api-keys/revoke',async(req,reply)=>{
