@@ -13,6 +13,7 @@ export interface ToolJobResult {
   job_id: string;
   platform?: string;
   source_url?: string;
+  canonical_url?: string;
   source_key?: string;
   source_fetched_at?: string|null;
   cache_expires_at?: string|null;
@@ -167,7 +168,7 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
     });
     const returnedUsageUnits=Number(row.usage_units??0)>0?Number(row.usage_units):(row.transcript_source==='post'||row.transcript_source==='page'?textUsageUnits(estimateTokens(row.transcript)):videoUsageUnits(Number(row.cache_duration??row.duration_seconds??0)));
     return {
-      status:'completed',job_id:row.id,platform:row.platform,source_url:row.source_url,source_key:`${row.platform}:${row.canonical_media_id}`,
+      status:'completed',job_id:row.id,platform:row.platform,source_url:row.source_url,canonical_url:row.normalized_url,source_key:`${row.platform}:${row.canonical_media_id}`,
       source_fetched_at:row.source_fetched_at?new Date(row.source_fetched_at).toISOString():null,cache_expires_at:row.cache_expires_at?new Date(row.cache_expires_at).toISOString():null,
       title:row.title,creator:row.creator,
       caption:row.caption,duration_seconds:row.cache_duration??row.duration_seconds,language:row.cache_language??'und',
