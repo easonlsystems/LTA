@@ -1,8 +1,8 @@
 # Link2AI
 
-> **Paste a link. Your AI can read it.**
+> **Public URL in. AI-ready source context out.**
 
-Link2AI is a thin remote MCP access layer that turns supported public links into AI-readable source context when the assistant cannot reliably access the content on its own. The founding beta is Claude-first, with ChatGPT as the next distribution surface; the protocol remains usable by compatible remote-MCP clients.
+Link2AI is source infrastructure that turns supported public links into AI-readable source context. Claude, Grok, compatible MCP clients, and the public REST API all use the same source engine, jobs, cache, quota, completeness, and provenance model.
 
 Link2AI does not summarize, translate, fact-check or run its own chatbot. The host AI still does the reasoning and produces the answer.
 
@@ -16,7 +16,7 @@ post/page ───→ public text extraction
     ↓
 metadata + AI-readable source text
     ↓
-Claude / ChatGPT continues
+AI client / agent / workflow continues
 ```
 
 ## Supported beta sources
@@ -69,7 +69,9 @@ Cache identity is based on platform + canonical source ID + language instead of 
 
 ### Quota behavior
 
-Successful Trial reads consume one successful-link unit. Video processing also consumes measured content seconds. Text-only post/page jobs keep media duration at zero but consume **one equivalent content minute** from plan quota. This keeps the existing minute-based plans useful for both media and text links without pretending a webpage has a video duration. Failed jobs do not consume completed-job quota.
+Processing units are the product-level source-size budget. Video reads use one unit per started processed minute. Text reads use about one unit per 2,500 estimated source tokens, with a minimum of one unit for a successful read. Failed and unsupported reads use 0 units.
+
+If a complete supported source requires more units than the account has available, Link2AI returns a payment-required state instead of intentionally publishing a size-truncated success. When known, the result includes both `remaining_usage_units` and `required_usage_units`.
 
 ### Security boundary
 
@@ -82,37 +84,53 @@ Temporary media/audio are deleted after processing. Cached source text/transcrip
 ## Architecture
 
 ```text
-Claude / ChatGPT / compatible MCP client
-                 ↓
-          Remote MCP + OAuth
-                 ↓
-             API service
-       ├── account/auth
-       ├── quota/entitlements
-       ├── billing hooks
-       ├── link-reading jobs
-       └── public website/account routes
-                 ↓
-             PostgreSQL
-                 ↕
-              Worker
-       ├── URL classifier
-       ├── social/page text extractor
-       ├── platform media resolvers
-       ├── caption extraction
-       ├── FFmpeg normalization
-       └── speech-to-text fallback
+Claude / Grok / compatible MCP clients     REST API clients
+                 ↓                              ↓
+          Remote MCP + OAuth               /v1/read + jobs
+                 └──────────────┬───────────────┘
+                                ↓
+                      Shared Source Engine
+                  ├── source policy / identity
+                  ├── jobs + cache + provenance
+                  ├── quota / entitlements
+                  └── completeness / error model
+                                ↓
+                           PostgreSQL
+                                ↕
+                             Worker
+                  ├── URL classifier
+                  ├── social/page text extractor
+                  ├── platform media resolvers
+                  ├── caption extraction
+                  ├── FFmpeg normalization
+                  └── speech-to-text fallback
 ```
 
 ## MCP tools
 
-The public interface intentionally stays small:
+The default Link2AI MCP surface exposes:
 
-- `get_video_transcript(url)` — backward-compatible tool id; starts/reuses a **Read link content** job.
-- `get_transcript_result(job_id)` — retrieve/poll a long-running result and page long source text.
-- `get_usage()` — return the connected account's plan and quota.
+- `read_public_link` — read one supported public URL.
+- `read_public_links` — read multiple supported public URLs while preserving source identity.
+- `get_transcript_result` — poll jobs and continue long results.
+- `get_video_time_range` — read timestamped text from an existing processed video.
+- `find_in_link` — lexical search inside an existing processed source.
+- `get_video_map` — compact timeline map for an existing processed video.
+- `get_usage` — authoritative processing-unit and concurrency usage.
+- `get_video_transcript` — legacy compatibility alias for already-connected clients.
 
-A supported URL appearing in conversation does not automatically mean the tool should be called. The host AI should invoke it only when the user's request actually depends on the content behind the link and the AI does not already have sufficient access.
+Tool descriptions state capabilities and source scope without trying to control the host AI's unrelated tool choices.
+
+## Public REST API beta
+
+Developer clients can use the same source engine through:
+
+- `POST /v1/read`
+- `GET /v1/jobs/{job_id}`
+- `GET /v1/usage`
+- `GET /v1/sources`
+
+API keys use the `l2ai_live_...` format. The full key is shown once; Link2AI stores only a hash plus a non-secret display prefix. Keys can be revoked from the account dashboard.
 
 ## Requirements
 
@@ -157,8 +175,12 @@ The production topology is one API/MCP service, one Worker service, and PostgreS
 
 The current expansion keeps the existing job/cache tables and extends cache source types to `post` and `page`, so the migration must run before the new worker becomes active.
 
-## Claude-first onboarding
+## Client onboarding
 
-Public beta onboarding lives at `/connect`. The preferred flow is Claude custom connector → **Sign in now** → **Register automatically (DCR)** → Add → Link2AI account authorization. Users should not need a manually issued OAuth client ID or secret.
+Claude onboarding lives at `/connect`. The preferred flow is Claude custom connector → Link2AI authorization → confirm Link2AI under Claude Connectors → paste the public URL in Claude.
 
-The beta can read spoken/caption text from supported videos, public post text, and readable public webpages. Reddit discussion context is available only when Reddit OAuth is configured. Visual-only information may still be missing unless it is present in readable page metadata/text.
+Grok can use the production `/mcp` endpoint through Grok's documented Custom MCP connector flow; the integration package is under `integrations/grok/`. Public Grok Connector Catalog publication is a separate xAI approval step and is not claimed until approved.
+
+Developer/API onboarding lives at `/developers`, with API key management and recent job diagnostics under `/account`.
+
+The current production source model reads spoken/caption text from supported videos, public post text, discussions, readable public webpages, and text-layer PDFs. Reddit is advertised only when approved Reddit OAuth credentials are configured. Visual-only information can be missing when it is not represented in returned text.
