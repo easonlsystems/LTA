@@ -39,18 +39,30 @@ await eventually('production revision availability',async()=>{
 
   const home=await request('/');
   assert.equal(home.response.status,200);
-  assert.match(home.text,/Source infrastructure for AI/);
+  assert.match(home.text,/Public links → AI-readable source/);
   assert.match(home.text,/Use MCP/,'homepage must expose MCP directly');
   assert.match(home.text,/API key/,'homepage must keep REST API key access separate');
   assert.match(home.text,/id="sim-run"[^>]*aria-expanded="false"[^>]*aria-controls="sim-comparison-panels"/,'homepage comparison CTA must start collapsed');
   assert.match(home.text,/id="sim-comparison-panels"[^>]*hidden/,'homepage comparison panels must be hidden on first paint');
   assert.doesNotMatch(home.text,/sim-answer sim-fail show/,'homepage must not preload the completed comparison');
   assert.match(home.text,/Summarize this Instagram Reel\./,'production homepage must lead with the recorded Instagram proof');
-  const reelLinks=home.text.match(/https:\/\/www\.instagram\.com\/reel\/C9xDemoLTA\//g)??[];
-  assert.equal(reelLinks.length,2,'production homepage must show the fake Reel URL in both comparison chat messages and nowhere above them');
-  assert.doesNotMatch(home.text,/sim-prompt-link[^>]*>https:\/\/www\.instagram\.com\/reel\/C9xDemoLTA\//,'top example must not show the fake Reel URL');
+  const reelLinks=home.text.match(/https:\/\/www\.instagram\.com\/reel\/Ddx6Q_MJNyg\//g)??[];
+  assert.equal(reelLinks.length,2,'production homepage must show the recorded Reel URL in both comparison chat messages');
+  assert.match(home.text,/Real LTA test case/,'production homepage must label the default Instagram proof as a real test case');
+  assert.match(home.text,/instagram\.com\/reel\/Ddx6Q_MJNyg\//,'production homepage must expose the recorded Reel identity before the comparison');
   assert.match(home.text,/Same AI assistant · same public link/,'production comparison must be AI-client neutral');
   assert.doesNotMatch(home.text,/Simulated Claude conversation/,'production comparison must not be Claude-specific');
+  const start=await request('/start?from=hero',{redirect:'manual'});
+  assert.equal(start.response.status,302,'production primary CTA must redirect');
+  const startLocation=start.response.headers.get('location')??'';
+  assert.match(startLocation,/^https:\/\/claude\.ai\/customize\/connectors\?/,'production primary CTA must open Claude connector setup before LTA signup');
+  assert.match(startLocation,/connectorUrl=/,'production Claude connector redirect must prefill the MCP URL');
+
+  const connect=await request('/connect');
+  assert.equal(connect.response.status,200);
+  assert.match(connect.text,/One click opens Claude/,'production connect page must lead with one-click setup');
+  assert.match(connect.text,/Need help connecting\?/,'production setup details should be collapsed behind help');
+  assert.doesNotMatch(connect.text,/Set up LTA in three steps/,'production connect page must not restore the long tutorial');
 
   const developers=await request('/developers');
   assert.equal(developers.response.status,200);
@@ -80,7 +92,7 @@ await eventually('production revision availability',async()=>{
   assert.match(response.headers.get('content-type')??'',/javascript/);
   assert.match(text,/resetDemo\(false,false\)/,'production homepage JS must initialize the comparison closed');
   assert.match(text,/state\.opened=true;const panels=q\('#sim-comparison-panels'\);if\(panels\)panels\.hidden=false/,'production homepage JS must reveal panels only from the comparison interaction');
-  assert.match(text,/specific claim and supports it with details from the caption and clip/,'production homepage JS must preserve the original With LTA Instagram answer');
+  assert.match(text,/rapid-fire interview with entrepreneur Marcus Lemonis/,'production homepage JS must preserve the recorded With-LTA Instagram result');
   assert.match(text,/can’t directly access the Instagram Reel/,'production without-LTA copy must explain the Reel access limitation');
   assert.match(text,/paste the caption or describe the clip/,'production failure copy must offer a realistic fallback');
   assert.match(text,/AI assistant/,'production homepage JS must use neutral AI labels');
