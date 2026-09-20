@@ -1,9 +1,9 @@
 import { McpServer, type AuthInfo } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
-import { getJobResult, startTranscriptJob, usageForTool, type ToolJobResult } from './service.js';
+import { getJobResult, startTranscriptJob, usageForTool, type ToolJobResult } from '../source/service.js';
 import { asLink2AIError, Link2AIError, publicErrorMessage } from '../util/errors.js';
 import { env } from '../config/env.js';
-import { supportedSourcesForProfile, parseAllowedMediaUrl, type DistributionProfile } from './policy.js';
+import { supportedSourcesForProfile, parseAllowedMediaUrl, type DistributionProfile } from '../source/policy.js';
 
 const MAX_CHARS=50_000;
 
