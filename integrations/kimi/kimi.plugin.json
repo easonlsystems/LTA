@@ -15,7 +15,7 @@
   "homepage": "https://api-production-0383e.up.railway.app/",
   "skills": "./skills/",
   "interface": {
-    "displayName": "Link2AI",
+    "displayName": "LTA",
     "shortDescription": "Read public links Kimi cannot reliably access",
     "longDescription": "Bring AI-readable source context from supported public videos, social posts, developer discussions, webpages and text-layer PDFs into Kimi without manual copy-paste.",
     "developerName": "Eason Systems",
