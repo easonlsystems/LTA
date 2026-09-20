@@ -34,6 +34,15 @@ assert.match(docs,/Give your app the source\./,'developer docs should lead with 
 assert.match(docs,/From zero to source text in three steps\./,'developer docs should expose a short first-run path');
 assert.match(docs,/You do not need to learn the whole contract before making your first request\./,'advanced protocol details should not block first use');
 assert.match(docs,/LTA generates the secret for you/,'docs must make server-generated API keys explicit');
+assert.match(docs,/Remote MCP/,'developer surface must expose MCP as a first-class integration path');
+assert.match(docs,/Use LTA inside an AI client\./,'developer surface must explain what MCP is for');
+assert.match(docs,/\/mcp/,'developer surface must publish the production MCP endpoint');
+assert.match(docs,/Claude[^]*Custom Connector/,'MCP surface must name Claude as a place to use Remote MCP');
+assert.match(docs,/Grok[^]*Custom MCP/,'MCP surface must name Grok custom MCP without claiming catalog publication');
+assert.match(docs,/LTA handles sign-in through OAuth/,'MCP surface must explain OAuth authentication');
+assert.match(docs,/API key into an MCP connector/,'MCP surface must separate OAuth from REST API keys');
+assert.match(main,/href="\/developers#mcp">Use MCP<\/a>/,'homepage must expose a visible MCP entry point');
+assert.match(main,/Using Grok or another Remote MCP client\?/,'connect page must explain where the MCP endpoint can be used');
 assert.match(billing,/Key name/,'account API key form must only ask for a key name');
 assert.match(billing,/Generate API key/,'account must generate the secret server-side');
 assert.match(billing,/The full key is shown once and cannot be viewed again\./,'account must explain one-time visibility');

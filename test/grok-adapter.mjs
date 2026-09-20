@@ -7,7 +7,7 @@ const catalog=await readFile(new URL('../integrations/grok/CATALOG_REQUEST.md',i
 const api=await readFile(new URL('../src/api/main.ts',import.meta.url),'utf8');
 
 assert.equal(config.server_url,'https://api-production-0383e.up.railway.app/mcp');
-assert.equal(config.server_label,'link2ai');
+assert.equal(config.server_label,'lta');
 assert.deepEqual(config.allowed_tools,[
   'read_public_link',
   'read_public_links',

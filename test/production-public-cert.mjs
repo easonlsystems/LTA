@@ -40,7 +40,8 @@ await eventually('production revision availability',async()=>{
   const home=await request('/');
   assert.equal(home.response.status,200);
   assert.match(home.text,/Source infrastructure for AI/);
-  assert.match(home.text,/Use the API/);
+  assert.match(home.text,/Use MCP/,'homepage must expose MCP directly');
+  assert.match(home.text,/API key/,'homepage must keep REST API key access separate');
   assert.match(home.text,/id="sim-run"[^>]*aria-expanded="false"[^>]*aria-controls="sim-comparison-panels"/,'homepage comparison CTA must start collapsed');
   assert.match(home.text,/id="sim-comparison-panels"[^>]*hidden/,'homepage comparison panels must be hidden on first paint');
   assert.doesNotMatch(home.text,/sim-answer sim-fail show/,'homepage must not preload the completed comparison');
@@ -59,6 +60,10 @@ await eventually('production revision availability',async()=>{
   assert.match(developers.text,/Generate API key/,'production developer docs must use generated-key onboarding');
   assert.match(developers.text,/I just want LTA inside an AI/,'production docs must route non-developers to the connection flow');
   assert.match(developers.text,/Windows PowerShell/,'production docs must expose a runnable Windows quickstart');
+  assert.match(developers.text,/Remote MCP/,'production developer surface must expose MCP');
+  assert.match(developers.text,new RegExp(base.replace(/[.*+?^${}()|[\]\\]/g,'\\  assert.match(developers.text,/Windows PowerShell/,'production docs must expose a runnable Windows quickstart');')+'\\/mcp'),'production developer surface must display the exact MCP endpoint');
+  assert.match(developers.text,/Claude/,'production MCP surface must identify Claude usage');
+  assert.match(developers.text,/Grok/,'production MCP surface must identify Grok custom MCP usage');
   return true;
 });
 
@@ -91,7 +96,7 @@ await eventually('production revision availability',async()=>{
 
 for(const [path,pattern] of [
   ['/developers',/Public REST API/],
-  ['/connect',/Connected = authorization finished/],
+  ['/connect',/Using Grok or another Remote MCP client\?/],
   ['/sources',/Supported sources/],
   ['/privacy',/API-key hashes and non-secret key prefixes/]
 ]){
