@@ -90,13 +90,16 @@ try{
     contains(name){return this.values.has(name);}
   }
   class FakeElement{
-    constructor(id='',dataset={}){this.id=id;this.dataset={...dataset};this.textContent='';this.innerHTML='';this.className='';this.hidden=false;this.listeners={};this.classList=new FakeClassList(this);}
+    constructor(id='',dataset={}){this.id=id;this.dataset={...dataset};this.textContent='';this.innerHTML='';this.className='';this.hidden=false;this.listeners={};this.attributes={};this.classList=new FakeClassList(this);}
     addEventListener(name,fn){this.listeners[name]=fn;}
+    setAttribute(name,value){this.attributes[name]=String(value);}
+    getAttribute(name){return this.attributes[name]??null;}
     scrollIntoView(){}
   }
   const ids={};
-  for(const id of ['sim-source-name','sim-url','sim-left-state','sim-right-state','sim-left-answer','sim-right-answer','sim-tool','sim-conclusion','sim-run','sim-reset','source-preview-label','source-preview-title','source-preview-question','source-mini-result','source-open-sim','usecase-user','usecase-result','simulation'])ids[id]=new FakeElement(id);
+  for(const id of ['sim-source-name','sim-url','sim-left-state','sim-right-state','sim-left-answer','sim-right-answer','sim-tool','sim-conclusion','sim-run','sim-reset','sim-comparison-panels','source-preview-label','source-preview-title','source-preview-question','source-mini-result','source-open-sim','usecase-user','usecase-result','simulation'])ids[id]=new FakeElement(id);
   ids['sim-conclusion'].hidden=true;
+  ids['sim-comparison-panels'].hidden=true;
   const simTabs=['reddit','youtube','tiktok','instagram','x','bluesky','hn','pdf','web'].map(value=>new FakeElement('',{simSource:value}));
   const simTab=(key)=>{const tab=simTabs.find(el=>el.dataset.simSource===key);assert.ok(tab,`missing simulation tab ${key}`);return tab;};
   const sourceButtons=['reddit','youtube','github','x','web','pdf','instagram','tiktok','hn','bluesky'].map(value=>new FakeElement('',{sourceKey:value}));
@@ -126,18 +129,22 @@ try{
   const runNextTimer=()=>{const entry=[...timers.entries()].sort((a,b)=>a[1].ms-b[1].ms||a[0]-b[0])[0];if(!entry)return false;timers.delete(entry[0]);entry[1].fn();return true;};
   const runAllTimers=()=>{let guard=0;while(runNextTimer()){if(++guard>100)throw new Error('timer loop');}};
   assert.doesNotThrow(()=>new Function('document','window','setTimeout','clearTimeout',homeJs)(fakeDocument,fakeWindow,queuedTimer,queuedClear),'homepage interaction JS must execute');
-  // The comparison must show a meaningful static preview without autoplay.
-  assert.equal(ids['sim-left-state'].textContent,'Link only','simulation should initialize with the link-only limitation visible');
-  assert.equal(ids['sim-right-state'].textContent,'Source ready','simulation should initialize with the loaded-source benefit visible');
+  // The comparison must stay closed until the visitor explicitly asks to see it.
+  assert.equal(ids['sim-left-state'].textContent,'Ready','simulation should initialize idle');
+  assert.equal(ids['sim-right-state'].textContent,'Ready','simulation should initialize idle');
+  assert.equal(ids['sim-comparison-panels'].hidden,true,'comparison panels must be hidden before interaction');
   assert.equal(timers.size,0,'simulation must not autoplay');
   runAllTimers();
-  assert.equal(ids['sim-left-state'].textContent,'Link only','idle comparison must preserve its preview');
-  assert.equal(ids['sim-right-state'].textContent,'Source ready','idle comparison must preserve its preview');
-  // Reddit is intentionally unavailable without OAuth credentials. Selecting it and then pressing Run must never turn it into a fake success.
+  assert.equal(ids['sim-left-state'].textContent,'Ready','idle comparison must remain closed');
+  assert.equal(ids['sim-right-state'].textContent,'Ready','idle comparison must remain closed');
+  // Tabs may change the example before reveal, but must not open the comparison themselves.
   simTab('reddit').listeners.click();
-  assert.equal(ids['sim-right-state'].textContent,'Temporarily paused','Reddit tab must show paused when credentials are absent');
-  assert.match(ids['sim-tool'].innerHTML,/Approved OAuth access required/);
+  assert.equal(ids['sim-comparison-panels'].hidden,true,'selecting a source must not reveal the comparison before the CTA');
+  assert.equal(ids['sim-right-state'].textContent,'Ready','Reddit availability should wait for the explicit comparison run');
+  // Reddit is intentionally unavailable without OAuth credentials. Pressing Run must reveal the paused state, never fake success.
   ids['sim-run'].listeners.click();
+  assert.equal(ids['sim-comparison-panels'].hidden,false,'comparison CTA must reveal the panels');
+  assert.equal(ids['sim-run'].getAttribute('aria-expanded'),'true','comparison CTA must expose its expanded state');
   runAllTimers();
   assert.equal(ids['sim-right-state'].textContent,'Temporarily paused','Run must not bypass the Reddit availability gate');
   assert.doesNotMatch(ids['sim-tool'].innerHTML,/Source loaded/);
