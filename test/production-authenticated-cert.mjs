@@ -92,12 +92,17 @@ try{
 
   const account=await web('/account');
   assert.equal(account.response.status,200);
+  assert.match(account.text,/Key name/,'account must label the API key input as a name');
+  assert.match(account.text,/Generate API key/,'account must make server-generated key creation explicit');
+  assert.match(account.text,/Link2AI generates the secret for you/,'account must explain that the user is not entering the secret');
   const csrf=hidden(account.text,'csrf');
   const created=await web('/account/api-keys',{
     method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},
     body:new URLSearchParams({csrf,name:`Production certification ${new Date().toISOString()}`})
   });
   assert.equal(created.response.status,200);
+  assert.match(created.text,/Your API key is ready\./,'one-time key screen must use the product handoff');
+  assert.match(created.text,/Copy key/,'one-time key screen must expose a copy action');
   apiKey=created.text.match(/l2ai_live_[A-Za-z0-9_-]+/)?.[0]||'';
   apiKeyId=created.text.match(/data-api-key-id="([0-9a-f-]+)"/i)?.[1]||'';
   assert.ok(apiKey&&apiKeyId,'created key and non-secret key id must be present');
