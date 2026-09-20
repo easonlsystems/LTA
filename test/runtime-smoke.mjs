@@ -232,7 +232,7 @@ try{
   assert.match(connectPageText,/\+ → Connectors/,'help must still show where to confirm LTA availability');
   assert.match(connectPageText,/paste a supported public link/,'connect page must say what to do after authorization');
   assert.doesNotMatch(connectPageText,/Connected = authorization finished/,'first-run surface should not front-load internal connector-state explanation');
-  assert.match(connectPageText,/Connected ✓ Authorization is done/,'Connected must be presented as authorization completion, not the end of Claude setup');
+  assert.match(connectPageText,/Connected ✓ Return to Claude/,'Connected state must give one concise next action');
 
   const connectStart=await fetch(`http://127.0.0.1:${port}/connect/start`,{headers:{host:'link2ai.example'},redirect:'manual'});
   assert.equal(connectStart.status,302);
