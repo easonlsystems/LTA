@@ -4,14 +4,14 @@ Subject: Grok Connector Catalog distribution request — Link2AI
 
 Hello xAI team,
 
-I'm building Link2AI, a production source-reading service for AI assistants. Link2AI retrieves AI-readable context from exact public links when the host AI cannot reliably access the original source.
+I'm building Link2AI, source infrastructure for AI assistants. Link2AI turns supported public URLs selected by the user into AI-ready source context with source identity, completeness, and provenance metadata.
 
 We would like to publish Link2AI as a pre-configured OAuth connector in the Grok Connector Catalog so normal Grok users can search for Link2AI, click Connect, authorize their Link2AI account, and use it without manually entering an MCP URL.
 
 Production MCP endpoint:
 https://api-production-0383e.up.railway.app/mcp
 
-Link2AI already supports OAuth 2.1 authorization-code + PKCE, MCP protected-resource discovery, dynamic client registration, per-user authorization, long-result continuation, quota/billing handling, and source-completeness signaling.
+Link2AI already supports OAuth 2.0 authorization-code + PKCE, MCP protected-resource discovery, dynamic client registration, per-user authorization, long-result continuation, quota/billing handling, and source-completeness signaling. The same production MCP endpoint is also compatible with Grok's documented Custom MCP connector flow.
 
 Current public-source categories include YouTube/Shorts, TikTok, Instagram, X, Bluesky, GitHub Issues/PRs, Hacker News, readable webpages, and text-layer PDFs. Link2AI does not provide source-platform write actions, broad crawling, private-account access, or paywall/DRM bypassing.
 
