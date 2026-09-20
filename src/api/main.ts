@@ -447,8 +447,7 @@ app.get('/start',async(req,reply)=>{
   return reply.redirect(claudeInstallUrl());
 });
 app.get('/connect/start',async(req,reply)=>{
-  await trackWebsiteEvent(req,'connect_install_click','/connect');  const current=await userFromSessionCookie(req.headers.cookie).catch(()=>null);
-  if(current?.id)await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude'}});
+  await trackWebsiteEvent(req,'connect_install_click','/connect');  const current=await userFromSessionCookie(req.headers.cookie).catch(()=>null);  if(current?.id)await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude'}});
   return reply.redirect(claudeInstallUrl());
 });
 
@@ -494,7 +493,7 @@ app.get('/',async(req,reply)=>{
           </div>
           <div class="sim-conclusion" id="sim-conclusion" hidden>Same AI. Same link. <strong>Missing context fixed.</strong></div>
         </div>
-        <div class="experience-hero-cta reveal"><a class="btn purple" href="/start?from=hero" target="_blank" rel="noopener">Add LTA to Claude →</a><a class="btn alt" href="/developers#mcp">Use MCP</a><a class="btn alt" href="/account">API key</a><span class="micro">About 30 seconds · 10 free units · Video ≈ 1 unit/min · No card · No API key</span></div>
+        <div class="experience-hero-cta reveal"><a class="btn purple" href="/start?from=hero" target="_blank" rel="noopener">Add LTA to Claude →</a><a class="btn alt" href="/developers#mcp">Use MCP</a><a class="btn alt" href="/account">API key</a><span class="micro">Public links → AI-readable source · About 30 seconds · 10 free units · Video ≈ 1 unit/min · No card · No API key</span></div>
         <div class="clarity-strip reveal" aria-label="How to start using LTA">
           <div class="clarity-item"><b>1</b><div><strong>Open the prefilled connector</strong><span>One click opens Claude's Add custom connector screen with LTA's name and MCP URL already filled in. No Directory search.</span></div></div>
           <div class="clarity-item"><b>2</b><div><strong>Sign in only if asked</strong><span>Claude sends you to LTA only when OAuth authorization is needed. No API key or client secret.</span></div></div>
@@ -580,7 +579,7 @@ app.get('/connect',async(req,reply)=>{
     <section class="connect-hero connect-fast">
       <span class="badge"><span class="badge-dot"></span>Claude connector</span>
       <h1>Add LTA to Claude. Start using it in about 30 seconds.</h1>
-      <p>No Connector Directory search. No MCP URL to copy. No API key. The button opens Claude's Add custom connector screen with LTA already filled in.</p>
+      <p>No Connector Directory search. No MCP URL to copy. No API key. One click opens Claude's Add custom connector screen with LTA already filled in.</p>
       <div class="guide-status"><span>About 30 seconds</span><span>10 units free</span><span>No card</span><span>No API key</span></div>
       <div class="setup-cta" style="justify-content:center;margin-top:26px">
         <a class="btn purple" id="claude-install" href="/connect/start" target="_blank" rel="noopener">Add LTA to Claude →</a>
@@ -595,7 +594,7 @@ app.get('/connect',async(req,reply)=>{
         <div class="connect-step-grid">
           <div class="connect-step"><span class="connect-step-num">1</span><h3>Confirm the prefilled connector.</h3><p>Do not search Claude's Connectors Directory. The LTA name and MCP URL are already there; press <strong>Add</strong> or <strong>Connect</strong>.</p></div>
           <div class="connect-step"><span class="connect-step-num">2</span><h3>Sign in only when Claude asks.</h3><p>Finish LTA OAuth and choose <strong>Connect and return</strong>. Your trial, usage and plan stay with the same LTA account.</p></div>
-          <div class="connect-step"><span class="connect-step-num">3</span><h3>Make LTA available in this chat.</h3><p>Return to Claude, open <strong>+ → Connectors → LTA</strong>, then paste a supported public link into the normal message box. <strong>Connected means authorization is finished</strong>; this step makes sure LTA is actually available in the conversation.</p></div>
+          <div class="connect-step"><span class="connect-step-num">3</span><h3>Make LTA available in this chat.</h3><p>Return to Claude, open <strong>+ → Connectors → LTA</strong>, then paste a supported public link into the normal message box. <strong>Connected means authorization is finished</strong>; this step makes sure LTA is actually available in the conversation. <strong>Connected ✓ Authorization is finished.</strong> One Claude-side step remains.</p></div>
         </div>
 
         <div class="connect-test">
@@ -608,7 +607,7 @@ app.get('/connect',async(req,reply)=>{
           <div class="connect-fact"><span class="connect-eyebrow">How units work</span><h3>10 units is a processing budget, not 10 links.</h3><p>Video uses 1 unit per started processed minute. A 19-minute video needs 19 units. If you only have 9, LTA stops before processing and charges 0. Text uses roughly 1 unit per 2,500 estimated tokens; failed or unsupported reads also cost 0.</p></div>
         </div>
 
-        <div class="setup-main connect-help">
+        <div class="connect-help-title"><strong>Need help connecting?</strong><span>The fixes below stay out of the main three-step path.</span></div><div class="setup-main connect-help">
           <details>
             <summary><strong>LTA is connected, but Claude still is not using it?</strong><span>Show the fix</span></summary>
             <div class="connect-help-body">
@@ -628,7 +627,7 @@ app.get('/connect',async(req,reply)=>{
       </div>
     </section>
 
-    <script>(()=>{const button=document.getElementById('claude-install');const state=document.getElementById('connect-state');let since=Number(sessionStorage.getItem('link2ai_connect_started')||0);let timer=null;const check=async()=>{if(!since)return;try{const response=await fetch('/api/connect/status?since='+encodeURIComponent(String(since)),{cache:'no-store',credentials:'same-origin'});if(!response.ok)return;const data=await response.json();if(data.connected){if(state)state.textContent='Connected ✓ Authorization is finished. Return to Claude → + → Connectors → LTA, then paste a supported public link.';clearInterval(timer);return;}if(data.authenticated&&state)state.textContent='Signed in. Finish Claude authorization, choose Connect and return, then enable LTA under + → Connectors.';}catch{}};button?.addEventListener('click',()=>{since=Date.now();sessionStorage.setItem('link2ai_connect_started',String(since));if(state)state.textContent='Claude opened. Confirm the prefilled LTA connector; sign in only if Claude asks.';clearInterval(timer);timer=setInterval(check,1500);setTimeout(check,500);});if(since){timer=setInterval(check,1500);check();}})();</script>
+    <script>(()=>{const button=document.getElementById('claude-install');const state=document.getElementById('connect-state');let since=Number(sessionStorage.getItem('link2ai_connect_started')||0);let timer=null;const check=async()=>{if(!since)return;try{const response=await fetch('/api/connect/status?since='+encodeURIComponent(String(since)),{cache:'no-store',credentials:'same-origin'});if(!response.ok)return;const data=await response.json();if(data.connected){if(state)state.textContent='Connected ✓ Return to Claude. Authorization is finished → + → Connectors → LTA, then paste a supported public link.';clearInterval(timer);return;}if(data.authenticated&&state)state.textContent='Signed in. Finish Claude authorization, choose Connect and return, then enable LTA under + → Connectors.';}catch{}};button?.addEventListener('click',()=>{since=Date.now();sessionStorage.setItem('link2ai_connect_started',String(since));if(state)state.textContent='Claude opened. Confirm the prefilled LTA connector; sign in only if Claude asks.';clearInterval(timer);timer=setInterval(check,1500);setTimeout(check,500);});if(since){timer=setInterval(check,1500);check();}})();</script>
 
     <style>
       .connect-fast{padding-bottom:24px}.connect-fast .setup-cta{display:flex}.connect-fast .btn{min-width:230px}
@@ -642,7 +641,7 @@ app.get('/connect',async(req,reply)=>{
       .connect-eyebrow{display:block;margin-bottom:8px;font-size:10px;text-transform:uppercase;letter-spacing:.12em;font-weight:900;color:#7a7086}
       .connect-explain-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}
       .connect-fact{border:1px solid var(--line);border-radius:20px;background:#fff;padding:20px}
-      .connect-help{margin-top:16px;padding:0;overflow:hidden;border:1px solid var(--line);border-radius:20px;background:rgba(255,255,255,.86)}
+      .connect-help-title{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-top:18px;padding:0 4px 8px;font-size:13px}.connect-help-title span{color:var(--muted);font-size:11px}.connect-help{margin-top:0;padding:0;overflow:hidden;border:1px solid var(--line);border-radius:20px;background:rgba(255,255,255,.86)}
       .connect-help details{border-bottom:1px solid var(--line)}.connect-help details:last-child{border-bottom:0}
       .connect-help summary{list-style:none;display:flex;justify-content:space-between;gap:18px;align-items:center;padding:18px 20px;cursor:pointer}
       .connect-help summary::-webkit-details-marker{display:none}.connect-help summary span{font-size:11px;color:var(--muted)}
@@ -897,8 +896,7 @@ app.get('/founder',async(req,reply)=>{
       (SELECT COUNT(DISTINCT v.visitor_id) FROM website_visitors v JOIN usage_ledger l ON l.user_id=v.user_id WHERE v.signed_up_at IS NOT NULL)::text AS activated_visitors_total,
       (SELECT COUNT(*) FROM website_visitors v LEFT JOIN users u ON u.id=v.user_id WHERE v.last_seen_at>now()-interval '7 days' AND COALESCE(lower(u.email),'')<>$1 AND COALESCE(u.analytics_excluded,false)=false)::text AS non_founder_7d,
       (SELECT COUNT(*) FROM website_visitors WHERE analytics_source='historical_backfill')::text AS historical_visitors_total,      (SELECT COUNT(*) FROM website_pageviews WHERE source_key IS NOT NULL)::text AS historical_pageviews_total,
-      (SELECT MIN(created_at) FROM website_pageviews) AS tracking_started_at,
-      GREATEST(
+      (SELECT MIN(created_at) FROM website_pageviews) AS tracking_started_at,      GREATEST(
         (SELECT MAX(created_at) FROM website_pageviews),
         (SELECT MAX(created_at) FROM usage_ledger),
         (SELECT MAX(created_at) FROM transcript_jobs)
