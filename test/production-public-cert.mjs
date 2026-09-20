@@ -24,11 +24,18 @@ async function eventually(label,check){
   throw new Error(label+' failed after '+attempts+' attempts: '+(last instanceof Error?last.message:String(last)));
 }
 
+// Do not let an old production release satisfy this gate. The homepage copy can
+// remain stable across releases, so require a marker introduced by the release
+// being certified before running the rest of the one-shot assertions.
 await eventually('production release availability',async()=>{
-  const {response,text}=await request('/');
-  assert.equal(response.status,200);
-  assert.match(text,/Source infrastructure for AI/);
-  assert.match(text,/Use the API/);
+  const home=await request('/');
+  assert.equal(home.response.status,200);
+  assert.match(home.text,/Source infrastructure for AI/);
+  assert.match(home.text,/Use the API/);
+
+  const developers=await request('/developers');
+  assert.equal(developers.response.status,200);
+  assert.match(developers.text,/Public REST API/);
   return true;
 });
 
