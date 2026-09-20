@@ -1,4 +1,4 @@
-# Link2AI — ChatGPT / Codex public plugin submission
+# LTA — ChatGPT / Codex public plugin submission
 
 ## Submission type
 
@@ -10,15 +10,15 @@ Production ChatGPT-specific MCP URL:
 
 MCP URL type: **Universal**.
 
-The general Link2AI `/mcp` endpoint is not the OpenAI submission endpoint.
+The general LTA `/mcp` endpoint is not the OpenAI submission endpoint.
 
 ## Public listing
 
-**Plugin name:** Link2AI
+**Plugin name:** LTA
 
 **Short description:** Read supported exact public links when the original source is not reliably available to the AI.
 
-**Long description:** Through its ChatGPT-specific distribution, Link2AI retrieves AI-readable source context from the same supported exact public-link categories as its default/Claude distribution, including YouTube / Shorts, Instagram Reels and supported public posts, TikTok, individual public X and Bluesky posts, GitHub Issues / pull requests, Hacker News discussions, readable public webpages / articles, and text-layer PDFs. Reddit exact public posts are available only when approved Reddit OAuth Data API credentials are configured. Link2AI preserves source identity, reports incomplete upstream results honestly, and paginates long results without treating delivery chunk size as a source-size limit.
+**Long description:** Through its ChatGPT-specific distribution, LTA retrieves AI-readable source context from the same supported exact public-link categories as its default/Claude distribution, including YouTube / Shorts, Instagram Reels and supported public posts, TikTok, individual public X and Bluesky posts, GitHub Issues / pull requests, Hacker News discussions, readable public webpages / articles, and text-layer PDFs. Reddit exact public posts are available only when approved Reddit OAuth Data API credentials are configured. LTA preserves source identity, reports incomplete upstream results honestly, and paginates long results without treating delivery chunk size as a source-size limit.
 
 **Developer identity:** Use the verified publisher identity selected in the OpenAI submission portal.
 
@@ -40,9 +40,9 @@ The ChatGPT distribution uses a dedicated OAuth resource audience for:
 
 `https://api-production-0383e.up.railway.app/mcp/openai`
 
-A token issued for the general Link2AI `/mcp` resource is not accepted by `/mcp/openai`. For compatibility with already-installed ChatGPT connectors whose runtime may still POST to legacy `/mcp`, an OpenAI-scoped `/mcp/openai` token presented there is routed only to the restricted five-tool OpenAI handler; it never gains access to the general `/mcp` tool surface.
+A token issued for the general LTA `/mcp` resource is not accepted by `/mcp/openai`. For compatibility with already-installed ChatGPT connectors whose runtime may still POST to legacy `/mcp`, an OpenAI-scoped `/mcp/openai` token presented there is routed only to the restricted five-tool OpenAI handler; it never gains access to the general `/mcp` tool surface.
 
-Normal users sign in to Link2AI with Google. OpenAI reviewers use the dedicated reviewer email/password flow exposed on the Link2AI sign-in page. Reviewer credentials are configured only in production environment variables and must be supplied privately in the submission portal. The reviewer flow must not require MFA or any out-of-band verification.
+Normal users sign in to LTA with Google. OpenAI reviewers use the dedicated reviewer email/password flow exposed on the LTA sign-in page. Reviewer credentials are configured only in production environment variables and must be supplied privately in the submission portal. The reviewer flow must not require MFA or any out-of-band verification.
 
 ## OpenAI domain challenge
 
@@ -54,7 +54,7 @@ Keep the submission-portal challenge token configured in production and verify t
 
 ## ChatGPT distribution source policy
 
-The ChatGPT distribution intentionally uses the same supported-source matrix as Link2AI's default/Claude distribution.
+The ChatGPT distribution intentionally uses the same supported-source matrix as LTA's default/Claude distribution.
 
 Supported exact public sources:
 - YouTube videos and YouTube Shorts.
@@ -68,16 +68,16 @@ Supported exact public sources:
 - Direct public text-layer PDFs.
 - Individual public Reddit posts when approved Reddit OAuth Data API credentials are configured.
 
-The ChatGPT-specific endpoint may expose a smaller tool surface than the default/Claude distribution, but source availability must not be reduced because of that packaging difference. Link2AI still does not support profiles, feeds, timelines, bulk crawling, private/login-only content, paywall or DRM bypass, or visual-only understanding that is not represented in returned text.
+The ChatGPT-specific endpoint may expose a smaller tool surface than the default/Claude distribution, but source availability must not be reduced because of that packaging difference. LTA still does not support profiles, feeds, timelines, bulk crawling, private/login-only content, paywall or DRM bypass, or visual-only understanding that is not represented in returned text.
 
 ## Tool review notes
 
 The ChatGPT-specific MCP endpoint exposes five tools.
 
 ### read_public_link
-Starts or reuses a Link2AI source-reading job for one allowed exact public URL.
+Starts or reuses a LTA source-reading job for one allowed exact public URL.
 
-- readOnlyHint: false — it can create a job and consume Link2AI processing units.
+- readOnlyHint: false — it can create a job and consume LTA processing units.
 - destructiveHint: false.
 - openWorldHint: true.
 - OAuth required: `link2ai:read`.
@@ -108,24 +108,24 @@ Locates likely relevant text regions inside an existing permitted processed sour
 - OAuth required: `link2ai:read`.
 
 ### get_usage
-Reads the connected user's Link2AI plan and authoritative processing-unit balance.
+Reads the connected user's LTA plan and authoritative processing-unit balance.
 
 - readOnlyHint: true.
 - destructiveHint: false.
 - openWorldHint: false.
 - OAuth required: `link2ai:read`.
 
-The compatibility `get_video_transcript`, `get_video_time_range`, and `get_video_map` tools remain available on other Link2AI distributions where applicable, but are not exposed on the ChatGPT-specific endpoint.
+The compatibility `get_video_transcript`, `get_video_time_range`, and `get_video_map` tools remain available on other LTA distributions where applicable, but are not exposed on the ChatGPT-specific endpoint.
 
 ## Suggested review prompts
 
 1. **Instagram Reel**
    - URL: https://www.instagram.com/reel/DdNnHPip4RD/
-   - Ask Link2AI to summarize the main points and specific claims from the Reel.
+   - Ask LTA to summarize the main points and specific claims from the Reel.
 
 2. **YouTube**
    - URL: https://www.youtube.com/watch?v=M7lc1UVf-VE
-   - Ask Link2AI to summarize what the video explains.
+   - Ask LTA to summarize what the video explains.
 
 3. **Hacker News discussion**
    - URL: https://news.ycombinator.com/item?id=37137448
@@ -137,13 +137,13 @@ The compatibility `get_video_transcript`, `get_video_time_range`, and `get_video
    - Ask how the issue's reported bug maps to the pull request's fix and reviewer feedback, using `read_public_links` and preserving source attribution.
 
 5. **Usage**
-   - Ask: "How many Link2AI processing units do I have left?"
+   - Ask: "How many LTA processing units do I have left?"
    - Expected: `get_usage` returns `remaining_usage_units`.
 
 Negative review:
-- Ask Link2AI to crawl every post from a public profile/feed and verify that broad crawling is refused.
-- Explicitly forbid Link2AI/external fetching and verify no Link2AI tool is invoked.
-- Include a supported URL only as incidental text (for example, "Save this link for later") and verify Link2AI is not invoked merely because a URL is present.
+- Ask LTA to crawl every post from a public profile/feed and verify that broad crawling is refused.
+- Explicitly forbid LTA/external fetching and verify no LTA tool is invoked.
+- Include a supported URL only as incidental text (for example, "Save this link for later") and verify LTA is not invoked merely because a URL is present.
 
 ## Pre-submission gates
 

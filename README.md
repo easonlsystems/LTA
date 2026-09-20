@@ -1,10 +1,10 @@
-# Link2AI
+# LTA
 
 > **Public URL in. AI-ready source context out.**
 
-Link2AI is source infrastructure that turns supported public links into AI-readable source context. Claude, Grok, compatible MCP clients, and the public REST API all use the same source engine, jobs, cache, quota, completeness, and provenance model.
+LTA is source infrastructure that turns supported public links into AI-readable source context. Claude, Grok, compatible MCP clients, and the public REST API all use the same source engine, jobs, cache, quota, completeness, and provenance model.
 
-Link2AI does not summarize, translate, fact-check or run its own chatbot. The host AI still does the reasoning and produces the answer.
+LTA does not summarize, translate, fact-check or run its own chatbot. The host AI still does the reasoning and produces the answer.
 
 ```text
 Public link
@@ -41,7 +41,7 @@ Not supported:
 - Profiles, feeds, timelines or bulk crawling
 - Paywall, DRM or access-control bypass
 - Full visual understanding / OCR
-- A separate Link2AI chat UI
+- A separate LTA chat UI
 - A permanent content library
 
 ## Core engineering decisions
@@ -52,11 +52,11 @@ The MCP tool id remains `get_video_transcript` for backward compatibility with a
 
 ### Media pipeline
 
-For supported videos, Link2AI prefers usable publisher/platform captions. Only when captions are unavailable does it download temporary media, normalize audio and use speech-to-text.
+For supported videos, LTA prefers usable publisher/platform captions. Only when captions are unavailable does it download temporary media, normalize audio and use speech-to-text.
 
 ### Text-link pipeline
 
-For supported posts and webpages, Link2AI extracts public text directly rather than forcing the media pipeline:
+For supported posts and webpages, LTA extracts public text directly rather than forcing the media pipeline:
 
 - X posts use public embed metadata.
 - Reddit posts use Reddit's OAuth Data API and are advertised at runtime only when both Reddit OAuth credentials are configured. There is no anonymous scraping fallback.
@@ -71,7 +71,7 @@ Cache identity is based on platform + canonical source ID + language instead of 
 
 Processing units are the product-level source-size budget. Video reads use one unit per started processed minute. Text reads use about one unit per 2,500 estimated source tokens, with a minimum of one unit for a successful read. Failed and unsupported reads use 0 units.
 
-If a complete supported source requires more units than the account has available, Link2AI returns a payment-required state instead of intentionally publishing a size-truncated success. When known, the result includes both `remaining_usage_units` and `required_usage_units`.
+If a complete supported source requires more units than the account has available, LTA returns a payment-required state instead of intentionally publishing a size-truncated success. When known, the result includes both `remaining_usage_units` and `required_usage_units`.
 
 ### Security boundary
 
@@ -79,7 +79,7 @@ Public URLs are untrusted input. Generic webpage fetching uses HTTPS only, valid
 
 ### Privacy and retention
 
-Temporary media/audio are deleted after processing. Cached source text/transcripts expire after the configured retention period. Historical jobs scrub source identifiers after retention. Link2AI does not intentionally build a permanent corpus of scraped pages or media.
+Temporary media/audio are deleted after processing. Cached source text/transcripts expire after the configured retention period. Historical jobs scrub source identifiers after retention. LTA does not intentionally build a permanent corpus of scraped pages or media.
 
 ## Architecture
 
@@ -108,7 +108,7 @@ Claude / Grok / compatible MCP clients     REST API clients
 
 ## MCP tools
 
-The default Link2AI MCP surface exposes:
+The default LTA MCP surface exposes:
 
 - `read_public_link` — read one supported public URL.
 - `read_public_links` — read multiple supported public URLs while preserving source identity.
@@ -130,7 +130,7 @@ Developer clients can use the same source engine through:
 - `GET /v1/usage`
 - `GET /v1/sources`
 
-API keys use the `l2ai_live_...` format. The full key is shown once; Link2AI stores only a hash plus a non-secret display prefix. Keys can be revoked from the account dashboard.
+API keys use the `l2ai_live_...` format. The full key is shown once; LTA stores only a hash plus a non-secret display prefix. Keys can be revoked from the account dashboard.
 
 ## Requirements
 
@@ -177,7 +177,7 @@ The current expansion keeps the existing job/cache tables and extends cache sour
 
 ## Client onboarding
 
-Claude onboarding lives at `/connect`. The preferred flow is Claude custom connector → Link2AI authorization → confirm Link2AI under Claude Connectors → paste the public URL in Claude.
+Claude onboarding lives at `/connect`. The preferred flow is Claude custom connector → LTA authorization → confirm LTA under Claude Connectors → paste the public URL in Claude.
 
 Grok can use the production `/mcp` endpoint through Grok's documented Custom MCP connector flow; the integration package is under `integrations/grok/`. Public Grok Connector Catalog publication is a separate xAI approval step and is not claimed until approved.
 

@@ -171,10 +171,10 @@ try{
   assert.match(listed.result.tools[0].description,/Profiles, feeds, private\/login-gated content/i);
   assert.match(listed.result.tools[1].description,/two or more supported public URLs/i);
   assert.match(listed.result.tools[1].description,/comparison|synthesis/i);
-  assert.match(listed.result.tools[2].description,/Compatibility reader for existing Link2AI connections/i);
+  assert.match(listed.result.tools[2].description,/Compatibility reader for existing LTA connections/i);
   assert.match(listed.result.tools[3].description,/LaunchBrand/);
   assert.match(listed.result.tools[4].description,/timestamped transcript text/i);
-  assert.match(listed.result.tools[5].description,/Search the text of an already processed Link2AI source/i);
+  assert.match(listed.result.tools[5].description,/Search the text of an already processed LTA source/i);
   assert.match(listed.result.tools[6].description,/compact timeline map/i);
   assert.doesNotMatch(JSON.stringify(listed.result.tools),/\$\{env\(\)/);
   assert.deepEqual(listed.result.tools[0].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true});
@@ -203,7 +203,7 @@ try{
   assert.ok(listed.result.tools[6].outputSchema.properties.sections,'get_video_map must expose timeline sections');
 
   const openaiInitialized=await callOpenai({jsonrpc:'2.0',id:20,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'openai-audit',version:'1'}}});
-  assert.match(openaiInitialized.result.instructions??'',/same supported-source matrix as Link2AI's default\/Claude distribution/i);
+  assert.match(openaiInitialized.result.instructions??'',/same supported-source matrix as LTA's default\/Claude distribution/i);
   assert.match(openaiInitialized.result.instructions??'',/provides AI-readable context from supported public links/i);
   assert.doesNotMatch(openaiInitialized.result.instructions??'',/use get_video_time_range|use get_video_map/i);
 
@@ -232,7 +232,7 @@ try{
   assert.match(listed.result.tools[1].description,/separate result for each source/i);
   assert.match(listed.result.tools[5].description,/lexical matching/i);
   assert.match(listed.result.tools[6].description,/overview of where topics appear/i);
-  assert.doesNotMatch(listed.result.tools[0].description,/Reuse a successful result|native source access|Do not call Link2AI merely because/i);
+  assert.doesNotMatch(listed.result.tools[0].description,/Reuse a successful result|native source access|Do not call LTA merely because/i);
   assert.ok(listed.result.tools[0].inputSchema.properties.refresh,'read_public_link must expose explicit refresh control');
 
   const batch=await call({jsonrpc:'2.0',id:3,method:'tools/call',params:{name:'read_public_links',arguments:{urls:['https://www.youtube.com/watch?v=dQw4w9WgXcQ','https://www.youtube.com/watch?v=dQw4w9WgXcQ']}}});
@@ -248,7 +248,7 @@ try{
   assert.equal(failed.result.isError,true);
   const payload=JSON.parse(failed.result.content[0].text.split('\n').at(-1));
   assert.equal(payload.error_code,'INTERNAL_ERROR');
-  assert.equal(payload.message,'Link2AI hit an internal error while processing this request. No processing units were charged.');
+  assert.equal(payload.message,'LTA hit an internal error while processing this request. No processing units were charged.');
   assert.doesNotMatch(failed.result.content[0].text,/ECONNREFUSED|127\.0\.0\.1|postgres/i);
   console.log('MCP smoke tests PASS');
 }finally{

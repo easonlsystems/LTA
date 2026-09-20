@@ -52,7 +52,7 @@ try{
       assert.match(body,/<nav class="home-nav" aria-label="Primary">/);
       assert.match(body,/class="experience-home home-only"/);
       assert.match(body,/Give your AI the source\./);
-      assert.match(body,/Link2AI makes it readable\./);
+      assert.match(body,/LTA makes it readable\./);
       assert.match(body,/Source infrastructure for AI/);
       assert.match(body,/See the difference/);
       for(const source of ['youtube','tiktok','instagram','x','bluesky','hn','pdf','web'])assert.match(body,new RegExp(`data-sim-source=\"${source}\"`),`homepage should expose ${source} simulation`);
@@ -72,7 +72,7 @@ try{
     if(route==='/use-cases'){assert.match(body,/Use the link normally/);assert.match(body,/Summaries grounded in the source/);}
     if(route==='/sources'){assert.match(body,/Supported sources/);assert.match(body,/Video & social/);assert.match(body,/Reddit/);assert.match(body,/Paused until approved Reddit OAuth Data API credentials are configured/);}
     if(route==='/pricing'){assert.match(body,/Founding offer/);assert.match(body,/First 50 paid users get 50% more usage/);assert.match(body,/500 paid units \+ 250 founding bonus/);assert.match(body,/2,000 paid units \+ 1,000 founding bonus/);assert.match(body,/Unused paid units roll over while subscribed/);assert.match(body,/founding bonus resets each billing cycle and does not roll over/);assert.match(body,/No plan-specific video length limit/);assert.match(body,/What does 1 processing unit mean/);assert.match(body,/Units depend on content size, not platform/);}
-    if(route==='/connect'){assert.match(body,/Add Link2AI to Claude/);assert.match(body,/custom-connector setup/);assert.match(body,/prefilled/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Load tools when needed/);assert.match(body,/Tools already loaded/);assert.doesNotMatch(body,/available in Claude's Connectors Directory|Open Claude Connectors Directory|Use the published connector|Search “Link2AI”|Choose the published Link2AI connector/);}
+    if(route==='/connect'){assert.match(body,/Add LTA to Claude/);assert.match(body,/custom-connector setup/);assert.match(body,/prefilled/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Load tools when needed/);assert.match(body,/Tools already loaded/);assert.doesNotMatch(body,/available in Claude's Connectors Directory|Open Claude Connectors Directory|Use the published connector|Search “LTA”|Choose the published LTA connector/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render|google-client-secret-must-not-render/);
   }
 
@@ -179,10 +179,10 @@ try{
   simTab('instagram').listeners.click();
   ids['sim-run'].listeners.click();
   runAllTimers();
-  assert.match(ids['sim-right-answer'].innerHTML,/specific claim and supports it with details from the caption and clip/,'Instagram With-Link2AI answer should keep the original generic result');
-  assert.match(ids['sim-left-answer'].innerHTML,/can’t directly access the Instagram Reel/,'Instagram without-Link2AI side should explain the source-access limitation');
+  assert.match(ids['sim-right-answer'].innerHTML,/specific claim and supports it with details from the caption and clip/,'Instagram With-LTA answer should keep the original generic result');
+  assert.match(ids['sim-left-answer'].innerHTML,/can’t directly access the Instagram Reel/,'Instagram without-LTA side should explain the source-access limitation');
   assert.match(ids['sim-left-answer'].innerHTML,/paste the caption or describe the clip/,'Instagram failure should give a realistic fallback');
-  assert.match(ids['sim-right-answer'].innerHTML,/caption gives the central claim/,'Instagram With-Link2AI answer should keep the original supporting points');
+  assert.match(ids['sim-right-answer'].innerHTML,/caption gives the central claim/,'Instagram With-LTA answer should keep the original supporting points');
   assert.doesNotMatch(ids['sim-right-answer'].innerHTML,/Claude/,'comparison answer labels must remain AI-client neutral');
   // Switching source during a run must invalidate old-source callbacks.
   ids['sim-run'].listeners.click();
@@ -208,7 +208,7 @@ try{
     assert.equal(ids['sim-right-state'].textContent,'Source ready',source+' should initialize its right-side preview');
     ids['sim-run'].listeners.click();
     runAllTimers();
-    assert.equal(ids['sim-right-state'].textContent,'Source loaded',source+' comparison should load the Link2AI side');
+    assert.equal(ids['sim-right-state'].textContent,'Source loaded',source+' comparison should load the LTA side');
     assert.ok(ids['sim-right-answer'].classList.contains('show'),source+' comparison should reveal an answer');
     ids['sim-reset'].listeners.click();
   }
@@ -220,7 +220,7 @@ try{
   const connectPage=await fetch(`http://127.0.0.1:${port}/connect`,{headers:{host:'link2ai.example'}});
   assert.equal(connectPage.status,200);
   const connectPageText=await connectPage.text();
-  assert.match(connectPageText,/\+ → Connectors/,'post-connect page must show where to confirm Link2AI availability');
+  assert.match(connectPageText,/\+ → Connectors/,'post-connect page must show where to confirm LTA availability');
   assert.match(connectPageText,/normal message box/,'post-connect page must say where to paste the source link');
   assert.match(connectPageText,/Connected = authorization finished/,'post-connect page must distinguish authorization from tool availability');
   assert.match(connectPageText,/Connected ✓ Authorization is done/,'Connected must be presented as authorization completion, not the end of Claude setup');
@@ -343,10 +343,10 @@ try{
   const signup=await fetch(`http://127.0.0.1:${port}/signup?return_to=%2Faccount`,{headers:{host:'link2ai.example'}});
   assert.equal(signup.status,200);
   const signupText=await signup.text();
-  assert.match(signupText,/Create your Link2AI account/);
+  assert.match(signupText,/Create your LTA account/);
   assert.match(signupText,/Continue with Google/);
   assert.match(signupText,/auth\/google\/start/);
-  assert.match(signupText,/verified email reconnects any existing Link2AI usage, plan and paid balance/);
+  assert.match(signupText,/verified email reconnects any existing LTA usage, plan and paid balance/);
   assert.match(signupText,/10 processing units free/);
   assert.match(signupText,/Failed \/ unsupported reads use 0 units/);
   assert.match(signupText,/product by Eason Systems/);

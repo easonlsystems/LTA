@@ -45,9 +45,9 @@ await eventually('production revision availability',async()=>{
   assert.match(home.text,/id="sim-comparison-panels"[^>]*hidden/,'homepage comparison panels must be hidden on first paint');
   assert.doesNotMatch(home.text,/sim-answer sim-fail show/,'homepage must not preload the completed comparison');
   assert.match(home.text,/Summarize this Instagram Reel\./,'production homepage must lead with the recorded Instagram proof');
-  const reelLinks=home.text.match(/https:\/\/www\.instagram\.com\/reel\/C9xDemoLink2AI\//g)??[];
+  const reelLinks=home.text.match(/https:\/\/www\.instagram\.com\/reel\/C9xDemoLTA\//g)??[];
   assert.equal(reelLinks.length,2,'production homepage must show the fake Reel URL in both comparison chat messages and nowhere above them');
-  assert.doesNotMatch(home.text,/sim-prompt-link[^>]*>https:\/\/www\.instagram\.com\/reel\/C9xDemoLink2AI\//,'top example must not show the fake Reel URL');
+  assert.doesNotMatch(home.text,/sim-prompt-link[^>]*>https:\/\/www\.instagram\.com\/reel\/C9xDemoLTA\//,'top example must not show the fake Reel URL');
   assert.match(home.text,/Same AI assistant · same public link/,'production comparison must be AI-client neutral');
   assert.doesNotMatch(home.text,/Simulated Claude conversation/,'production comparison must not be Claude-specific');
 
@@ -57,6 +57,8 @@ await eventually('production revision availability',async()=>{
   assert.match(developers.text,/Give your app the source\./,'production developer docs must lead with product value');
   assert.match(developers.text,/From zero to source text in three steps\./,'production developer docs must expose the short quickstart');
   assert.match(developers.text,/Generate API key/,'production developer docs must use generated-key onboarding');
+  assert.match(developers.text,/I just want LTA inside an AI/,'production docs must route non-developers to the connection flow');
+  assert.match(developers.text,/Windows PowerShell/,'production docs must expose a runnable Windows quickstart');
   return true;
 });
 
@@ -74,8 +76,8 @@ await eventually('production revision availability',async()=>{
   assert.match(response.headers.get('content-type')??'',/javascript/);
   assert.match(text,/resetDemo\(false,false\)/,'production homepage JS must initialize the comparison closed');
   assert.match(text,/state\.opened=true;const panels=q\('#sim-comparison-panels'\);if\(panels\)panels\.hidden=false/,'production homepage JS must reveal panels only from the comparison interaction');
-  assert.match(text,/specific claim and supports it with details from the caption and clip/,'production homepage JS must preserve the original With Link2AI Instagram answer');
-  assert.match(text,/can’t directly access the Instagram Reel/,'production without-Link2AI copy must explain the Reel access limitation');
+  assert.match(text,/specific claim and supports it with details from the caption and clip/,'production homepage JS must preserve the original With LTA Instagram answer');
+  assert.match(text,/can’t directly access the Instagram Reel/,'production without-LTA copy must explain the Reel access limitation');
   assert.match(text,/paste the caption or describe the clip/,'production failure copy must offer a realistic fallback');
   assert.match(text,/AI assistant/,'production homepage JS must use neutral AI labels');
 }

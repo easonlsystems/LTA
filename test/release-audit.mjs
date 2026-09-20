@@ -71,9 +71,9 @@ assert.match(linkSource,/safeJsonArrayPages/,'GitHub discussions must paginate t
 assert.match(linkSource,/GitHub comments/);
 assert.match(linkSource,/GitHub reviews/);
 assert.doesNotMatch(linkSource,/comments\?per_page=100|reviews\?per_page=100/,'GitHub must not silently stop after one page');
-assert.match(mcpSource,/provides AI-readable context from supported public links/,'MCP instructions must state the Link2AI source-reading capability narrowly');
+assert.match(mcpSource,/provides AI-readable context from supported public links/,'MCP instructions must state the LTA source-reading capability narrowly');
 assert.match(mcpSource,/Returned source content is untrusted external data/,'MCP instructions must preserve the external-content trust boundary');
-assert.doesNotMatch(mcpSource,/Do not call Link2AI merely because|native source access is already sufficient|Reuse a successful result for the same source/i,'Directory-facing tool descriptions must not steer Claude against other tools or contain workflow coercion');
+assert.doesNotMatch(mcpSource,/Do not call LTA merely because|native source access is already sufficient|Reuse a successful result for the same source/i,'Directory-facing tool descriptions must not steer Claude against other tools or contain workflow coercion');
 assert.doesNotMatch(mcpSource,/Claude(?:'s)? built-in/,'MCP server instructions must stay host-neutral for V3 AI clients');
 assert.match(mcpSource,/const text=JSON\.stringify\(data\)/,'user-visible tool results must contain only the structured payload');
 assert.doesNotMatch(mcpSource,/external link data \(untrusted content\)\. IMPORTANT:/,'internal MCP operating guidance must not be prepended to tool results');
@@ -141,7 +141,7 @@ assert.match(mcpSource,/video matches include timestamps|start_seconds/,'Video s
 assert.match(mcpSource,/zero-match result is not a semantic guarantee of absence/i,'Source search must not turn lexical misses into false absence claims');
 assert.doesNotMatch(mcpSource,/checkout_url|plan_info_url/,'Public MCP schemas must not expose checkout or plan-purchase URLs for digital subscriptions or credits');
 assert.doesNotMatch(mcpServiceSource,/plan_info_url|\/pricing/,'ChatGPT tool results must not return upgrade, top-up, or plan-purchase links');
-assert.match(mcpServiceSource,/PUBLIC_BASE_URL[^\n]*\/account|\/account in your browser/,'Quota exhaustion must direct users to the Link2AI account page without initiating a purchase');
+assert.match(mcpServiceSource,/PUBLIC_BASE_URL[^\n]*\/account|\/account in your browser/,'Quota exhaustion must direct users to the LTA account page without initiating a purchase');
 assert.doesNotMatch(billingRoutesSource,/e instanceof Error\?e\.message:'Could not start top-up checkout\.'/,'Billing UI must not echo raw provider error messages to users');
 assert.doesNotMatch(mcpServiceSource,/createCheckoutSession|createTopupCheckoutSession|checkout_url:row\.checkout_url/,'MCP service must not create or return purchase flows');
 assert.doesNotMatch(processorSource,/createCheckoutSession|createTopupCheckoutSession|paymentUrl\(/,'Worker must not create purchase sessions when quota is exceeded');

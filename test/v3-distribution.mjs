@@ -22,7 +22,7 @@ assert.match(openaiSkill,/continuation_required/);
 assert.match(openaiSkill,/source_completeness/);
 assert.match(openaiSkill,/payment_required/);
 assert.match(openaiSkill,/untrusted external content/);
-assert.match(openaiSkill,/Do not invoke Link2AI just because a URL appears/);
+assert.match(openaiSkill,/Do not invoke LTA just because a URL appears/);
 
 assert.match(openaiSubmission,/Contains MCP/);
 assert.match(openaiSubmission,/Universal/);
@@ -34,7 +34,7 @@ assert.match(openaiSubmission,/must not require MFA/i);
 assert.match(openaiSubmission,/security schemes, output schemas, and accurate annotations/i);
 
 assert.match(grokCatalog,/Connector Catalog/);
-assert.match(grokCatalog,/search Link2AI → Connect → Link2AI OAuth/);
+assert.match(grokCatalog,/search LTA → Connect → LTA OAuth/);
 assert.match(grokCatalog,/must not need to copy an MCP URL/i);
 assert.match(grokCatalog,/distribution approval/i);
 assert.match(grokCatalog,/https:\/\/docs\.x\.ai\/grok\/connectors/);

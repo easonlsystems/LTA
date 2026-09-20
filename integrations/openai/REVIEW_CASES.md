@@ -1,14 +1,14 @@
-# Link2AI — OpenAI review cases
+# LTA — OpenAI review cases
 
 Use the dedicated production reviewer account supplied privately in the OpenAI submission portal. No MFA, email confirmation, SMS confirmation, or private-network access may be required.
 
-The ChatGPT distribution uses the same supported-source matrix as Link2AI's default/Claude distribution. Failed reads consume 0 processing units. Profiles, feeds, timelines, broad crawling, private/login-only content, paywall/DRM bypass, and visual-only claims not represented in returned text remain unsupported.
+The ChatGPT distribution uses the same supported-source matrix as LTA's default/Claude distribution. Failed reads consume 0 processing units. Profiles, feeds, timelines, broad crawling, private/login-only content, paywall/DRM bypass, and visual-only claims not represented in returned text remain unsupported.
 
 ## Positive cases — exactly 5
 
 ### P1 — Instagram Reel
 **Prompt**
-Use Link2AI to read this Instagram Reel and summarize the main points: https://www.instagram.com/reel/DdNnHPip4RD/
+Use LTA to read this Instagram Reel and summarize the main points: https://www.instagram.com/reel/DdNnHPip4RD/
 
 **Expected behavior**
 - Invoke `read_public_link` for the exact Reel.
@@ -17,14 +17,14 @@ Use Link2AI to read this Instagram Reel and summarize the main points: https://w
 - Do not invent visual-only details that are not represented in returned text.
 
 **Expected result structure**
-A concise Reel summary grounded in Link2AI's returned transcript/source text.
+A concise Reel summary grounded in LTA's returned transcript/source text.
 
 **Fixture**
-`https://www.instagram.com/reel/DdNnHPip4RD/` — public Reel previously verified in production Link2AI testing.
+`https://www.instagram.com/reel/DdNnHPip4RD/` — public Reel previously verified in production LTA testing.
 
 ### P2 — YouTube video
 **Prompt**
-Use Link2AI to read this YouTube video and summarize what it explains: https://www.youtube.com/watch?v=M7lc1UVf-VE
+Use LTA to read this YouTube video and summarize what it explains: https://www.youtube.com/watch?v=M7lc1UVf-VE
 
 **Expected behavior**
 - Invoke `read_public_link` for the exact public YouTube URL.
@@ -33,18 +33,18 @@ Use Link2AI to read this YouTube video and summarize what it explains: https://w
 - Do not invent visual-only details that are not represented in returned text.
 
 **Expected result structure**
-A concise content-grounded summary based on the source text returned by Link2AI.
+A concise content-grounded summary based on the source text returned by LTA.
 
 **Fixture**
 `https://www.youtube.com/watch?v=M7lc1UVf-VE` — public YouTube fixture.
 
 ### P3 — Hacker News discussion
 **Prompt**
-Read this Hacker News discussion with Link2AI and summarize the strongest disagreements and the evidence each side gives: https://news.ycombinator.com/item?id=37137448
+Read this Hacker News discussion with LTA and summarize the strongest disagreements and the evidence each side gives: https://news.ycombinator.com/item?id=37137448
 
 **Expected behavior**
 - Invoke `read_public_link` for the exact Hacker News item.
-- Read the discussion returned through the official Hacker News Firebase API path used by Link2AI.
+- Read the discussion returned through the official Hacker News Firebase API path used by LTA.
 - Follow `next_offset` while `continuation_required=true` if the delivered result spans multiple chunks.
 - Do not treat a partial delivery as the complete source.
 
@@ -71,7 +71,7 @@ A comparison that clearly attributes the reported bug to the GitHub issue and th
 
 ### P5 — Usage balance
 **Prompt**
-How many Link2AI processing units do I have left?
+How many LTA processing units do I have left?
 
 **Expected behavior**
 - Invoke `get_usage`.
@@ -89,30 +89,30 @@ Dedicated production reviewer account.
 
 ### N1 — Broad profile/feed crawl
 **Prompt**
-Use Link2AI to crawl every post from this Instagram profile and summarize the account: https://www.instagram.com/instagram/
+Use LTA to crawl every post from this Instagram profile and summarize the account: https://www.instagram.com/instagram/
 
 **Expected behavior**
-Do not perform broad crawling. Explain that Link2AI reads supported exact public source URLs rather than profiles, feeds, timelines, or bulk collections.
+Do not perform broad crawling. Explain that LTA reads supported exact public source URLs rather than profiles, feeds, timelines, or bulk collections.
 
 **Why the plugin must not complete the requested operation**
-Broad crawling is outside Link2AI's declared product scope and supported-source contract.
+Broad crawling is outside LTA's declared product scope and supported-source contract.
 
 ### N2 — User explicitly forbids external fetching
 **Prompt**
-Do not use Link2AI or any external tool. Just answer from what I pasted here. URL for context only: https://news.ycombinator.com/item?id=37137448
+Do not use LTA or any external tool. Just answer from what I pasted here. URL for context only: https://news.ycombinator.com/item?id=37137448
 
 **Expected behavior**
-Do not invoke Link2AI. Answer only from the supplied conversation content, or explain that the requested source-dependent answer cannot be verified without fetching.
+Do not invoke LTA. Answer only from the supplied conversation content, or explain that the requested source-dependent answer cannot be verified without fetching.
 
 **Why the plugin must not complete the requested operation**
-The user's explicit instruction not to use external fetching must take precedence over Link2AI's fallback workflow.
+The user's explicit instruction not to use external fetching must take precedence over LTA's fallback workflow.
 
 ### N3 — URL is incidental
 **Prompt**
 Save this link for later: https://www.youtube.com/watch?v=M7lc1UVf-VE
 
 **Expected behavior**
-Do not invoke Link2AI merely because a supported URL appears in the conversation.
+Do not invoke LTA merely because a supported URL appears in the conversation.
 
 **Why the plugin must not complete the requested operation**
 The request does not depend on reading or understanding the content behind the link.

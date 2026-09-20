@@ -20,7 +20,7 @@ assert.deepEqual(config.allowed_tools,[
 assert.equal(config.allowed_tools.includes('get_video_transcript'),false,'Grok adapter should not advertise the legacy compatibility alias');
 
 assert.match(custom,/same source engine, jobs, cache, quota, completeness and provenance/i);
-assert.match(custom,/No Link2AI API key belongs in the Grok custom-connector form/i);
+assert.match(custom,/No LTA API key belongs in the Grok custom-connector form/i);
 assert.match(custom,/Do not claim Catalog publication until xAI has actually approved/i);
 assert.match(catalog,/source infrastructure for AI systems/i);
 assert.match(catalog,/OAuth 2\.0 authorization-code flow with PKCE/i);
