@@ -34,7 +34,7 @@ export async function createApiKey(userId:string,nameRaw:unknown):Promise<{id:st
 export async function listApiKeys(userId:string):Promise<ApiKeySummary[]>{
   const r=await pool.query<ApiKeySummary>(
     `SELECT id,name,key_prefix,created_at,last_used_at,revoked_at
-     FROM api_keys WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50`,
+     FROM api_keys WHERE user_id=$1 AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 50`,
     [userId]
   );
   return r.rows;
