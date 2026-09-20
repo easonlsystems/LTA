@@ -17,11 +17,11 @@ assert.match(authSource,/openidconnect\.googleapis\.com\/v1\/userinfo/);
 assert.match(authSource,/code_challenge_method','S256'/);
 assert.match(authSource,/email_verified!==true/,'Google email must be verified before account linking');
 assert.match(authSource,/WHERE google_sub=\$1 FOR UPDATE/,'Google stable subject must be the primary identity key');
-assert.match(authSource,/WHERE lower\(email\)=lower\(\$1\) FOR UPDATE/,'Verified Google email must reconnect an existing Link2AI account');
+assert.match(authSource,/WHERE lower\(email\)=lower\(\$1\) FOR UPDATE/,'Verified Google email must reconnect an existing LTA account');
 assert.match(authSource,/currentUserId/,'anonymous trial account should be preserved when possible');
 
 assert.match(routes,/Continue with Google/);
-assert.match(routes,/Link2AI never sees or stores your Google password/);
+assert.match(routes,/LTA never sees or stores your Google password/);
 assert.match(routes,/SameSite=Lax/);
 assert.match(routes,/Path=\/auth\/google\/callback/);
 assert.match(routes,/googleSignInConfigured\(\)\)return reply\.code\(404\)/,'legacy password/email-code endpoints must close when Google is configured');
