@@ -46,7 +46,8 @@ await eventually('production revision availability',async()=>{
   assert.doesNotMatch(home.text,/sim-answer sim-fail show/,'homepage must not preload the completed comparison');
   assert.match(home.text,/Summarize this Instagram Reel\./,'production homepage must lead with the recorded Instagram proof');
   const reelLinks=home.text.match(/https:\/\/www\.instagram\.com\/reel\/C9xDemoLink2AI\//g)??[];
-  assert.equal(reelLinks.length,3,'production homepage must show the same fake Reel URL in the example prompt and both chat messages');
+  assert.equal(reelLinks.length,1,'production homepage must show the fake Reel URL only in the Without Link2AI user message');
+  assert.doesNotMatch(home.text,/sim-prompt-link[^>]*>https:\/\/www\.instagram\.com\/reel\/C9xDemoLink2AI\//,'top example must not show the fake Reel URL');
   assert.match(home.text,/Same AI assistant · same public link/,'production comparison must be AI-client neutral');
   assert.doesNotMatch(home.text,/Simulated Claude conversation/,'production comparison must not be Claude-specific');
 
