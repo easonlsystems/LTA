@@ -131,6 +131,9 @@ assert.doesNotMatch(providerTelemetrySource,/\b(?:source_url|normalized_url|cano
 assert.match(providerHealthMigration,/PRIMARY KEY\(bucket_start,platform,operation,provider\)/,'Provider health storage must use bounded hourly aggregates instead of unbounded per-request rows');
 assert.match(processorSource,/if\(reserved\)\{await releaseQuota\(job\.id\)/,'Failed provider\/extraction paths must release reserved quota before retry or failure');
 assert.match(billingSource,/j\.error_code='QUOTA_EXCEEDED'/,'A successful top-up must resume quota-blocked jobs');
+assert.match(apiSource,/status='queued'[\s\S]*status='awaiting_payment'[\s\S]*error_code='QUOTA_EXCEEDED'/,'Founder allowance changes must requeue quota-blocked jobs instead of leaving stale awaiting-payment results');
+assert.match(apiSource,/試用累積用量/,'Founder trial usage must be labeled as lifetime cumulative usage');
+assert.match(billingRoutesSource,/trial units used \(lifetime\)/,'Account UI must not describe trial usage as a billing-cycle counter');
 assert.doesNotMatch(apiSource,/supports videos up to 30 minutes|supports videos up to 120 minutes|very large sources may return partial context/i,'Published copy must match the unit-bounded full-source policy');
 assert.match(mcpServiceSource,/if\(!options\.refresh(?:&&parsed\.platform!=='x')?\)[\s\S]*j\.status='completed'[\s\S]*c\.expires_at>now\(\)/,'Normal non-X same-source reads must reuse a still-valid completed user result');
 assert.match(mcpServiceSource,/options\.refresh\|\|parsed\.platform==='x'\?null:await findCache/,'Explicit refresh and the X media-routing rollout must bypass the shared successful cache');
