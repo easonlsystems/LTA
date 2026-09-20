@@ -62,7 +62,7 @@ try{
       assert.match(body,/href="\/pricing"/);
       assert.match(body,/href="\/developers"/);
       assert.match(body,/Use the API/);
-      assert.match(body,/src="\/home\.js\?v=20260917-homeonly2" defer/);
+      assert.match(body,/src="\/home\.js\?v=20260920-reel-proof3" defer/);
       assert.doesNotMatch(body,/One missing layer/i);
       assert.doesNotMatch(body,/What do you want Claude to read\?/);
       assert.doesNotMatch(body,/Try the link Claude just failed to read\./);
@@ -76,7 +76,7 @@ try{
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render|google-client-secret-must-not-render/);
   }
 
-  const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260917-homeonly2`,{headers:{host:'link2ai.example'}});
+  const homeJsResponse=await fetch(`http://127.0.0.1:${port}/home.js?v=20260920-reel-proof3`,{headers:{host:'link2ai.example'}});
   assert.equal(homeJsResponse.status,200,'homepage JS endpoint must return 200');
   assert.match(homeJsResponse.headers.get('content-type')??'',/javascript/);
   const homeJs=await homeJsResponse.text();
