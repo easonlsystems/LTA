@@ -35,7 +35,7 @@ assert.match(docs,/\/mcp/,'developer surface must publish the production MCP end
 assert.match(docs,/Claude[^]*Custom Connector/,'MCP surface must name Claude as a place to use Remote MCP');
 assert.match(docs,/Grok[^]*Custom MCP/,'MCP surface must name Grok custom MCP without claiming catalog publication');
 assert.match(docs,/LTA handles sign-in through OAuth/,'MCP surface must explain OAuth authentication');
-assert.match(docs,/API key into an MCP connector/,'MCP surface must separate OAuth from REST API keys');
+assert.match(docs,/MCP does not use an <code>l2ai_live_…<\/code> API key/,'MCP surface must separate OAuth from REST API keys');
 assert.match(main,/href="\/developers#mcp">Use MCP<\/a>/,'homepage must expose a visible MCP entry point');
 assert.match(main,/Using Grok or another Remote MCP client\?/,'connect page must explain where the MCP endpoint can be used');
 assert.match(billing,/Key name/,'account API key form must only ask for a key name');
