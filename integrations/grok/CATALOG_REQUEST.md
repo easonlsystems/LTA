@@ -1,24 +1,24 @@
-# Link2AI — Grok Connector Catalog distribution request
+# LTA — Grok Connector Catalog distribution request
 
 ## Distribution goal
 
-Publish **Link2AI** as a pre-configured OAuth connector in the Grok Connector Catalog.
+Publish **LTA** as a pre-configured OAuth connector in the Grok Connector Catalog.
 
 The production launch standard is:
 
-`Grok user → Connectors → search Link2AI → Connect → Link2AI OAuth → use`
+`Grok user → Connectors → search LTA → Connect → LTA OAuth → use`
 
 Normal users must not need to copy an MCP URL, enable a developer mode, create an API key, or configure a client secret.
 
 ## Product
 
-Link2AI is source infrastructure for AI systems. It turns supported public URLs selected by the user into AI-ready source context with source identity, completeness and provenance metadata.
+LTA is source infrastructure for AI systems. It turns supported public URLs selected by the user into AI-ready source context with source identity, completeness and provenance metadata.
 
 Primary use case:
 
-`user provides exact public URL → Link2AI reads the supported source through the shared source engine → Grok uses the returned source context`
+`user provides exact public URL → LTA reads the supported source through the shared source engine → Grok uses the returned source context`
 
-Link2AI does not provide broad crawling, profile/feed scraping, private-account access, paywall bypassing, DRM bypassing, or source-platform write actions.
+LTA does not provide broad crawling, profile/feed scraping, private-account access, paywall bypassing, DRM bypassing, or source-platform write actions.
 
 ## Production endpoint
 
@@ -50,9 +50,9 @@ Resource scope:
 
 `link2ai:read`
 
-The server publishes MCP protected-resource metadata and OAuth authorization-server metadata, supports dynamic client registration, refresh tokens, and validates the authenticated Link2AI user on every MCP tool call.
+The server publishes MCP protected-resource metadata and OAuth authorization-server metadata, supports dynamic client registration, refresh tokens, and validates the authenticated LTA user on every MCP tool call.
 
-Normal users sign in to Link2AI with Google. A dedicated no-MFA reviewer login exists for marketplace/integration review and is configured through production-only `REVIEWER_EMAIL` / `REVIEWER_PASSWORD` values.
+Normal users sign in to LTA with Google. A dedicated no-MFA reviewer login exists for marketplace/integration review and is configured through production-only `REVIEWER_EMAIL` / `REVIEWER_PASSWORD` values.
 
 ## Tools
 
@@ -75,24 +75,24 @@ Searches an already processed source for likely relevant transcript/text regions
 Returns a compact timeline map for an already processed video, covering the full available timeline with time ranges, transcript excerpts, and deterministic keywords. It is a navigation aid; Grok should read exact relevant ranges before making detailed claims.
 
 ### get_usage
-Returns the connected Link2AI account's plan and processing-unit balance.
+Returns the connected LTA account's plan and processing-unit balance.
 
 ### get_video_transcript
-Compatibility alias retained for already-connected Link2AI clients. New integrations should use `read_public_link`.
+Compatibility alias retained for already-connected LTA clients. New integrations should use `read_public_link`.
 
 ## Source completeness
 
-Link2AI does not intentionally truncate a supported source because of a product-defined token, page-count, discussion-count, or video-duration cap.
+LTA does not intentionally truncate a supported source because of a product-defined token, page-count, discussion-count, or video-duration cap.
 
 Account processing units are the product-level source-size budget:
 - video: 1 unit per started processed minute;
 - text: about 1 unit per 2,500 estimated tokens.
 
-If the account cannot afford the complete supported source, Link2AI stops and returns a quota/payment-required state rather than publishing an intentionally partial success.
+If the account cannot afford the complete supported source, LTA stops and returns a quota/payment-required state rather than publishing an intentionally partial success.
 
 MCP delivery is paginated at up to 50,000 characters per response. This is transport pagination, not source-ingestion truncation.
 
-If an upstream platform itself exposes only partial data, Link2AI marks the source as partial/unverified rather than presenting it as complete.
+If an upstream platform itself exposes only partial data, LTA marks the source as partial/unverified rather than presenting it as complete.
 
 ## Supported source categories
 
@@ -111,20 +111,20 @@ Reddit is deliberately not advertised until approved Reddit Data API OAuth crede
 
 ## Data and actions
 
-Link2AI reads public-source content requested by the user. It does not post, like, follow, edit, delete, send messages, or mutate content on source platforms.
+LTA reads public-source content requested by the user. It does not post, like, follow, edit, delete, send messages, or mutate content on source platforms.
 
-Link2AI account authentication, plan, quota, billing state and temporary processing jobs are handled on Link2AI infrastructure according to the published privacy policy and terms.
+LTA account authentication, plan, quota, billing state and temporary processing jobs are handled on LTA infrastructure according to the published privacy policy and terms.
 
 ## Requested Catalog UX
 
-Catalog name: **Link2AI**
+Catalog name: **LTA**
 
 Short description: **Read public links Grok cannot reliably access.**
 
 Connection:
-1. User chooses Link2AI in the Grok Connector Catalog.
-2. Grok starts Link2AI OAuth.
-3. User signs in / authorizes Link2AI.
+1. User chooses LTA in the Grok Connector Catalog.
+2. Grok starts LTA OAuth.
+3. User signs in / authorizes LTA.
 4. Connector is ready in Grok.
 
 No user-visible MCP URL configuration should be required.
@@ -133,13 +133,13 @@ No user-visible MCP URL configuration should be required.
 
 Catalog publication is not considered complete until a normal Grok consumer account can:
 
-1. find Link2AI in the standard Connector Catalog;
-2. connect via Link2AI OAuth without manual MCP configuration;
+1. find LTA in the standard Connector Catalog;
+2. connect via LTA OAuth without manual MCP configuration;
 3. ask a question that depends on an exact supported public URL;
-4. have Grok invoke Link2AI when native source access is insufficient;
+4. have Grok invoke LTA when native source access is insufficient;
 5. receive the correct source identity and source content;
 6. continue long results until required context is delivered;
-7. receive a clear quota/payment-required result when full processing exceeds the Link2AI balance;
+7. receive a clear quota/payment-required result when full processing exceeds the LTA balance;
 8. reuse the same source in follow-up questions without unnecessary reprocessing or double charging;
 9. compare multiple links without collapsing source attribution;
 10. answer timestamp-specific video questions from the existing processed job without re-reading the video;
