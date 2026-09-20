@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 process.env.NODE_ENV='production';
 process.env.DATABASE_URL='postgres://127.0.0.1:1/link2ai';
 process.env.PUBLIC_BASE_URL='https://link2ai.example';
-process.env.PUBLIC_BRAND_NAME='Link2AI';
+process.env.PUBLIC_BRAND_NAME='LTA';
 process.env.APP_SECRET='01234567890123456789012345678901';
 
 const auth=await import('../dist/src/auth/service.js');
