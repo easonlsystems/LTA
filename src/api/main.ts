@@ -15,6 +15,7 @@ import { getUsageSnapshot } from '../quota/service.js';
 import { trackWebsiteEvent, trackWebsiteVisit } from '../analytics/visitors.js';
 import { recordActivationEvent } from '../analytics/product.js';
 import { logErrorEvent, logEvent } from '../util/log.js';
+import { registerPublicApiRoutes } from './publicApi.js';
 
 const allowedPublicHosts=publicHostAllowlist(env().PUBLIC_BASE_URL,[process.env.RAILWAY_PUBLIC_DOMAIN??'']);
 const redditOAuthReady=Boolean(env().REDDIT_CLIENT_ID&&env().REDDIT_CLIENT_SECRET);
@@ -1076,6 +1077,7 @@ app.get('/terms',async(_req,reply)=>reply.type('text/html').send(legalPage('Term
 
 await registerAuthRoutes(app);
 await registerBillingRoutes(app);
+await registerPublicApiRoutes(app);
 
 app.setErrorHandler((err,req,reply)=>{
   logErrorEvent(req.url.startsWith('/mcp/openai')?'openai_mcp_request_error':'api_request_error',err,{
