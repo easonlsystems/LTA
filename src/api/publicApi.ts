@@ -133,7 +133,7 @@ export async function registerPublicApiRoutes(app:FastifyInstance):Promise<void>
       return sendResult(reply,result);
     }catch(error){
       const err=asLink2AIError(error);
-      return reply.code(err.httpStatus??400).send({error:err.code,message:err.message,retryable:Boolean(err.retryable)});
+      return reply.code(err.status??400).send({error:err.code,message:err.message,retryable:Boolean(err.retryable)});
     }
   });
 
@@ -146,7 +146,7 @@ export async function registerPublicApiRoutes(app:FastifyInstance):Promise<void>
       return sendResult(reply,result);
     }catch(error){
       const err=asLink2AIError(error);
-      return reply.code(err.httpStatus??404).send({error:err.code,message:err.message,retryable:Boolean(err.retryable)});
+      return reply.code(err.status??404).send({error:err.code,message:err.message,retryable:Boolean(err.retryable)});
     }
   });
 
