@@ -22,8 +22,9 @@ assert.match(docs,/one unit per started processed minute/);
 assert.match(docs,/roughly one unit per 2,500 estimated source tokens/);
 assert.match(docs,/cache hits[^]*must not double-charge/);
 assert.match(main,/siteShell\(developerDocs\(base\)/);
-assert.match(main,/sim-answer sim-fail show/,'homepage comparison must not look unloaded before interaction');
-assert.match(main,/resetDemo\(false,true\)/,'initial homepage state must render a meaningful preview');
+assert.doesNotMatch(main,/sim-answer sim-fail show/,'homepage comparison must not preload the completed failure state');
+assert.match(main,/id="sim-comparison-panels"[^>]*hidden/,'homepage comparison must stay closed before interaction');
+assert.match(main,/resetDemo\(false,false\)/,'initial homepage state must wait for the user to run the comparison');
 assert.match(billing,/data-api-key-id/,'one-time API key page must expose its non-secret key id for lifecycle management');
 
 for(const required of ['/auth/reviewer','/account/api-keys','/v1/usage','/v1/sources','/v1/read','/v1/jobs/','/account/api-keys/revoke']){
