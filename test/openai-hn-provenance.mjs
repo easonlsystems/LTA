@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 
 const [cacheSource,serviceSource]=await Promise.all([
   readFile(new URL('../src/worker/cache.ts',import.meta.url),'utf8'),
-  readFile(new URL('../src/mcp/service.ts',import.meta.url),'utf8')
+  readFile(new URL('../src/source/service.ts',import.meta.url),'utf8')
 ]);
 
 assert.match(

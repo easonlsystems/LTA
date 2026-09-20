@@ -4,7 +4,7 @@ const [linkSource,limitsSource,mcpSource,mcpServiceSource,apiSource,authWrapperS
   readFile(new URL('../src/content/linkText.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/content/limits.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/mcp/server.ts',import.meta.url),'utf8'),
-  readFile(new URL('../src/mcp/service.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/source/service.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/api/main.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/auth/routes.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/auth/routes.base.ts',import.meta.url),'utf8'),
@@ -18,7 +18,7 @@ const [linkSource,limitsSource,mcpSource,mcpServiceSource,apiSource,authWrapperS
   readFile(new URL('../src/billing/lemon.ts',import.meta.url),'utf8')
 ]);
 const authSource=authWrapperSource+'\n'+authBaseSource;
-const policySource=await readFile(new URL('../src/mcp/policy.ts',import.meta.url),'utf8');
+const policySource=await readFile(new URL('../src/source/policy.ts',import.meta.url),'utf8');
 const xResolverSource=await readFile(new URL('../src/resolvers/xSyndication.ts',import.meta.url),'utf8');
 const xResolverPureSource=await readFile(new URL('../src/resolvers/xSyndicationPure.ts',import.meta.url),'utf8');
 const activationSource=await readFile(new URL('../src/analytics/product.ts',import.meta.url),'utf8');
