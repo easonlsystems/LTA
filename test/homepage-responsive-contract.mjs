@@ -23,7 +23,9 @@ assert.match(source,/data-sim-source="instagram"[^>]*class="[^"]*active|class="[
 assert.doesNotMatch(source,/Simulated Claude conversation/,'general comparison must stay AI-client neutral');
 assert.match(source,/Same AI assistant · same public link/);
 assert.match(source,/https:\/\/www\.instagram\.com\/reel\/C9xDemoLink2AI\//,'homepage comparison should show a plausible fake Reel URL');
-assert.match(source,/<div class="sim-chat-user"><span>You<\/span><code class="sim-user-link">https:\/\/www\.instagram\.com\/reel\/C9xDemoLink2AI\/<\/code><p class="sim-user-question">Summarize this Instagram Reel\.<\/p><\/div>/,'each comparison chat should show link + prompt as the same user message');
+assert.match(source,/<article class="sim-panel without">[\s\S]*?<div class="sim-chat-user"><span>You<\/span><code class="sim-user-link">https:\/\/www\.instagram\.com\/reel\/C9xDemoLink2AI\/<\/code><p class="sim-user-question">Summarize this Instagram Reel\.<\/p><\/div>/,'Without Link2AI chat should show the fake Reel URL plus prompt');
+assert.match(source,/<article class="sim-panel with">[\s\S]*?<div class="sim-chat-user"><span>You<\/span><p class="sim-user-question">Summarize this Instagram Reel\.<\/p><\/div>/,'With Link2AI chat should keep the original prompt-only layout');
+assert.doesNotMatch(source,/<div class="sim-prompt-card">[\s\S]*?sim-prompt-link[^>]*>https:\/\/www\.instagram\.com\/reel\/C9xDemoLink2AI\//,'top prompt should not show the fake Reel URL');
 assert.match(source,/qa\('\.sim-user-link'\)\.forEach/,'source switching must update the visible example link');
 assert.match(source,/state\.opened=true;const panels=q\('#sim-comparison-panels'\);if\(panels\)panels\.hidden=false/,'clicking the comparison CTA must reveal the panels');
 assert.match(source,/resetDemo\(false,false\);\s*\}\)\(\);/,'homepage must initialize the comparison closed');
