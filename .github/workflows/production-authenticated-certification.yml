@@ -25,4 +25,5 @@ jobs:
           LINK2AI_CERT_EMAIL: ${{ secrets.LINK2AI_CERT_EMAIL }}
           LINK2AI_CERT_PASSWORD: ${{ secrets.LINK2AI_CERT_PASSWORD }}
           LINK2AI_CERT_SOURCE_URL: ${{ secrets.LINK2AI_CERT_SOURCE_URL }}
+          LINK2AI_EXPECTED_REVISION: ${{ github.sha }}
         run: node test/production-authenticated-cert.mjs
