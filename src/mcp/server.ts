@@ -155,6 +155,9 @@ function userIdFromContext(ctx:Link2AIHandlerContext):string{
   if(typeof id!=='string'||!id)throw new Error('Authenticated Link2AI user is missing.');
   return id;
 }
+function clientSourceFromContext(ctx:Link2AIHandlerContext,profile:DistributionProfile){
+  return normalizeClientSource(ctx?.http?.authInfo?.extra?.clientSource??(profile==='openai'?'chatgpt':'mcp'));
+}
 
 function kindFor(result:ToolJobResult):'video'|'post'|'page'{
   if(result.transcript_source==='post')return 'post';
