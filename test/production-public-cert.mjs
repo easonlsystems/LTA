@@ -94,7 +94,7 @@ await eventually('production revision availability',async()=>{
 }
 
 for(const [path,pattern] of [
-  ['/developers',/Public REST API/],
+  ['/developers',/Connect LTA your way\./],
   ['/connect',/Using Grok or another Remote MCP client\?/],
   ['/sources',/Supported sources/],
   ['/privacy',/API-key hashes and non-secret key prefixes/]
