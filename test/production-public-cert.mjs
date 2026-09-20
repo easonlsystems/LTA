@@ -41,6 +41,9 @@ await eventually('production revision availability',async()=>{
   assert.equal(home.response.status,200);
   assert.match(home.text,/Source infrastructure for AI/);
   assert.match(home.text,/Use the API/);
+  assert.match(home.text,/id="sim-run"[^>]*aria-expanded="false"[^>]*aria-controls="sim-comparison-panels"/,'homepage comparison CTA must start collapsed');
+  assert.match(home.text,/id="sim-comparison-panels"[^>]*hidden/,'homepage comparison panels must be hidden on first paint');
+  assert.doesNotMatch(home.text,/sim-answer sim-fail show/,'homepage must not preload the completed comparison');
 
   const developers=await request('/developers');
   assert.equal(developers.response.status,200);
@@ -54,6 +57,14 @@ await eventually('production revision availability',async()=>{
   const data=JSON.parse(text);
   assert.equal(data.ok,true);
   assert.equal(data.revision,expectedRevision);
+}
+
+{
+  const {response,text}=await request('/home.js?v=click-to-reveal-cert');
+  assert.equal(response.status,200);
+  assert.match(response.headers.get('content-type')??'',/javascript/);
+  assert.match(text,/resetDemo\(false,false\)/,'production homepage JS must initialize the comparison closed');
+  assert.match(text,/state\.opened=true;const panels=q\('#sim-comparison-panels'\);if\(panels\)panels\.hidden=false/,'production homepage JS must reveal panels only from the comparison interaction');
 }
 
 {
