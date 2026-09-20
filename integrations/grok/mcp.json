@@ -1,0 +1,14 @@
+{
+  "server_url": "https://api-production-0383e.up.railway.app/mcp",
+  "server_label": "link2ai",
+  "server_description": "Read supported public URLs into AI-ready source context with source identity, completeness and provenance metadata.",
+  "allowed_tools": [
+    "read_public_link",
+    "read_public_links",
+    "get_transcript_result",
+    "get_video_time_range",
+    "find_in_link",
+    "get_video_map",
+    "get_usage"
+  ]
+}

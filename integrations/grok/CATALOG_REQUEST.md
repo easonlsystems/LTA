@@ -12,11 +12,11 @@ Normal users must not need to copy an MCP URL, enable a developer mode, create a
 
 ## Product
 
-Link2AI is a source-reading layer for AI systems. It retrieves AI-readable context from supported public links when the host AI cannot reliably access the original source itself.
+Link2AI is source infrastructure for AI systems. It turns supported public URLs selected by the user into AI-ready source context with source identity, completeness and provenance metadata.
 
 Primary use case:
 
-`user provides exact public URL → Grok native access is missing/incomplete → Link2AI reads exact source → Grok answers from returned source context`
+`user provides exact public URL → Link2AI reads the supported source through the shared source engine → Grok uses the returned source context`
 
 Link2AI does not provide broad crawling, profile/feed scraping, private-account access, paywall bypassing, DRM bypassing, or source-platform write actions.
 
@@ -44,7 +44,7 @@ Terms:
 
 ## Authentication
 
-OAuth 2.1 authorization-code flow with PKCE.
+OAuth 2.0 authorization-code flow with PKCE.
 
 Resource scope:
 
@@ -148,11 +148,11 @@ Catalog publication is not considered complete until a normal Grok consumer acco
 
 ## Distribution status
 
-As of 2026-09-18, xAI publicly documents:
+As of 2026-09-20, xAI publicly documents:
 - the Grok Connector Catalog for pre-configured OAuth third-party connectors;
 - Custom MCP connectors for manually supplied servers.
 
-The public documentation does not document a self-service third-party vendor submission schema or Catalog publishing portal. Therefore the remaining non-technical blocker is xAI distribution approval / onboarding.
+The public documentation describes the Connector Catalog and Custom MCP connectors, but does not document a self-service third-party vendor publishing flow for adding a new pre-configured OAuth connector. Therefore Catalog publication still requires xAI distribution approval / onboarding.
 
 Official references:
 - https://docs.x.ai/grok/connectors
