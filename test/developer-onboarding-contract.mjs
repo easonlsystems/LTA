@@ -29,7 +29,7 @@ assert.match(billing,/data-api-key-id/,'one-time API key page must expose its no
 for(const required of ['/auth/reviewer','/account/api-keys','/v1/usage','/v1/sources','/v1/read','/v1/jobs/','/account/api-keys/revoke']){
   assert.ok(cert.includes(required),`production cert must exercise ${required}`);
 }
-assert.doesNotMatch(cert,/web\(['\"]\\/auth\\/password\\/login['\"]\)/,'production certification must remain compatible with Google-enabled deployments');
+assert.ok(!cert.includes("web('/auth/password/login'")&&!cert.includes('web("/auth/password/login"'),'production certification must remain compatible with Google-enabled deployments');
 assert.match(cert,/headers\.set\('origin',base\)/,'browser-form POSTs must satisfy production same-origin protection');
 assert.match(cert,/revoked\.response\.status,401/);
 assert.doesNotMatch(cert,/console\.log\([^)]*(apiKey|password|cookie)/i,'certification must never log credentials');
