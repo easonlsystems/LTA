@@ -851,7 +851,7 @@ export async function exchangeRefreshToken(input:{refreshToken:string;clientId:s
   finally{ client.release(); }
 }
 
-export type Link2AIAuthInfo = AuthInfo & { extra: { userId:string; clientSource?:string } };
+export type Link2AIAuthInfo = AuthInfo & { extra: { userId:string; clientSource?:string; clientName?:string } };
 
 function bearerTokenFromAuthorization(authorization?:string):string|null{
   if(!authorization)return null;
@@ -919,9 +919,10 @@ export async function diagnoseBearerAuth(authorization?:string,expectedResource=
 export async function authInfoFromBearer(authorization?: string,expectedResource=mcpResource()): Promise<Link2AIAuthInfo | null> {
   const token=bearerTokenFromAuthorization(authorization);
   if (!token) return null;
-  const r = await pool.query<{user_id:string;client_id:string;scope:string;expires_at:Date}>(
-    `SELECT t.user_id,t.client_id,t.scope,t.expires_at
+  const r = await pool.query<{user_id:string;client_id:string;client_name:string|null;scope:string;expires_at:Date}>(
+    `SELECT t.user_id,t.client_id,c.client_name,t.scope,t.expires_at
      FROM oauth_access_tokens t JOIN users u ON u.id=t.user_id
+     LEFT JOIN oauth_clients c ON c.client_id=t.client_id
      WHERE t.token_hash=$1 AND t.resource=$2 AND t.revoked_at IS NULL AND t.expires_at > now()
        AND u.account_status <> 'disabled'`, [sha256(token),expectedResource]
   );
@@ -935,6 +936,6 @@ export async function authInfoFromBearer(authorization?: string,expectedResource
     scopes,
     expiresAt:Math.floor(new Date(row.expires_at).getTime()/1000),
     resource:new URL(expectedResource),
-    extra:{userId:row.user_id}
+    extra:{userId:row.user_id,...(row.client_name?{clientName:row.client_name}:{})}
   };
 }
