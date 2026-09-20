@@ -397,8 +397,7 @@ nav.scrolled:not(.home-nav){background:rgba(248,247,252,.88)!important;backdrop-
 .home-only .clarity-strip{margin-top:24px}
 .home-only .experience-hero-cta{margin-top:20px}
 @media(max-width:1279px) and (min-width:901px){
-  .home-only .home-inner,.home-only .home-nav{width:min(calc(100vw - 48px),1120px)}
-  .home-only .experience-hero{padding-top:104px}
+  .home-only .home-inner,.home-only .home-nav{width:min(calc(100vw - 48px),1120px)}  .home-only .experience-hero{padding-top:104px}
   .home-only .experience-hero h1{font-size:clamp(54px,5.6vw,68px);max-width:920px}
   .home-only .experience-copy{max-width:920px}
   .home-only .sim-tab{padding:8px 11px;font-size:11px}
@@ -448,9 +447,7 @@ app.get('/start',async(req,reply)=>{
   return reply.redirect(claudeInstallUrl());
 });
 app.get('/connect/start',async(req,reply)=>{
-  await trackWebsiteEvent(req,'connect_install_click','/connect');
-  const current=await userFromSessionCookie(req.headers.cookie).catch(()=>null);
-  if(current?.id)await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude'}});
+  await trackWebsiteEvent(req,'connect_install_click','/connect');  const current=await userFromSessionCookie(req.headers.cookie).catch(()=>null);  if(current?.id)await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude'}});
   return reply.redirect(claudeInstallUrl());
 });
 
@@ -460,9 +457,9 @@ app.get('/',async(req,reply)=>{
     <section class="experience-hero" id="simulation">
       <div class="home-inner">
         <div class="experience-copy reveal">
-          <span class="experience-kicker">Public links → AI-readable source</span>
+          <span class="experience-kicker">Your AI got the link. Not the content.</span>
           <h1><span class="hero-line hero-line-plain">Paste the link.</span><span class="hero-line hero-line-accent">Let your AI actually read it.</span></h1>
-          <p class="experience-lede">Connect LTA once. Then use Instagram Reels, YouTube, X, GitHub, webpages and PDFs inside your AI without manually copying the content first.</p>
+          <p class="experience-lede">Public links often arrive as a URL, partial metadata, or nothing useful. LTA brings supported Reels, videos, posts, developer threads, webpages and PDFs into your AI so you can ask about what is actually there.</p>
         </div>
         <div class="sim-shell reveal" id="comparison-demo" aria-label="Interactive LTA comparison simulation">
           <div class="sim-tabs" role="tablist" aria-label="Choose a source for the comparison">
@@ -496,11 +493,11 @@ app.get('/',async(req,reply)=>{
           </div>
           <div class="sim-conclusion" id="sim-conclusion" hidden>Same AI. Same link. <strong>Missing context fixed.</strong></div>
         </div>
-        <div class="experience-hero-cta reveal"><a class="btn purple" href="/start?from=hero" target="_blank" rel="noopener">Add LTA to Claude →</a><a class="btn alt" href="/developers#mcp">Use MCP</a><a class="btn alt" href="/account">API key</a><span class="micro">10 processing units free · No card · Failed reads cost 0</span></div>
+        <div class="experience-hero-cta reveal"><a class="btn purple" href="/start?from=hero" target="_blank" rel="noopener">Add LTA to Claude →</a><a class="btn alt" href="/developers#mcp">Use MCP</a><a class="btn alt" href="/account">API key</a><span class="micro">Public links → AI-readable source · About 30 seconds · 10 free units · Video ≈ 1 unit/min · No card · No API key</span></div>
         <div class="clarity-strip reveal" aria-label="How to start using LTA">
-          <div class="clarity-item"><b>1</b><div><strong>Add to Claude</strong><span>Name and MCP URL are prefilled.</span></div></div>
-          <div class="clarity-item"><b>2</b><div><strong>Sign in when asked</strong><span>LTA authorization happens during the connection.</span></div></div>
-          <div class="clarity-item"><b>3</b><div><strong>Paste the link</strong><span>Ask Claude normally. LTA supplies the source.</span></div></div>
+          <div class="clarity-item"><b>1</b><div><strong>Open the prefilled connector</strong><span>One click opens Claude's Add custom connector screen with LTA's name and MCP URL already filled in. No Directory search.</span></div></div>
+          <div class="clarity-item"><b>2</b><div><strong>Sign in only if asked</strong><span>Claude sends you to LTA only when OAuth authorization is needed. No API key or client secret.</span></div></div>
+          <div class="clarity-item"><b>3</b><div><strong>Turn it on, then paste</strong><span>Back in the chat: + → Connectors → LTA. Then paste the public link and ask normally.</span></div></div>
         </div>
       </div>
     </section>
@@ -581,50 +578,77 @@ app.get('/connect',async(req,reply)=>{
   return reply.type('text/html').send(siteShell(`<main id="main-content">
     <section class="connect-hero connect-fast">
       <span class="badge"><span class="badge-dot"></span>Claude connector</span>
-      <h1>Add LTA to Claude.</h1>
-      <p>One click opens Claude with LTA's name and MCP URL prefilled. Claude will ask you to sign in to LTA only when authorization is needed.</p>
-      <div class="guide-status"><span>10 units free</span><span>No card</span><span>OAuth sign-in</span></div>
+      <h1>Add LTA to Claude. Start using it in about 30 seconds.</h1>
+      <p>No Connector Directory search. No MCP URL to copy. No API key. One click opens Claude's Add custom connector screen with LTA already filled in.</p>
+      <div class="guide-status"><span>About 30 seconds</span><span>10 units free</span><span>No card</span><span>No API key</span></div>
       <div class="setup-cta" style="justify-content:center;margin-top:26px">
         <a class="btn purple" id="claude-install" href="/connect/start" target="_blank" rel="noopener">Add LTA to Claude →</a>
       </div>
-      <p class="micro" id="connect-state">After Claude opens, confirm the connector and finish LTA sign-in. Then paste a supported public link into Claude and ask normally.</p>
+      <p class="micro" id="connect-state">After Claude opens: confirm LTA → sign in if asked → return to your chat → + → Connectors → LTA.</p>
     </section>
 
-    <section class="setup-shell connect-help-shell">
-      <div class="setup-main connect-help">
-        <details>
-          <summary><strong>Need help connecting?</strong><span>Show the steps</span></summary>
-          <div class="connect-help-body">
-            <ol>
-              <li>Confirm the prefilled <strong>LTA</strong> connector in Claude.</li>
-              <li>Finish LTA sign-in and press <strong>Connect and return</strong> when authorization appears.</li>
-              <li>Back in the Claude conversation, open <strong>+ → Connectors</strong> if LTA is not already available.</li>
-            </ol>
-            <p>If Claude still does not load it, open <strong>+ → Connectors → Tool access</strong> and choose <strong>Tools already loaded</strong>.</p>
-            <p><a href="/support"><strong>Open support →</strong></a></p>
-          </div>
-        </details>
-        <details>
-          <summary><strong>Using Grok or another Remote MCP client?</strong><span>Show MCP URL</span></summary>
-          <div class="connect-help-body">
-            <code style="display:block;padding:13px 14px;border-radius:12px;background:#17151f;color:#fff;overflow-wrap:anywhere">${mcpUrl}</code>
-            <p>Remote MCP · OAuth. No LTA API key goes in the connector.</p>
-          </div>
-        </details>
+    <section class="setup-shell connect-guide-shell">
+      <div class="setup-main">
+        <h2>Three steps. No hunting through a directory.</h2>
+        <p>The install button handles the part that confused early users: it opens Claude's custom-connector screen directly, with the LTA name and MCP URL prefilled.</p>
+        <div class="connect-step-grid">
+          <div class="connect-step"><span class="connect-step-num">1</span><h3>Confirm the prefilled connector.</h3><p>Do not search Claude's Connectors Directory. The LTA name and MCP URL are already there; press <strong>Add</strong> or <strong>Connect</strong>.</p></div>
+          <div class="connect-step"><span class="connect-step-num">2</span><h3>Sign in only when Claude asks.</h3><p>Finish LTA OAuth and choose <strong>Connect and return</strong>. Your trial, usage and plan stay with the same LTA account.</p></div>
+          <div class="connect-step"><span class="connect-step-num">3</span><h3>Make LTA available in this chat.</h3><p>Return to Claude, open <strong>+ → Connectors → LTA</strong>, then paste a supported public link into the normal message box. <strong>Connected means authorization is finished</strong>; this step makes sure LTA is actually available in the conversation. <strong>Connected ✓ Authorization is finished.</strong> One Claude-side step remains.</p></div>
+        </div>
+
+        <div class="connect-test">
+          <div><span class="connect-eyebrow">First test</span><h3>Your first 30-second test.</h3><p>Paste this real Reel into Claude and ask: <strong>“Summarize this Instagram Reel and list the main claims.”</strong></p><code>https://www.instagram.com/reel/Ddx6Q_MJNyg/</code></div>
+          <a class="btn alt sm" href="/examples">See more examples</a>
+        </div>
+
+        <div class="connect-explain-grid">
+          <div class="connect-fact"><span class="connect-eyebrow">What LTA reads</span><h3>Video understanding today</h3><p>LTA reads spoken or captioned content and available metadata. It does not yet analyze visual-only frames, diagrams or slides that are never described in speech or captions.</p></div>
+          <div class="connect-fact"><span class="connect-eyebrow">How units work</span><h3>10 units is a processing budget, not 10 links.</h3><p>Video uses 1 unit per started processed minute. A 19-minute video needs 19 units. If you only have 9, LTA stops before processing and charges 0. Text uses roughly 1 unit per 2,500 estimated tokens; failed or unsupported reads also cost 0.</p></div>
+        </div>
+
+        <div class="connect-help-title"><strong>Need help connecting?</strong><span>The fixes below stay out of the main three-step path.</span></div><div class="setup-main connect-help">
+          <details>
+            <summary><strong>LTA is connected, but Claude still is not using it?</strong><span>Show the fix</span></summary>
+            <div class="connect-help-body">
+              <p>Open <strong>+ → Connectors → Tool access</strong> and choose <strong>Tools already loaded</strong>. This makes LTA available from the start of the conversation instead of waiting for Claude to load it later.</p>
+              <img loading="lazy" decoding="async" src="/guide/claude-tool-access.png" alt="Claude Connectors Tool access menu showing where to load LTA in a conversation">
+              <p><a href="/support"><strong>Open support →</strong></a></p>
+            </div>
+          </details>
+          <details>
+            <summary><strong>Using Grok or another Remote MCP client?</strong><span>Show MCP URL</span></summary>
+            <div class="connect-help-body">
+              <code class="connect-mcp-url">${mcpUrl}</code>
+              <p>Remote MCP · OAuth. No LTA API key goes in the connector.</p>
+            </div>
+          </details>
+        </div>
       </div>
     </section>
 
-    <script>(()=>{const button=document.getElementById('claude-install');const state=document.getElementById('connect-state');let since=Number(sessionStorage.getItem('link2ai_connect_started')||0);let timer=null;const check=async()=>{if(!since)return;try{const response=await fetch('/api/connect/status?since='+encodeURIComponent(String(since)),{cache:'no-store',credentials:'same-origin'});if(!response.ok)return;const data=await response.json();if(data.connected){if(state)state.textContent='Connected ✓ Return to Claude and paste a supported public link.';clearInterval(timer);return;}if(data.authenticated&&state)state.textContent='Signed in. Finish Claude authorization, then return to Claude.';}catch{}};button?.addEventListener('click',()=>{since=Date.now();sessionStorage.setItem('link2ai_connect_started',String(since));if(state)state.textContent='Claude opened. Confirm LTA and finish authorization when prompted.';clearInterval(timer);timer=setInterval(check,1500);setTimeout(check,500);});if(since){timer=setInterval(check,1500);check();}})();</script>
+    <script>(()=>{const button=document.getElementById('claude-install');const state=document.getElementById('connect-state');let since=Number(sessionStorage.getItem('link2ai_connect_started')||0);let timer=null;const check=async()=>{if(!since)return;try{const response=await fetch('/api/connect/status?since='+encodeURIComponent(String(since)),{cache:'no-store',credentials:'same-origin'});if(!response.ok)return;const data=await response.json();if(data.connected){if(state)state.textContent='Connected ✓ Return to Claude. Authorization is finished → + → Connectors → LTA, then paste a supported public link.';clearInterval(timer);return;}if(data.authenticated&&state)state.textContent='Signed in. Finish Claude authorization, choose Connect and return, then enable LTA under + → Connectors.';}catch{}};button?.addEventListener('click',()=>{since=Date.now();sessionStorage.setItem('link2ai_connect_started',String(since));if(state)state.textContent='Claude opened. Confirm the prefilled LTA connector; sign in only if Claude asks.';clearInterval(timer);timer=setInterval(check,1500);setTimeout(check,500);});if(since){timer=setInterval(check,1500);check();}})();</script>
 
     <style>
       .connect-fast{padding-bottom:24px}.connect-fast .setup-cta{display:flex}.connect-fast .btn{min-width:230px}
-      .connect-help-shell{margin-top:10px}.connect-help{padding:0;overflow:hidden;background:rgba(255,255,255,.84)}
+      .connect-guide-shell{margin-top:10px}.connect-guide-shell>.setup-main{background:rgba(255,255,255,.84)}
+      .connect-step-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:22px}
+      .connect-step{border:1px solid var(--line);border-radius:20px;background:#fff;padding:20px;min-width:0}
+      .connect-step-num{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:#1c1922;color:#fff;font-size:12px;font-weight:900;margin-bottom:15px}
+      .connect-step h3,.connect-fact h3,.connect-test h3{margin:0 0 8px;font-size:18px}.connect-step p,.connect-fact p,.connect-test p{margin:0;color:var(--muted);font-size:14px;line-height:1.6}
+      .connect-test{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-top:16px;padding:20px;border:1px solid rgba(111,84,232,.18);border-radius:20px;background:linear-gradient(180deg,#fff,#faf8ff)}
+      .connect-test>div{min-width:0}.connect-test code{display:block;margin-top:12px;padding:10px 12px;border-radius:10px;background:#f3f0f8;overflow-wrap:anywhere;font-size:12px}
+      .connect-eyebrow{display:block;margin-bottom:8px;font-size:10px;text-transform:uppercase;letter-spacing:.12em;font-weight:900;color:#7a7086}
+      .connect-explain-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}
+      .connect-fact{border:1px solid var(--line);border-radius:20px;background:#fff;padding:20px}
+      .connect-help-title{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-top:18px;padding:0 4px 8px;font-size:13px}.connect-help-title span{color:var(--muted);font-size:11px}.connect-help{margin-top:0;padding:0;overflow:hidden;border:1px solid var(--line);border-radius:20px;background:rgba(255,255,255,.86)}
       .connect-help details{border-bottom:1px solid var(--line)}.connect-help details:last-child{border-bottom:0}
       .connect-help summary{list-style:none;display:flex;justify-content:space-between;gap:18px;align-items:center;padding:18px 20px;cursor:pointer}
       .connect-help summary::-webkit-details-marker{display:none}.connect-help summary span{font-size:11px;color:var(--muted)}
-      .connect-help-body{padding:0 20px 20px;color:var(--muted);font-size:13px;line-height:1.6}
-      .connect-help-body ol{margin:0;padding-left:20px}.connect-help-body li{margin:7px 0}
-      @media(max-width:620px){.connect-fast{padding-top:48px}.connect-fast .setup-cta{display:block}.connect-fast .btn{width:100%;min-width:0}.connect-help summary{align-items:flex-start}}
+      .connect-help-body{padding:0 20px 20px;color:var(--muted);font-size:13px;line-height:1.6}.connect-help-body img{display:block;width:100%;max-width:760px;margin:14px auto 0;border:1px solid var(--line);border-radius:16px}
+      .connect-mcp-url{display:block;padding:13px 14px;border-radius:12px;background:#17151f;color:#fff;overflow-wrap:anywhere}
+      @media(max-width:820px){.connect-step-grid,.connect-explain-grid{grid-template-columns:1fr}.connect-test{align-items:flex-start;flex-direction:column}}
+      @media(max-width:620px){.connect-fast{padding-top:48px}.connect-fast .setup-cta{display:block}.connect-fast .btn{width:100%;min-width:0}.connect-help summary{align-items:flex-start}.connect-test .btn{width:100%}}
     </style>
   </main>`, `Connect ${env().PUBLIC_BRAND_NAME} to Claude`, '/connect'));
 });
@@ -797,8 +821,7 @@ app.post('/founder/lock',async(req,reply)=>{
 
 app.get('/founder',async(req,reply)=>{
   const founder=await requireFounder(req,reply,'/founder',true);
-  if(!founder)return;
-  const founderEmail=String(founder.email??'').trim().toLowerCase();
+  if(!founder)return;  const founderEmail=String(founder.email??'').trim().toLowerCase();
   const founderCsrf=csrfTokenFromSessionCookie(req.headers.cookie)??'';
 
   const q=String((req.query as {q?:string})?.q??'').trim().slice(0,160);
@@ -872,10 +895,8 @@ app.get('/founder',async(req,reply)=>{
       (SELECT COUNT(*) FROM website_visitors WHERE signed_up_at IS NOT NULL)::text AS signed_up_total,
       (SELECT COUNT(DISTINCT v.visitor_id) FROM website_visitors v JOIN usage_ledger l ON l.user_id=v.user_id WHERE v.signed_up_at IS NOT NULL)::text AS activated_visitors_total,
       (SELECT COUNT(*) FROM website_visitors v LEFT JOIN users u ON u.id=v.user_id WHERE v.last_seen_at>now()-interval '7 days' AND COALESCE(lower(u.email),'')<>$1 AND COALESCE(u.analytics_excluded,false)=false)::text AS non_founder_7d,
-      (SELECT COUNT(*) FROM website_visitors WHERE analytics_source='historical_backfill')::text AS historical_visitors_total,
-      (SELECT COUNT(*) FROM website_pageviews WHERE source_key IS NOT NULL)::text AS historical_pageviews_total,
-      (SELECT MIN(created_at) FROM website_pageviews) AS tracking_started_at,
-      GREATEST(
+      (SELECT COUNT(*) FROM website_visitors WHERE analytics_source='historical_backfill')::text AS historical_visitors_total,      (SELECT COUNT(*) FROM website_pageviews WHERE source_key IS NOT NULL)::text AS historical_pageviews_total,
+      (SELECT MIN(created_at) FROM website_pageviews) AS tracking_started_at,      GREATEST(
         (SELECT MAX(created_at) FROM website_pageviews),
         (SELECT MAX(created_at) FROM usage_ledger),
         (SELECT MAX(created_at) FROM transcript_jobs)
@@ -1197,8 +1218,7 @@ app.get('/privacy',async(_req,reply)=>reply.type('text/html').send(legalPage('Pr
 <h2>Account, API, and billing data</h2><p>${env().PUBLIC_BRAND_NAME} stores the email address used for your account, a salted password hash (never your plaintext password), account/session identifiers, API-key hashes and non-secret key prefixes, plan and quota usage, and identifiers needed to manage a Lemon Squeezy subscription. Full API keys are shown only when created and are not stored in plaintext. To limit repeated free-trial abuse, ${env().PUBLIC_BRAND_NAME} also uses a random first-party browser token associated with trial eligibility. ${env().PUBLIC_BRAND_NAME} does not store card numbers.</p>
 <h2>Website analytics</h2><p>${env().PUBLIC_BRAND_NAME} uses a random first-party browser token to count page views, unique visitors and a small set of product-funnel events such as starting signup or opening the AI setup. When present, LTA may also store UTM campaign fields and only the referring site hostname (not the full referrer URL) so traffic quality can be measured. It does not store an IP address and does not use a third-party advertising or analytics tracker. A one-time historical backfill used existing Railway request logs to estimate visits from before first-party analytics was enabled; only anonymous synthetic visitor IDs, page paths and timestamps were imported, not raw IP addresses or user-agent strings.</p>
 <h2>Retention</h2><p>Downloaded media and derived audio are temporary processing files and are deleted after the job finishes. Source-text/transcript cache is temporary and defaults to 72 hours. Completed and failed job records are retained only as minimal operational/accounting records; stored source URLs and canonical identifiers are scrubbed after the content-retention window. Unpaid pending jobs expire and have their source URL scrubbed after 24 hours.</p>
-<h2>Service providers</h2><p>${env().PUBLIC_BRAND_NAME} may send the minimum data needed to service providers used for hosting, billing, media processing, and optional email authentication. These providers process data under their own terms and privacy policies.</p>
-<h2>What ${env().PUBLIC_BRAND_NAME} does not do</h2><p>LTA does not support private accounts, paid/DRM content or bulk crawling. Scanned image-only PDFs are not OCRed in this release. ${env().PUBLIC_BRAND_NAME} does not sell a source-content corpus and does not intentionally keep raw video, audio or scraped webpages as a content library.</p>`)));
+<h2>Service providers</h2><p>${env().PUBLIC_BRAND_NAME} may send the minimum data needed to service providers used for hosting, billing, media processing, and optional email authentication. These providers process data under their own terms and privacy policies.</p><h2>What ${env().PUBLIC_BRAND_NAME} does not do</h2><p>LTA does not support private accounts, paid/DRM content or bulk crawling. Scanned image-only PDFs are not OCRed in this release. ${env().PUBLIC_BRAND_NAME} does not sell a source-content corpus and does not intentionally keep raw video, audio or scraped webpages as a content library.</p>`)));
 
 app.get('/terms',async(_req,reply)=>reply.type('text/html').send(legalPage('Terms of Service',`
 <h2>Use of the service</h2><p>Use ${env().PUBLIC_BRAND_NAME} only for public content you are authorized to access and process. Do not use the service to bypass private-account controls, authentication, paywalls, DRM, geographic restrictions or other access controls, and do not use it for bulk crawling.</p>
