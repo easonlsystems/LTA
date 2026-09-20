@@ -8,10 +8,10 @@ const pollLimit=Number(process.env.LINK2AI_CERT_POLL_LIMIT||60);
 const pollDelayMs=Number(process.env.LINK2AI_CERT_POLL_DELAY_MS||2000);
 
 if(!base||!email||!password){
-  throw new Error('Authenticated production certification BLOCKED: configure LINK2AI_PRODUCTION_URL, LINK2AI_CERT_EMAIL, and LINK2AI_CERT_PASSWORD as CI secrets.');
+  throw new Error('Authenticated production certification BLOCKED: configure LINK2AI_PRODUCTION_URL, LINK2AI_CERT_EMAIL, and LINK2AI_CERT_PASSWORD as CI secrets. LINK2AI_CERT_EMAIL/PASSWORD must match the production reviewer credentials.');
 }
 
-let cookie='';
+const cookies=new Map();
 let apiKey='';
 let apiKeyId='';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -20,13 +20,27 @@ const hidden=(html,name)=>{
   assert.ok(match,`Expected hidden ${name} field`);
   return match[1].replaceAll('&amp;','&');
 };
+const cookieHeader=()=>[...cookies].map(([name,value])=>`${name}=${value}`).join('; ');
+const rememberCookies=response=>{
+  for(const raw of response.headers.getSetCookie?.()||[]){
+    const first=raw.split(';',1)[0];
+    const index=first.indexOf('=');
+    if(index<=0)continue;
+    const name=first.slice(0,index).trim();
+    const value=first.slice(index+1);
+    if(/(?:^|;)\s*max-age=0(?:;|$)/i.test(raw)||value==='')cookies.delete(name);
+    else cookies.set(name,value);
+  }
+};
 
 async function web(path,options={}){
   const headers=new Headers(options.headers||{});
+  const cookie=cookieHeader();
   if(cookie)headers.set('cookie',cookie);
+  const method=String(options.method||'GET').toUpperCase();
+  if(method!=='GET'&&method!=='HEAD'&&!headers.has('origin'))headers.set('origin',base);
   const response=await fetch(base+path,{redirect:'manual',...options,headers});
-  const setCookies=response.headers.getSetCookie?.()||[];
-  if(setCookies.length)cookie=setCookies.map(value=>value.split(';',1)[0]).join('; ');
+  rememberCookies(response);
   return {response,text:await response.text()};
 }
 
@@ -41,7 +55,7 @@ async function api(path,options={}){
 }
 
 async function revoke(){
-  if(!apiKeyId||!cookie)return;
+  if(!apiKeyId||!cookieHeader())return;
   const account=await web('/account');
   if(account.response.status!==200)return;
   const csrf=hidden(account.text,'csrf');
@@ -52,11 +66,14 @@ async function revoke(){
 }
 
 try{
-  const login=await web('/auth/password/login',{
+  // Production normally has Google sign-in enabled, which intentionally disables
+  // /auth/password/login. Reviewer access remains available specifically for
+  // integration/release verification and is therefore the stable automation path.
+  const login=await web('/auth/reviewer',{
     method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},
     body:new URLSearchParams({email,password,return_to:'/account'})
   });
-  assert.equal(login.response.status,302,'dedicated certification account must sign in');
+  assert.equal(login.response.status,302,'production reviewer certification account must sign in');
 
   const account=await web('/account');
   assert.equal(account.response.status,200);
