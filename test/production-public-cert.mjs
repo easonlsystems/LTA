@@ -71,7 +71,7 @@ await eventually('production revision availability',async()=>{
   assert.match(response.headers.get('content-type')??'',/javascript/);
   assert.match(text,/resetDemo\(false,false\)/,'production homepage JS must initialize the comparison closed');
   assert.match(text,/state\.opened=true;const panels=q\('#sim-comparison-panels'\);if\(panels\)panels\.hidden=false/,'production homepage JS must reveal panels only from the comparison interaction');
-  assert.match(text,/Marcus Lemonis/,'production homepage JS must carry the real Instagram demo result');
+  assert.match(text,/specific claim and supports it with details from the caption and clip/,'production homepage JS must preserve the original With Link2AI Instagram answer');
   assert.match(text,/can’t directly access the Instagram Reel/,'production without-Link2AI copy must explain the Reel access limitation');
   assert.match(text,/paste the caption or describe the clip/,'production failure copy must offer a realistic fallback');
   assert.match(text,/AI assistant/,'production homepage JS must use neutral AI labels');
