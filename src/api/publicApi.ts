@@ -72,6 +72,7 @@ function apiPayload(result:ToolJobResult){
     status:result.status,
     source_type:result.platform,
     source_url:result.source_url,
+    canonical_url:result.canonical_url,
     source_key:result.source_key,
     title:result.title??undefined,
     creator:result.creator??undefined,
@@ -140,6 +141,7 @@ export async function registerPublicApiRoutes(app:FastifyInstance):Promise<void>
   app.get('/v1/jobs/:jobId',async(req,reply)=>{
     const auth=await requireApiKey(req,reply); if(!auth)return;
     const jobId=String((req.params as {jobId?:unknown}).jobId??'');
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(jobId))return reply.code(400).send({error:'invalid_request',message:'jobId must be a UUID.'});
     try{
       const result=await getJobResult(auth.userId,jobId,'default');
       await recordApiRequest(auth.userId,auth.keyId,'GET /v1/jobs/:jobId',result.job_id);
