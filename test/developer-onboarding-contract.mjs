@@ -11,17 +11,10 @@ const [docs,main,billing,apiKeys,cert,workflow]=await Promise.all([
 ]);
 
 for(const required of [
-  'Authorization: Bearer','POST /v1/read','GET /v1/jobs/{id}','GET /v1/usage','GET /v1/sources',
-  '202 processing','200 completed','401','402','422','retry_after_seconds','retryable',
-  'canonical_url','source_completeness','truncation_reason','content_sections_truncated',
-  'metadata','evidence','units_used','remaining_usage_units','refresh','JavaScript','Python'
-])assert.ok(docs.includes(required),`developer docs must explain ${required}`);
+  'Remote MCP','/mcp','REST API','POST /v1/read','Authorization: Bearer &lt;API_KEY&gt;','Generate API key'
+])assert.ok(docs.includes(required),`minimal developer page must expose ${required}`);
 
-assert.match(docs,/id[^]*job_id[^]*compatibility alias/,'job identifier contract must be explicit');
-assert.match(docs,/Failed, unsupported, private, login-required, empty, or inaccessible reads consume/);
-assert.match(docs,/one unit per started processed minute/);
-assert.match(docs,/roughly one unit per 2,500 estimated source tokens/);
-assert.match(docs,/cache hits[^]*must not double-charge/);
+assert.doesNotMatch(docs,/GET \/v1\/jobs\/\{id\}|GET \/v1\/usage|GET \/v1\/sources|202 processing|retry_after_seconds|source_completeness|truncation_reason|JavaScript|Python/,'developer page must not carry the full API reference');
 assert.match(main,/siteShell\(developerDocs\(base\)/);
 assert.doesNotMatch(main,/sim-answer sim-fail show/,'homepage comparison must not preload the completed failure state');
 assert.match(main,/id="sim-comparison-panels"[^>]*hidden/,'homepage comparison must stay closed before interaction');
