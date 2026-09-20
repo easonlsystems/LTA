@@ -26,7 +26,7 @@ function normalizeResource(raw?: string): string {
   let actual: string;
   try { actual = new URL(raw).toString(); } catch { throw new Link2AIError('AUTH_REQUIRED','Invalid OAuth resource.',400); }
   const allowed=new Set([mcpResource(),mcpResource('openai')]);
-  if (!allowed.has(actual)) throw new Link2AIError('AUTH_REQUIRED','OAuth resource does not match a Link2AI MCP server.',400);
+  if (!allowed.has(actual)) throw new Link2AIError('AUTH_REQUIRED','OAuth resource does not match a LTA MCP server.',400);
   return actual;
 }
 
@@ -288,7 +288,7 @@ export async function completeGoogleSignIn(input:{code:string;state:string;cooki
     if(bySub.rowCount){
       const existing=bySub.rows[0];
       if(byEmail.rowCount&&byEmail.rows[0].id!==existing.id){
-        throw new Link2AIError('AUTH_REQUIRED','This Google account conflicts with an existing Link2AI account.',409);
+        throw new Link2AIError('AUTH_REQUIRED','This Google account conflicts with an existing LTA account.',409);
       }
       if(existing.account_status==='disabled')throw new Link2AIError('AUTH_REQUIRED','This account is disabled.',403);
       const updated=await accountClient.query<AuthUser & {account_status:string}>(
@@ -299,7 +299,7 @@ export async function completeGoogleSignIn(input:{code:string;state:string;cooki
     }else if(byEmail.rowCount){
       const existing=byEmail.rows[0];
       if(existing.google_sub&&existing.google_sub!==googleSub){
-        throw new Link2AIError('AUTH_REQUIRED','This Link2AI account is already linked to a different Google account.',409);
+        throw new Link2AIError('AUTH_REQUIRED','This LTA account is already linked to a different Google account.',409);
       }
       if(existing.account_status==='disabled')throw new Link2AIError('AUTH_REQUIRED','This account is disabled.',403);
       const updated=await accountClient.query<AuthUser & {account_status:string}>(
@@ -612,13 +612,13 @@ export async function verifyReviewerLogin(emailRaw:string,password:string,return
 
 export async function beginGuestLogin(existingToken:string|undefined,returnTo:string):Promise<{user:AuthUser;sessionToken:string;deviceToken:string;returnTo:string}>{
   validateReturnTo(returnTo);
-  if(!existingToken||existingToken.length<32||existingToken.length>256)throw new Link2AIError('AUTH_REQUIRED','Create or sign in to your Link2AI account to continue.',410);
+  if(!existingToken||existingToken.length<32||existingToken.length>256)throw new Link2AIError('AUTH_REQUIRED','Create or sign in to your LTA account to continue.',410);
   const deviceToken=existingToken;
   const deviceHash=sha256(`trial-device:${deviceToken}:${env().APP_SECRET}`);
   const r=await pool.query<AuthUser & {account_status:string}>(
     `SELECT u.id,u.email,u.plan,u.account_status FROM trial_device_claims d JOIN users u ON u.id=d.user_id WHERE d.device_hash=$1`,[deviceHash]
   );
-  if(!r.rowCount)throw new Link2AIError('AUTH_REQUIRED','Create or sign in to your Link2AI account to continue.',410);
+  if(!r.rowCount)throw new Link2AIError('AUTH_REQUIRED','Create or sign in to your LTA account to continue.',410);
   if(r.rows[0].account_status==='disabled')throw new Link2AIError('AUTH_REQUIRED','This account is disabled.',403);
   const token=randomToken(32);
   await pool.query(`INSERT INTO web_sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '30 days')`,[r.rows[0].id,sha256(token)]);
