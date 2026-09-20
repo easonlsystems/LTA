@@ -17,6 +17,7 @@ import { recordActivationEvent } from '../analytics/product.js';
 import { logErrorEvent, logEvent } from '../util/log.js';
 import { registerPublicApiRoutes } from './publicApi.js';
 import { developerDocs } from './developerDocs.js';
+import { clientSourceLabel, inferMcpClientSource } from '../source/clientSource.js';
 
 const allowedPublicHosts=publicHostAllowlist(env().PUBLIC_BASE_URL,[process.env.RAILWAY_PUBLIC_DOMAIN??'']);
 const redditOAuthReady=Boolean(env().REDDIT_CLIENT_ID&&env().REDDIT_CLIENT_SECRET);
@@ -40,6 +41,7 @@ const openaiMcpHandler=createMcpHandler(()=>buildMcpServer('openai'));
 const nodeOpenaiMcp=toNodeHandler(openaiMcpHandler,{onerror:(err)=>logErrorEvent('mcp_adapter_error',err,{distribution_profile:'openai'})});
 
 app.all('/mcp',async(request,reply)=>{
+  const ua=String(request.headers['user-agent']??'');
   const originHeader=Array.isArray(request.headers.origin)?request.headers.origin[0]:request.headers.origin;
   const originCheck=validateOriginHeader(originHeader,allowedPublicHosts);
   if(!originCheck.ok){
@@ -50,6 +52,7 @@ app.all('/mcp',async(request,reply)=>{
   // and full tool surface.
   const defaultAuth=await authInfoFromBearer(request.headers.authorization,mcpResource());
   if(defaultAuth){
+    defaultAuth.extra.clientSource=inferMcpClientSource(defaultAuth.clientId,ua,'default');
     return nodeMcp(Object.assign(request.raw,{auth:defaultAuth}),reply.raw,request.body);
   }
 
@@ -60,11 +63,11 @@ app.all('/mcp',async(request,reply)=>{
   // access: the OpenAI token never gains the general /mcp tool surface.
   const openaiAuth=await authInfoFromBearer(request.headers.authorization,mcpResource('openai'));
   if(openaiAuth){
+    openaiAuth.extra.clientSource='chatgpt';
     logEvent('openai_mcp_legacy_alias',{method:request.method,distribution_profile:'openai'});
     return nodeOpenaiMcp(Object.assign(request.raw,{auth:openaiAuth}),reply.raw,request.body);
   }
 
-  const ua=String(request.headers['user-agent']??'');
   const openaiRuntime=/^openai-mcp\//i.test(ua);
   const resourceMetadata=openaiRuntime
     ? `${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp/openai`
@@ -100,6 +103,7 @@ app.all('/mcp/openai',async(request,reply)=>{
     reply.header('WWW-Authenticate',challenge);
     return reply.code(401).send({error:'unauthorized',message:`Connect ${env().PUBLIC_BRAND_NAME} to continue.`});
   }
+  auth.extra.clientSource='chatgpt';
   return nodeOpenaiMcp(Object.assign(request.raw,{auth}),reply.raw,request.body);
 });
 
