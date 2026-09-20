@@ -11,17 +11,10 @@ const [docs,main,billing,apiKeys,cert,workflow]=await Promise.all([
 ]);
 
 for(const required of [
-  'Authorization: Bearer','POST /v1/read','GET /v1/jobs/{id}','GET /v1/usage','GET /v1/sources',
-  '202 processing','200 completed','401','402','422','retry_after_seconds','retryable',
-  'canonical_url','source_completeness','truncation_reason','content_sections_truncated',
-  'metadata','evidence','units_used','remaining_usage_units','refresh','JavaScript','Python'
-])assert.ok(docs.includes(required),`developer docs must explain ${required}`);
+  'Remote MCP','/mcp','REST API','POST /v1/read','Authorization: Bearer &lt;API_KEY&gt;','Generate API key'
+])assert.ok(docs.includes(required),`minimal developer page must expose ${required}`);
 
-assert.match(docs,/id[^]*job_id[^]*compatibility alias/,'job identifier contract must be explicit');
-assert.match(docs,/Failed, unsupported, private, login-required, empty, or inaccessible reads consume/);
-assert.match(docs,/one unit per started processed minute/);
-assert.match(docs,/roughly one unit per 2,500 estimated source tokens/);
-assert.match(docs,/cache hits[^]*must not double-charge/);
+assert.doesNotMatch(docs,/GET \/v1\/jobs\/\{id\}|GET \/v1\/usage|GET \/v1\/sources|202 processing|retry_after_seconds|source_completeness|truncation_reason|JavaScript|Python/,'developer page must not carry the full API reference');
 assert.match(main,/siteShell\(developerDocs\(base\)/);
 assert.doesNotMatch(main,/sim-answer sim-fail show/,'homepage comparison must not preload the completed failure state');
 assert.match(main,/id="sim-comparison-panels"[^>]*hidden/,'homepage comparison must stay closed before interaction');
@@ -30,17 +23,19 @@ assert.doesNotMatch(main,/Simulated Claude conversation/,'general homepage compa
 assert.match(main,/Same AI assistant · LTA connected/);
 assert.match(main,/specific claim and supports it with details from the caption and clip/,'homepage comparison should preserve the original With LTA Instagram answer');
 assert.match(billing,/data-api-key-id/,'one-time API key page must expose its non-secret key id for lifecycle management');
-assert.match(docs,/Give your app the source\./,'developer docs should lead with product value, not the raw contract');
-assert.match(docs,/From zero to source text in three steps\./,'developer docs should expose a short first-run path');
-assert.match(docs,/You do not need to learn the whole contract before making your first request\./,'advanced protocol details should not block first use');
-assert.match(docs,/LTA generates the secret for you/,'docs must make server-generated API keys explicit');
+assert.match(docs,/Connect LTA your way\./,'developer page should lead with the two supported integration paths');
+assert.match(docs,/Use LTA from your app\./,'developer page should expose REST API without teaching basic API usage');
+assert.match(docs,/Generate API key/,'developer page should send REST users directly to key generation');
+assert.match(docs,/POST \/v1\/read/,'developer page should expose the read endpoint');
+assert.match(docs,/Authorization: Bearer &lt;API_KEY&gt;/,'developer page should expose the required auth shape');
+assert.doesNotMatch(docs,/From zero to source text in three steps\.|Windows PowerShell|Complete examples|Read lifecycle|Usage & cache/,'developer page must not contain tutorial/reference sections');
 assert.match(docs,/Remote MCP/,'developer surface must expose MCP as a first-class integration path');
 assert.match(docs,/Use LTA inside an AI client\./,'developer surface must explain what MCP is for');
 assert.match(docs,/\/mcp/,'developer surface must publish the production MCP endpoint');
 assert.match(docs,/Claude[^]*Custom Connector/,'MCP surface must name Claude as a place to use Remote MCP');
 assert.match(docs,/Grok[^]*Custom MCP/,'MCP surface must name Grok custom MCP without claiming catalog publication');
 assert.match(docs,/LTA handles sign-in through OAuth/,'MCP surface must explain OAuth authentication');
-assert.match(docs,/API key into an MCP connector/,'MCP surface must separate OAuth from REST API keys');
+assert.match(docs,/MCP does not use an <code>l2ai_live_…<\/code> API key/,'MCP surface must separate OAuth from REST API keys');
 assert.match(main,/href="\/developers#mcp">Use MCP<\/a>/,'homepage must expose a visible MCP entry point');
 assert.match(main,/Using Grok or another Remote MCP client\?/,'connect page must explain where the MCP endpoint can be used');
 assert.match(billing,/Key name/,'account API key form must only ask for a key name');
