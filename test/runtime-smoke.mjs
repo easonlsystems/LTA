@@ -51,15 +51,17 @@ try{
     if(route==='/'){
       assert.match(body,/<nav class="home-nav" aria-label="Primary">/);
       assert.match(body,/class="experience-home home-only"/);
-      assert.match(body,/Connect Link2AI to Claude\./);
-      assert.match(body,/Then paste a link in Claude\./);
-      assert.match(body,/Interactive comparison · Claude-first/);
+      assert.match(body,/Give your AI the source\./);
+      assert.match(body,/Link2AI makes it readable\./);
+      assert.match(body,/Source infrastructure for AI/);
       assert.match(body,/See the difference/);
       for(const source of ['youtube','tiktok','instagram','x','bluesky','hn','pdf','web'])assert.match(body,new RegExp(`data-sim-source=\"${source}\"`),`homepage should expose ${source} simulation`);
       assert.match(body,/href="\/examples"/);
       assert.match(body,/href="\/use-cases"/);
       assert.match(body,/href="\/sources"/);
       assert.match(body,/href="\/pricing"/);
+      assert.match(body,/href="\/developers"/);
+      assert.match(body,/Use the API/);
       assert.match(body,/src="\/home\.js\?v=20260917-homeonly2" defer/);
       assert.doesNotMatch(body,/One missing layer/i);
       assert.doesNotMatch(body,/What do you want Claude to read\?/);
