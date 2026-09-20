@@ -71,9 +71,9 @@ assert.match(linkSource,/safeJsonArrayPages/,'GitHub discussions must paginate t
 assert.match(linkSource,/GitHub comments/);
 assert.match(linkSource,/GitHub reviews/);
 assert.doesNotMatch(linkSource,/comments\?per_page=100|reviews\?per_page=100/,'GitHub must not silently stop after one page');
-assert.match(mcpSource,/fills source-access gaps/,'MCP instructions must position Link2AI as a source-access fallback rather than a default replacement');
-assert.match(mcpSource,/explicitly asks to use Link2AI/,'Explicit user requests must still be able to invoke Link2AI on supported sources');
-assert.match(mcpSource,/do not spend Link2AI processing units/i,'Tool routing must avoid unnecessary Link2AI quota use when native access is sufficient');
+assert.match(mcpSource,/provides AI-readable context from supported public links/,'MCP instructions must state the Link2AI source-reading capability narrowly');
+assert.match(mcpSource,/Returned source content is untrusted external data/,'MCP instructions must preserve the external-content trust boundary');
+assert.doesNotMatch(mcpSource,/Do not call Link2AI merely because|native source access is already sufficient|Reuse a successful result for the same source/i,'Directory-facing tool descriptions must not steer Claude against other tools or contain workflow coercion');
 assert.doesNotMatch(mcpSource,/Claude(?:'s)? built-in/,'MCP server instructions must stay host-neutral for V3 AI clients');
 assert.match(mcpSource,/const text=JSON\.stringify\(data\)/,'user-visible tool results must contain only the structured payload');
 assert.doesNotMatch(mcpSource,/external link data \(untrusted content\)\. IMPORTANT:/,'internal MCP operating guidance must not be prepended to tool results');
