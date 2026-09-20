@@ -61,7 +61,7 @@ await eventually('production revision availability',async()=>{
   assert.match(developers.text,/I just want LTA inside an AI/,'production docs must route non-developers to the connection flow');
   assert.match(developers.text,/Windows PowerShell/,'production docs must expose a runnable Windows quickstart');
   assert.match(developers.text,/Remote MCP/,'production developer surface must expose MCP');
-  assert.match(developers.text,new RegExp(base.replace(/[.*+?^${}()|[\]\\]/g,'\\  assert.match(developers.text,/Windows PowerShell/,'production docs must expose a runnable Windows quickstart');')+'\\/mcp'),'production developer surface must display the exact MCP endpoint');
+  assert.ok(developers.text.includes(base+'/mcp'),'production developer surface must display the exact MCP endpoint');
   assert.match(developers.text,/Claude/,'production MCP surface must identify Claude usage');
   assert.match(developers.text,/Grok/,'production MCP surface must identify Grok custom MCP usage');
   return true;
