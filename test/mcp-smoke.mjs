@@ -162,17 +162,17 @@ async function callOpenai(body){
 try{
   const initialized=await call({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'audit',version:'1'}}});
   assert.equal(initialized.result.serverInfo.name,'LaunchBrand');
-  assert.match(initialized.result.instructions??'',/fills source-access gaps/i);
-  assert.match(initialized.result.instructions??'',/explicitly asks to use Link2AI/i);
+  assert.match(initialized.result.instructions??'',/provides AI-readable context from supported public links/i);
+  assert.match(initialized.result.instructions??'',/source identity, completeness\/provenance metadata/i);
   assert.match(initialized.result.instructions??'',/already access the complete source[\s\S]*without calling Link2AI/i);
 
   const listed=await call({jsonrpc:'2.0',id:2,method:'tools/list',params:{}});
   assert.deepEqual(listed.result.tools.map(tool=>tool.name),['read_public_link','read_public_links','get_video_transcript','get_transcript_result','get_video_time_range','find_in_link','get_video_map','get_usage']);
-  assert.match(listed.result.tools[0].description,/user explicitly asks to use Link2AI/i);
-  assert.match(listed.result.tools[0].description,/native source access is already sufficient[\s\S]*do not spend Link2AI processing units/i);
+  assert.match(listed.result.tools[0].description,/Read one supported public URL/i);
+  assert.match(listed.result.tools[0].description,/Profiles, feeds, private\/login-gated content/i);
   assert.match(listed.result.tools[1].description,/two or more supported public links/i);
   assert.match(listed.result.tools[1].description,/comparison|synthesis/i);
-  assert.match(listed.result.tools[2].description,/Prefer read_public_link/i);
+  assert.match(listed.result.tools[2].description,/Compatibility reader for existing Link2AI connections/i);
   assert.match(listed.result.tools[3].description,/LaunchBrand/);
   assert.match(listed.result.tools[4].description,/timestamp range/i);
   assert.match(listed.result.tools[5].description,/Locate likely relevant regions/i);
@@ -205,7 +205,7 @@ try{
 
   const openaiInitialized=await callOpenai({jsonrpc:'2.0',id:20,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'openai-audit',version:'1'}}});
   assert.match(openaiInitialized.result.instructions??'',/same supported-source matrix as Link2AI's default\/Claude distribution/i);
-  assert.match(openaiInitialized.result.instructions??'',/explicitly asks to use Link2AI/i);
+  assert.match(openaiInitialized.result.instructions??'',/provides AI-readable context from supported public links/i);
   assert.match(openaiInitialized.result.instructions??'',/do not narrate internal job ids, source keys, raw error codes, authentication diagnostics/i);
   assert.doesNotMatch(openaiInitialized.result.instructions??'',/use get_video_time_range|use get_video_map/i);
 
@@ -213,7 +213,7 @@ try{
   assert.deepEqual(openaiListed.result.tools.map(tool=>tool.name),['read_public_link','read_public_links','get_transcript_result','find_in_link','get_usage']);
   assert.doesNotMatch(JSON.stringify(openaiListed.result.tools),/get_video_transcript|get_video_time_range|get_video_map/);
   assert.match(openaiListed.result.tools[0].description,/YouTube\/Shorts, TikTok, Instagram, X, Bluesky, GitHub Issue\/PR, Hacker News, readable webpage\/article, or text-layer PDF/i);
-  assert.match(openaiListed.result.tools[0].description,/user explicitly asks to use Link2AI/i);
+  assert.match(openaiListed.result.tools[0].description,/Read one supported public URL/i);
   const openaiUsageSchema=openaiListed.result.tools.find(tool=>tool.name==='get_usage').outputSchema.properties;
   assert.ok(openaiUsageSchema.remaining_usage_units,'OpenAI get_usage must expose authoritative remaining units');
   assert.equal(openaiUsageSchema.remaining_seconds,undefined,'OpenAI get_usage must not expose legacy seconds metadata');
@@ -233,11 +233,11 @@ try{
   assert.doesNotMatch(get_video_transcript_desc,/Reddit/i,'Without approved Reddit OAuth credentials, MCP must not advertise Reddit as live');
   assert.doesNotMatch(listed.result.tools[0].description,/Reddit/i,'Primary tool must also hide unavailable Reddit support');
   assert.match(initialized.result.instructions??'',/turn count alone is never a reason to refresh/i);
-  assert.match(initialized.result.instructions??'',/use read_public_links so source identities stay separate/i);
+  assert.match(listed.result.tools[1].description,/separate result for each source/i);
   assert.match(initialized.result.instructions??'',/get_video_time_range/i);
-  assert.match(initialized.result.instructions??'',/find_in_link/i);
-  assert.match(initialized.result.instructions??'',/get_video_map/i);
-  assert.match(listed.result.tools[0].description,/Reuse a successful result for the same source/i);
+  assert.match(listed.result.tools[5].description,/lexical matching/i);
+  assert.match(listed.result.tools[6].description,/overview of where topics appear/i);
+  assert.doesNotMatch(listed.result.tools[0].description,/Reuse a successful result|native source access|Do not call Link2AI merely because/i);
   assert.ok(listed.result.tools[0].inputSchema.properties.refresh,'read_public_link must expose explicit refresh control');
 
   // Assertion for explicit opt-out wording
