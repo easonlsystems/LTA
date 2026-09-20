@@ -29,6 +29,16 @@ assert.doesNotMatch(main,/Simulated Claude conversation/,'general homepage compa
 assert.match(main,/Same AI assistant · Link2AI connected/);
 assert.match(main,/specific claim and supports it with details from the caption and clip/,'homepage comparison should preserve the original With Link2AI Instagram answer');
 assert.match(billing,/data-api-key-id/,'one-time API key page must expose its non-secret key id for lifecycle management');
+assert.match(docs,/Give your app the source\./,'developer docs should lead with product value, not the raw contract');
+assert.match(docs,/From zero to source text in three steps\./,'developer docs should expose a short first-run path');
+assert.match(docs,/You do not need to learn the whole contract before making your first request\./,'advanced protocol details should not block first use');
+assert.match(docs,/Link2AI generates the secret for you/,'docs must make server-generated API keys explicit');
+assert.match(billing,/Key name/,'account API key form must label the user input as a key name');
+assert.match(billing,/Generate API key/,'account should present API key creation as server generation');
+assert.match(billing,/This is only a label so you know where the key is used/,'account must explain that the input is not the secret');
+assert.match(billing,/Your API key is ready\./,'one-time key screen should read as a product handoff');
+assert.match(billing,/copy-api-key/,'one-time key screen should offer a copy action');
+assert.doesNotMatch(billing,/Claude and API reads share the same jobs/,'account API copy must not imply a Claude-only product');
 
 for(const required of ['/auth/reviewer','/account/api-keys','/v1/usage','/v1/sources','/v1/read','/v1/jobs/','/account/api-keys/revoke']){
   assert.ok(cert.includes(required),`production cert must exercise ${required}`);
