@@ -506,7 +506,7 @@ app.get('/',async(req,reply)=>{
       </div>
     </section>
 
-    <script src="/home.js?v=20260917-homeonly2" defer></script>
+    <script src="/home.js?v=20260920-reel-proof3" defer></script>
   </main>`, `${env().PUBLIC_BRAND_NAME} — Public links to AI-ready source context`, `/`));
 });
 
