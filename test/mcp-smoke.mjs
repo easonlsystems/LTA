@@ -173,7 +173,7 @@ try{
   assert.match(listed.result.tools[1].description,/comparison|synthesis/i);
   assert.match(listed.result.tools[2].description,/Compatibility reader for existing Link2AI connections/i);
   assert.match(listed.result.tools[3].description,/LaunchBrand/);
-  assert.match(listed.result.tools[4].description,/timestamp range/i);
+  assert.match(listed.result.tools[4].description,/timestamped transcript text/i);
   assert.match(listed.result.tools[5].description,/Search the text of an already processed Link2AI source/i);
   assert.match(listed.result.tools[6].description,/compact timeline map/i);
   assert.doesNotMatch(JSON.stringify(listed.result.tools),/\$\{env\(\)/);
@@ -192,7 +192,7 @@ try{
   assert.ok(listed.result.tools[0].outputSchema.properties.source_completeness,'read_public_link output schema must expose completeness');
   assert.ok(listed.result.tools[0].outputSchema.properties.continuation_required,'read_public_link output schema must expose pagination state');
   assert.ok(listed.result.tools[7].outputSchema.properties.remaining_usage_units,'get_usage output schema must expose remaining units');
-  assert.match(listed.result.tools[7].description,/authoritative processing-unit balance/i,'get_usage must tell the host which quota fields are authoritative');
+  assert.match(listed.result.tools[7].description,/authoritative available processing-unit balance/i,'get_usage must identify the authoritative quota balance');
   assert.match(JSON.stringify(listed.result.tools[7].outputSchema.properties.limit_links),/null/,'Legacy link limit must allow null when there is no link-count cap');
   assert.match(JSON.stringify(listed.result.tools[7].outputSchema.properties.remaining_links),/null/,'Legacy remaining-link limit must allow null when there is no link-count cap');
   assert.match(listed.result.tools[7].outputSchema.properties.remaining_usage_units.description??'',/Authoritative processing units remaining/i);
