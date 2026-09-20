@@ -51,8 +51,8 @@ try{
     if(route==='/'){
       assert.match(body,/<nav class="home-nav" aria-label="Primary">/);
       assert.match(body,/class="experience-home home-only"/);
-      assert.match(body,/Paste a link\./);
-      assert.match(body,/Claude can read it\./);
+      assert.match(body,/Connect Link2AI to Claude\./);
+      assert.match(body,/Then paste a link in Claude\./);
       assert.match(body,/Interactive comparison · Claude-first/);
       assert.match(body,/See the difference/);
       for(const source of ['youtube','tiktok','instagram','x','bluesky','hn','pdf','web'])assert.match(body,new RegExp(`data-sim-source=\"${source}\"`),`homepage should expose ${source} simulation`);
