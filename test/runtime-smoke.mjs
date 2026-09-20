@@ -43,7 +43,7 @@ try{
   assert.equal((await health.json()).ok,true);
 
   // Public routes should include /status (may return 503 if db unavailable)
-  for(const route of ['/','/examples','/use-cases','/sources','/pricing','/connect','/support','/privacy','/terms']){
+  for(const route of ['/','/examples','/use-cases','/sources','/pricing','/developers','/connect','/support','/privacy','/terms']){
     const page=await fetch(`http://127.0.0.1:${port}${route}`,{headers:{host:'link2ai.example'}});
     assert.equal(page.status,200,`${route} should return 200`);
     const body=await page.text();
@@ -51,8 +51,9 @@ try{
     if(route==='/'){
       assert.match(body,/<nav class="home-nav" aria-label="Primary">/);
       assert.match(body,/class="experience-home home-only"/);
-      assert.match(body,/Paste a link\./);
-      assert.match(body,/Claude can read it\./);
+      assert.match(body,/Public URL in\./);
+      assert.match(body,/AI-ready source context out\./);
+      assert.match(body,/Use the API/);
       assert.match(body,/Interactive comparison · Claude-first/);
       assert.match(body,/See the difference/);
       for(const source of ['youtube','tiktok','instagram','x','bluesky','hn','pdf','web'])assert.match(body,new RegExp(`data-sim-source=\"${source}\"`),`homepage should expose ${source} simulation`);
@@ -60,6 +61,7 @@ try{
       assert.match(body,/href="\/use-cases"/);
       assert.match(body,/href="\/sources"/);
       assert.match(body,/href="\/pricing"/);
+      assert.match(body,/href="\/developers"/);
       assert.match(body,/src="\/home\.js\?v=20260917-homeonly2" defer/);
       assert.doesNotMatch(body,/One missing layer/i);
       assert.doesNotMatch(body,/What do you want Claude to read\?/);
@@ -70,7 +72,8 @@ try{
     if(route==='/use-cases'){assert.match(body,/Use the link normally/);assert.match(body,/Summaries grounded in the source/);}
     if(route==='/sources'){assert.match(body,/Supported sources/);assert.match(body,/Video & social/);assert.match(body,/Reddit/);assert.match(body,/Paused until approved Reddit OAuth Data API credentials are configured/);}
     if(route==='/pricing'){assert.match(body,/Founding offer/);assert.match(body,/First 50 paid users get 50% more usage/);assert.match(body,/500 paid units \+ 250 founding bonus/);assert.match(body,/2,000 paid units \+ 1,000 founding bonus/);assert.match(body,/Unused paid units roll over while subscribed/);assert.match(body,/founding bonus resets each billing cycle and does not roll over/);assert.match(body,/No plan-specific video length limit/);assert.match(body,/What does 1 processing unit mean/);assert.match(body,/Units depend on content size, not platform/);}
-    if(route==='/connect'){assert.match(body,/Add Link2AI to Claude/);assert.match(body,/custom-connector setup/);assert.match(body,/prefilled/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Always available/);assert.doesNotMatch(body,/available in Claude's Connectors Directory|Open Claude Connectors Directory|Use the published connector|Search “Link2AI”|Choose the published Link2AI connector/);}
+    if(route==='/developers'){assert.match(body,/Public API beta/);assert.match(body,/POST \/v1\/read/);assert.match(body,/GET \/v1\/jobs/);}
+    if(route==='/connect'){assert.match(body,/Add Link2AI to Claude/);assert.match(body,/custom-connector setup/);assert.match(body,/prefilled/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Load tools when needed/);assert.match(body,/Tools already loaded/);assert.doesNotMatch(body,/Open Claude Connectors Directory|Use the published connector|Search “Link2AI”|Choose the published Link2AI connector/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render|google-client-secret-must-not-render/);
   }
 
