@@ -81,12 +81,12 @@ assert.match(apiSource,/https:\/\/claude\.ai\/customize\/connectors/,'Claude onb
 assert.match(apiSource,/connectorName/,'Claude install URL must prefill the connector name');
 assert.match(apiSource,/connectorUrl/,'Claude install URL must prefill the MCP endpoint');
 assert.doesNotMatch(apiSource,/function claudeInstallUrl\(\)\{return 'https:\/\/claude\.ai\/directory'/,'Claude onboarding must not regress to the generic directory homepage');
-assert.match(apiSource,/Load tools when needed/,'Onboarding must document Claude on-demand tool loading');
-assert.match(apiSource,/Tools already loaded/,'Onboarding must document Claude preloaded tool mode');
-assert.match(apiSource,/\+ → Connectors/,'Post-connect onboarding must show the Claude-side connector availability step');
-assert.match(apiSource,/normal message box/,'Onboarding must tell users where to paste the public link');
-assert.match(apiSource,/Connected = authorization finished/,'Onboarding must distinguish authorization from Claude-side availability');
-assert.match(apiSource,/Connected ✓ Authorization is done/,'Connected state must clearly mean authorization completed, not full Claude readiness');
+assert.doesNotMatch(apiSource,/Load tools when needed/,'First-run onboarding must not front-load Claude tool-loading internals');
+assert.match(apiSource,/Tools already loaded/,'Collapsed help must preserve the Claude preloaded-tool recovery path');
+assert.match(apiSource,/\+ → Connectors/,'Collapsed help must preserve the Claude-side connector availability step');
+assert.match(apiSource,/paste a supported public link/,'Onboarding must tell users what to do after authorization');
+assert.doesNotMatch(apiSource,/Connected = authorization finished/,'First-run onboarding must not front-load connector-state terminology');
+assert.match(apiSource,/Connected ✓ Return to Claude/,'Connected state must give one concise next action');
 assert.match(authBaseSource,/connection_started/,'OAuth authorization flow must record a connection-start milestone');
 assert.match(authServiceSource,/connection_success/,'OAuth token exchange must record a successful connection milestone');
 assert.match(mcpServiceSource,/first_link_attempt/,'MCP service must record the first real link attempt');
