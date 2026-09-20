@@ -180,8 +180,8 @@ try{
   ids['sim-run'].listeners.click();
   runAllTimers();
   assert.match(ids['sim-right-answer'].innerHTML,/Marcus Lemonis/,'Instagram proof should reflect the real recorded demo content');
-  assert.match(ids['sim-left-answer'].innerHTML,/can’t access Instagram Reels directly/,'Instagram without-Link2AI side should mirror the recorded access failure');
-  assert.match(ids['sim-left-answer'].innerHTML,/can’t be fetched or previewed/,'Instagram failure should explain the actual limitation instead of a generic short error');
+  assert.match(ids['sim-left-answer'].innerHTML,/can’t directly access the Instagram Reel/,'Instagram without-Link2AI side should explain the source-access limitation');
+  assert.match(ids['sim-left-answer'].innerHTML,/paste the caption or describe the clip/,'Instagram failure should give a realistic fallback');
   assert.match(ids['sim-right-answer'].innerHTML,/keep cash on hand/,'Instagram proof should preserve a concrete point from the recorded demo');
   assert.doesNotMatch(ids['sim-right-answer'].innerHTML,/Claude/,'comparison answer labels must remain AI-client neutral');
   // Switching source during a run must invalidate old-source callbacks.
