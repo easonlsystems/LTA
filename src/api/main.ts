@@ -447,8 +447,7 @@ app.get('/start',async(req,reply)=>{
   return reply.redirect(claudeInstallUrl());
 });
 app.get('/connect/start',async(req,reply)=>{
-  await trackWebsiteEvent(req,'connect_install_click','/connect');
-  const current=await userFromSessionCookie(req.headers.cookie).catch(()=>null);
+  await trackWebsiteEvent(req,'connect_install_click','/connect');  const current=await userFromSessionCookie(req.headers.cookie).catch(()=>null);
   if(current?.id)await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude'}});
   return reply.redirect(claudeInstallUrl());
 });
@@ -577,7 +576,7 @@ app.get('/home.js',async(_req,reply)=>reply.header('Cache-Control','no-cache, ma
 app.get('/connect',async(req,reply)=>{
   await trackWebsiteVisit(req,reply,'/connect');
   const mcpUrl=env().PUBLIC_BASE_URL.replace(/\/$/,'')+'/mcp';
-  return reply.type('text/html').send(siteShell(\`<main id="main-content">
+  return reply.type('text/html').send(siteShell(`<main id="main-content">
     <section class="connect-hero connect-fast">
       <span class="badge"><span class="badge-dot"></span>Claude connector</span>
       <h1>Add LTA to Claude. Start using it in about 30 seconds.</h1>
@@ -621,7 +620,7 @@ app.get('/connect',async(req,reply)=>{
           <details>
             <summary><strong>Using Grok or another Remote MCP client?</strong><span>Show MCP URL</span></summary>
             <div class="connect-help-body">
-              <code class="connect-mcp-url">\${mcpUrl}</code>
+              <code class="connect-mcp-url">${mcpUrl}</code>
               <p>Remote MCP · OAuth. No LTA API key goes in the connector.</p>
             </div>
           </details>
@@ -652,7 +651,7 @@ app.get('/connect',async(req,reply)=>{
       @media(max-width:820px){.connect-step-grid,.connect-explain-grid{grid-template-columns:1fr}.connect-test{align-items:flex-start;flex-direction:column}}
       @media(max-width:620px){.connect-fast{padding-top:48px}.connect-fast .setup-cta{display:block}.connect-fast .btn{width:100%;min-width:0}.connect-help summary{align-items:flex-start}.connect-test .btn{width:100%}}
     </style>
-  </main>\`, \`Connect \${env().PUBLIC_BRAND_NAME} to Claude\`, '/connect'));
+  </main>`, `Connect ${env().PUBLIC_BRAND_NAME} to Claude`, '/connect'));
 });
 
 app.get('/api/connect/status',async(req,reply)=>{
@@ -897,8 +896,7 @@ app.get('/founder',async(req,reply)=>{
       (SELECT COUNT(*) FROM website_visitors WHERE signed_up_at IS NOT NULL)::text AS signed_up_total,
       (SELECT COUNT(DISTINCT v.visitor_id) FROM website_visitors v JOIN usage_ledger l ON l.user_id=v.user_id WHERE v.signed_up_at IS NOT NULL)::text AS activated_visitors_total,
       (SELECT COUNT(*) FROM website_visitors v LEFT JOIN users u ON u.id=v.user_id WHERE v.last_seen_at>now()-interval '7 days' AND COALESCE(lower(u.email),'')<>$1 AND COALESCE(u.analytics_excluded,false)=false)::text AS non_founder_7d,
-      (SELECT COUNT(*) FROM website_visitors WHERE analytics_source='historical_backfill')::text AS historical_visitors_total,
-      (SELECT COUNT(*) FROM website_pageviews WHERE source_key IS NOT NULL)::text AS historical_pageviews_total,
+      (SELECT COUNT(*) FROM website_visitors WHERE analytics_source='historical_backfill')::text AS historical_visitors_total,      (SELECT COUNT(*) FROM website_pageviews WHERE source_key IS NOT NULL)::text AS historical_pageviews_total,
       (SELECT MIN(created_at) FROM website_pageviews) AS tracking_started_at,
       GREATEST(
         (SELECT MAX(created_at) FROM website_pageviews),
