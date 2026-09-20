@@ -26,9 +26,11 @@ assert.match(main,/sim-answer sim-fail show/,'homepage comparison must not look 
 assert.match(main,/resetDemo\(false,true\)/,'initial homepage state must render a meaningful preview');
 assert.match(billing,/data-api-key-id/,'one-time API key page must expose its non-secret key id for lifecycle management');
 
-for(const required of ['/auth/password/login','/account/api-keys','/v1/usage','/v1/sources','/v1/read','/v1/jobs/','/account/api-keys/revoke']){
+for(const required of ['/auth/reviewer','/account/api-keys','/v1/usage','/v1/sources','/v1/read','/v1/jobs/','/account/api-keys/revoke']){
   assert.ok(cert.includes(required),`production cert must exercise ${required}`);
 }
+assert.doesNotMatch(cert,/\/auth\/password\/login/,'production certification must remain compatible with Google-enabled deployments');
+assert.match(cert,/headers\.set\('origin',base\)/,'browser-form POSTs must satisfy production same-origin protection');
 assert.match(cert,/revoked\.response\.status,401/);
 assert.doesNotMatch(cert,/console\.log\([^)]*(apiKey|password|cookie)/i,'certification must never log credentials');
 assert.match(workflow,/workflow_dispatch/);
