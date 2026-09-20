@@ -23,7 +23,7 @@ assert.match(source,/data-sim-source="instagram"[^>]*class="[^"]*active|class="[
 assert.doesNotMatch(source,/Simulated Claude conversation/,'general comparison must stay AI-client neutral');
 assert.match(source,/Same AI assistant · same public link/);
 assert.match(source,/https:\/\/www\.instagram\.com\/reel\/C9xDemoLink2AI\//,'homepage comparison should show a plausible fake Reel URL');
-assert.match(source,/qa\('\.sim-user-link'\)\.forEach/,'source switching must update the displayed link in every prompt');
+assert.match(source,/qa\('\.sim-user-link'\)\.forEach/,'source switching must update the visible example link');
 assert.match(source,/state\.opened=true;const panels=q\('#sim-comparison-panels'\);if\(panels\)panels\.hidden=false/,'clicking the comparison CTA must reveal the panels');
 assert.match(source,/resetDemo\(false,false\);\s*\}\)\(\);/,'homepage must initialize the comparison closed');
 
