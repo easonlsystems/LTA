@@ -1,22 +1,22 @@
-# Link2AI — OpenAI review demo video
+# LTA — OpenAI review demo video
 
 OpenAI requires a demo video URL for final remote-MCP directory submission. This is a reviewer demo, not a marketing video.
 
 ## Recording target
 
-Record one continuous desktop capture, approximately 2–4 minutes, showing the production ChatGPT-specific Link2AI workflow end to end.
+Record one continuous desktop capture, approximately 2–4 minutes, showing the production ChatGPT-specific LTA workflow end to end.
 
 ## Required sequence
 
-1. Show the Link2AI public website briefly.
-2. In ChatGPT, show Link2AI already installed/connected through the review configuration using the production `/mcp/openai` endpoint.
-3. Paste `https://www.instagram.com/reel/DdNnHPip4RD/` and ask: “Use Link2AI to read this Instagram Reel and summarize the main points.”
-4. Show Link2AI OAuth/reviewer authentication if the review connection requires it.
+1. Show the LTA public website briefly.
+2. In ChatGPT, show LTA already installed/connected through the review configuration using the production `/mcp/openai` endpoint.
+3. Paste `https://www.instagram.com/reel/DdNnHPip4RD/` and ask: “Use LTA to read this Instagram Reel and summarize the main points.”
+4. Show LTA OAuth/reviewer authentication if the review connection requires it.
 5. Show the tool call returning the exact Instagram source identity and transcript/source text. Do not invent visual-only details.
-6. Paste `https://www.youtube.com/watch?v=M7lc1UVf-VE` and ask: “Use Link2AI to read this YouTube video and summarize what it explains.” If processing is asynchronous, show `get_transcript_result` continuing the job.
-7. Paste `https://github.com/nodejs/node/pull/65472` and ask: “Read this pull request with Link2AI and summarize the change, the main reviewer concern, and how it was resolved.”
-8. Ask “How many Link2AI processing units do I have left?” and show `get_usage`.
-9. End on a successful Link2AI answer for one of the supported media sources.
+6. Paste `https://www.youtube.com/watch?v=M7lc1UVf-VE` and ask: “Use LTA to read this YouTube video and summarize what it explains.” If processing is asynchronous, show `get_transcript_result` continuing the job.
+7. Paste `https://github.com/nodejs/node/pull/65472` and ask: “Read this pull request with LTA and summarize the change, the main reviewer concern, and how it was resolved.”
+8. Ask “How many LTA processing units do I have left?” and show `get_usage`.
+9. End on a successful LTA answer for one of the supported media sources.
 
 ## Recording rules
 
