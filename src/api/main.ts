@@ -52,7 +52,7 @@ app.all('/mcp',async(request,reply)=>{
   // and full tool surface.
   const defaultAuth=await authInfoFromBearer(request.headers.authorization,mcpResource());
   if(defaultAuth){
-    defaultAuth.extra.clientSource=inferMcpClientSource(defaultAuth.clientId,ua,'default');
+    defaultAuth.extra.clientSource=inferMcpClientSource(defaultAuth.clientId,ua,'default',defaultAuth.extra.clientName);
     return nodeMcp(Object.assign(request.raw,{auth:defaultAuth}),reply.raw,request.body);
   }
 
