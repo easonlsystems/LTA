@@ -133,12 +133,12 @@ assert.doesNotMatch(apiSource,/supports videos up to 30 minutes|supports videos 
 assert.match(mcpServiceSource,/if\(!options\.refresh(?:&&parsed\.platform!=='x')?\)[\s\S]*j\.status='completed'[\s\S]*c\.expires_at>now\(\)/,'Normal non-X same-source reads must reuse a still-valid completed user result');
 assert.match(mcpServiceSource,/options\.refresh\|\|parsed\.platform==='x'\?null:await findCache/,'Explicit refresh and the X media-routing rollout must bypass the shared successful cache');
 assert.match(mcpSource,/read_public_links/,'V3 must expose a first-class multi-link reader');
-assert.match(mcpSource,/turn count alone is never a reason to refresh/i,'Host instructions must not use conversation length as a refresh policy');
+assert.doesNotMatch(mcpSource,/turn count alone is never a reason to refresh/i,'Directory-facing metadata must not encode host conversation-routing policy');
 assert.match(mcpSource,/get_video_time_range/,'V3 must expose timed lookup for processed video jobs');
 assert.match(mcpSource,/find_in_link/,'V3 must expose read-only search over processed source context');
 assert.match(mcpSource,/get_video_map/,'V3 must expose a whole-video timeline map for broad questions');
 assert.match(mcpSource,/video matches include timestamps|start_seconds/,'Video source search must preserve time ranges for follow-up context');
-assert.match(mcpSource,/search miss is not proof|zero matches as proof/i,'Source search must not turn lexical misses into false absence claims');
+assert.match(mcpSource,/zero-match result is not a semantic guarantee of absence/i,'Source search must not turn lexical misses into false absence claims');
 assert.doesNotMatch(mcpSource,/checkout_url|plan_info_url/,'Public MCP schemas must not expose checkout or plan-purchase URLs for digital subscriptions or credits');
 assert.doesNotMatch(mcpServiceSource,/plan_info_url|\/pricing/,'ChatGPT tool results must not return upgrade, top-up, or plan-purchase links');
 assert.match(mcpServiceSource,/PUBLIC_BASE_URL[^\n]*\/account|\/account in your browser/,'Quota exhaustion must direct users to the Link2AI account page without initiating a purchase');
