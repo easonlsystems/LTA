@@ -16,5 +16,10 @@ assert.match(source,/@media\(max-width:650px\)\{[\s\S]*?\.home-only \.home-inner
 assert.match(source,/\.home-only \.sim-panel\{min-height:150px/);
 assert.match(source,/\.home-only \.sim-chat-user\{display:block/);
 assert.match(source,/\.home-only \.sim-panel-sub\{display:block/);
+assert.match(source,/id="sim-run"[^>]*aria-expanded="false"[^>]*aria-controls="sim-comparison-panels"/);
+assert.match(source,/id="sim-comparison-panels"[^>]*hidden/,'comparison panels must be closed on first paint');
+assert.match(source,/state=\{source:'youtube',[\s\S]*opened:false\}/);
+assert.match(source,/state\.opened=true;const panels=q\('#sim-comparison-panels'\);if\(panels\)panels\.hidden=false/,'clicking the comparison CTA must reveal the panels');
+assert.match(source,/resetDemo\(false,false\);\s*\}\)\(\);/,'homepage must initialize the comparison closed');
 
 console.log('homepage responsive architecture tests PASS');
