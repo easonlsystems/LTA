@@ -15,7 +15,7 @@ assert.match(migration,/CREATE TABLE IF NOT EXISTS source_access_events/);
 assert.match(migration,/reused boolean NOT NULL DEFAULT false/);
 
 assert.equal(inferMcpClientSource('https://claude.ai/oauth/client','Mozilla/5.0','default'),'claude');
-assert.equal(inferMcpClientSource('grok-custom-mcp','xai-runtime','default'),'grok');
+assert.equal(inferMcpClientSource('opaque-client-id','custom-runtime','default','Grok'),'grok');
 assert.equal(inferMcpClientSource('anything','openai-mcp/1.0','openai'),'chatgpt');
 assert.equal(inferMcpClientSource('moonshot-kimi','custom','default'),'kimi');
 assert.equal(inferMcpClientSource('custom-client','custom-runtime','default'),'mcp');
