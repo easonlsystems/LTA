@@ -44,6 +44,9 @@ await eventually('production revision availability',async()=>{
   assert.match(home.text,/id="sim-run"[^>]*aria-expanded="false"[^>]*aria-controls="sim-comparison-panels"/,'homepage comparison CTA must start collapsed');
   assert.match(home.text,/id="sim-comparison-panels"[^>]*hidden/,'homepage comparison panels must be hidden on first paint');
   assert.doesNotMatch(home.text,/sim-answer sim-fail show/,'homepage must not preload the completed comparison');
+  assert.match(home.text,/Summarize this Instagram Reel\./,'production homepage must lead with the recorded Instagram proof');
+  assert.match(home.text,/Same AI assistant · same public link/,'production comparison must be AI-client neutral');
+  assert.doesNotMatch(home.text,/Simulated Claude conversation/,'production comparison must not be Claude-specific');
 
   const developers=await request('/developers');
   assert.equal(developers.response.status,200);
@@ -65,6 +68,8 @@ await eventually('production revision availability',async()=>{
   assert.match(response.headers.get('content-type')??'',/javascript/);
   assert.match(text,/resetDemo\(false,false\)/,'production homepage JS must initialize the comparison closed');
   assert.match(text,/state\.opened=true;const panels=q\('#sim-comparison-panels'\);if\(panels\)panels\.hidden=false/,'production homepage JS must reveal panels only from the comparison interaction');
+  assert.match(text,/Marcus Lemonis/,'production homepage JS must carry the real Instagram demo result');
+  assert.match(text,/AI assistant/,'production homepage JS must use neutral AI labels');
 }
 
 {

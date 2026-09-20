@@ -176,6 +176,12 @@ try{
   assert.equal(ids['sim-run'].textContent,'Run again ↻','completed comparison should offer a rerun');
   assert.doesNotMatch(ids['sim-tool'].innerHTML,/\bready\b/i,'loaded tool state should not repeat ready');
   assert.match(ids['sim-right-answer'].innerHTML,/AI agents are becoming capable faster/,'YouTube proof should read as source-specific');
+  simTab('instagram').listeners.click();
+  ids['sim-run'].listeners.click();
+  runAllTimers();
+  assert.match(ids['sim-right-answer'].innerHTML,/Marcus Lemonis/,'Instagram proof should reflect the real recorded demo content');
+  assert.match(ids['sim-right-answer'].innerHTML,/keep cash on hand/,'Instagram proof should preserve a concrete point from the recorded demo');
+  assert.doesNotMatch(ids['sim-right-answer'].innerHTML,/Claude/,'comparison answer labels must remain AI-client neutral');
   // Switching source during a run must invalidate old-source callbacks.
   ids['sim-run'].listeners.click();
   assert.ok(runNextTimer());
