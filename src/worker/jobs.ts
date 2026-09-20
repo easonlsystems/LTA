@@ -183,11 +183,11 @@ export async function markFailed(jobId: string, errorCode: string, message: stri
   );
 }
 
-export async function markAwaitingPayment(jobId: string, errorCode: string, message: string, checkoutUrl: string | null): Promise<void> {
+export async function markAwaitingPayment(jobId: string, errorCode: string, message: string, checkoutUrl: string | null, requiredUsageUnits?: number): Promise<void> {
   await pool.query(
     `UPDATE transcript_jobs SET status='awaiting_payment', error_code=$2, error_message=$3, retryable=false,
-      checkout_url=$4, locked_at=NULL, locked_by=NULL, updated_at=now() WHERE id=$1`,
-    [jobId, errorCode, message, checkoutUrl]
+      checkout_url=$4, required_usage_units=$5, locked_at=NULL, locked_by=NULL, updated_at=now() WHERE id=$1`,
+    [jobId, errorCode, message, checkoutUrl, Number.isFinite(requiredUsageUnits)?Math.max(0,Math.ceil(Number(requiredUsageUnits))):null]
   );
 }
 
