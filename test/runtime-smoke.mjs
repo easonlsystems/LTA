@@ -203,10 +203,11 @@ try{
   const connectPage=await fetch(`http://127.0.0.1:${port}/connect`,{headers:{host:'link2ai.example'}});
   assert.equal(connectPage.status,200);
   const connectPageText=await connectPage.text();
-  assert.match(connectPageText,/\+ → Connectors → Link2AI/,'post-connect page must show the exact Claude activation path');
+  assert.match(connectPageText,/\+ → Connectors/,'post-connect page must show where to verify Link2AI in Claude');
   assert.match(connectPageText,/normal message box/,'post-connect page must say where to paste the source link');
-  assert.match(connectPageText,/Repeat in each conversation where you want Link2AI/,'post-connect page must disclose per-conversation activation');
-  assert.match(connectPageText,/Connected ✓ One Claude-side step remains/,'Connected must not be presented as the end of setup');
+  assert.match(connectPageText,/Tools already loaded/,'post-connect page must document the optional Claude preload setting');
+  assert.match(connectPageText,/Connected = authorization finished/,'post-connect page must separate authorization from tool availability');
+  assert.match(connectPageText,/Connected ✓ Authorization is done/,'Connected must be presented as authorization completion, not guaranteed tool loading');
 
   const connectStart=await fetch(`http://127.0.0.1:${port}/connect/start`,{headers:{host:'link2ai.example'},redirect:'manual'});
   assert.equal(connectStart.status,302);
