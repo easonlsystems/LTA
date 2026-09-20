@@ -54,12 +54,11 @@ await eventually('production revision availability',async()=>{
 
   const developers=await request('/developers');
   assert.equal(developers.response.status,200);
-  assert.match(developers.text,/Public REST API/);
-  assert.match(developers.text,/Give your app the source\./,'production developer docs must lead with product value');
-  assert.match(developers.text,/From zero to source text in three steps\./,'production developer docs must expose the short quickstart');
-  assert.match(developers.text,/Generate API key/,'production developer docs must use generated-key onboarding');
-  assert.match(developers.text,/I just want LTA inside an AI/,'production docs must route non-developers to the connection flow');
-  assert.match(developers.text,/Windows PowerShell/,'production docs must expose a runnable Windows quickstart');
+  assert.match(developers.text,/Connect LTA your way\./,'production Developers page must expose the two integration paths');
+  assert.match(developers.text,/REST API/);
+  assert.match(developers.text,/Generate API key/,'production Developers page must link directly to key generation');
+  assert.match(developers.text,/POST \/v1\/read/,'production Developers page must expose the read endpoint');
+  assert.doesNotMatch(developers.text,/From zero to source text in three steps\.|Windows PowerShell|Complete examples|Read lifecycle|Usage & cache/,'production Developers page must not expose tutorial/reference sections');
   assert.match(developers.text,/Remote MCP/,'production developer surface must expose MCP');
   assert.ok(developers.text.includes(base+'/mcp'),'production developer surface must display the exact MCP endpoint');
   assert.match(developers.text,/Claude/,'production MCP surface must identify Claude usage');
