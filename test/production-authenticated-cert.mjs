@@ -6,10 +6,12 @@ const password=process.env.LINK2AI_CERT_PASSWORD||'';
 const sourceUrl=process.env.LINK2AI_CERT_SOURCE_URL||'https://news.ycombinator.com/item?id=8863';
 const pollLimit=Number(process.env.LINK2AI_CERT_POLL_LIMIT||60);
 const pollDelayMs=Number(process.env.LINK2AI_CERT_POLL_DELAY_MS||2000);
+const expectedRevision=(process.env.LINK2AI_EXPECTED_REVISION||'').trim();
 
 if(!base||!email||!password){
   throw new Error('Authenticated production certification BLOCKED: configure LINK2AI_PRODUCTION_URL, LINK2AI_CERT_EMAIL, and LINK2AI_CERT_PASSWORD as CI secrets. LINK2AI_CERT_EMAIL/PASSWORD must match the production reviewer credentials.');
 }
+if(!expectedRevision)throw new Error('Authenticated production certification requires LINK2AI_EXPECTED_REVISION.');
 
 const cookies=new Map();
 let apiKey='';
@@ -66,6 +68,19 @@ async function revoke(){
 }
 
 try{
+  // Never certify an older healthy deployment. The complete authenticated
+  // lifecycle below must run against the exact revision that triggered this job.
+  let revisionReady=false;
+  for(let attempt=0;attempt<pollLimit;attempt++){
+    const health=await fetch(base+'/healthz');
+    if(health.status===200){
+      const data=await health.json().catch(()=>null);
+      if(data?.revision===expectedRevision){revisionReady=true;break;}
+    }
+    await sleep(pollDelayMs);
+  }
+  assert.equal(revisionReady,true,'production did not reach the expected revision before authenticated certification');
+
   // Production normally has Google sign-in enabled, which intentionally disables
   // /auth/password/login. Reviewer access remains available specifically for
   // integration/release verification and is therefore the stable automation path.
