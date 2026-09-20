@@ -81,11 +81,12 @@ assert.match(apiSource,/https:\/\/claude\.ai\/customize\/connectors/,'Claude onb
 assert.match(apiSource,/connectorName/,'Claude install URL must prefill the connector name');
 assert.match(apiSource,/connectorUrl/,'Claude install URL must prefill the MCP endpoint');
 assert.doesNotMatch(apiSource,/function claudeInstallUrl\(\)\{return 'https:\/\/claude\.ai\/directory'/,'Claude onboarding must not regress to the generic directory homepage');
-assert.match(apiSource,/Always available/,'Onboarding must document current Claude Tool access mode');
-assert.match(apiSource,/\+ → Connectors → Link2AI/,'Post-connect onboarding must show the Claude-side connector activation step');
+assert.match(apiSource,/Load tools when needed/,'Onboarding must document Claude on-demand tool loading');
+assert.match(apiSource,/Tools already loaded/,'Onboarding must document Claude preloaded tool mode');
+assert.match(apiSource,/\+ → Connectors/,'Post-connect onboarding must show the Claude-side connector availability step');
 assert.match(apiSource,/normal message box/,'Onboarding must tell users where to paste the public link');
-assert.match(apiSource,/Repeat in each conversation where you want Link2AI/,'Onboarding must state the current per-conversation activation behavior');
-assert.match(apiSource,/Connected ✓ One Claude-side step remains/,'Connected state must not imply that Claude-side activation is already finished');
+assert.match(apiSource,/Connected = authorization finished/,'Onboarding must distinguish authorization from Claude-side availability');
+assert.match(apiSource,/Connected ✓ Authorization is done/,'Connected state must clearly mean authorization completed, not full Claude readiness');
 assert.match(authBaseSource,/connection_started/,'OAuth authorization flow must record a connection-start milestone');
 assert.match(authServiceSource,/connection_success/,'OAuth token exchange must record a successful connection milestone');
 assert.match(mcpServiceSource,/first_link_attempt/,'MCP service must record the first real link attempt');
