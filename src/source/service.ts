@@ -1,6 +1,6 @@
 import { env } from '../config/env.js';
 import { pool } from '../db/pool.js';
-import { assertPlatformAllowedForProfile, parseAllowedMediaUrl, type DistributionProfile } from '../mcp/policy.js';
+import { assertPlatformAllowedForProfile, parseAllowedMediaUrl, type DistributionProfile } from './policy.js';
 import { asLink2AIError, Link2AIError, publicErrorMessage } from '../util/errors.js';
 import { reserveQuota, finalizeQuota, getUsageSnapshot } from '../quota/service.js';
 import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limits.js';
