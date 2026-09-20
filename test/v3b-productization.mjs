@@ -11,8 +11,10 @@ const [billing,main,source,keys,docs]=await Promise.all([
 
 assert.match(billing,/Developer API/);
 assert.match(billing,/Generate API key/);
-assert.match(billing,/full generated secret is shown once/i);
+assert.match(billing,/full key is shown once and cannot be viewed again/i);
 assert.match(billing,/\/account\/api-keys\/revoke/);
+assert.match(billing,/>Delete<\/button>/);
+assert.doesNotMatch(billing,/>Revoke<\/button>/);
 assert.match(billing,/Recent jobs/);
 assert.match(billing,/\/account\/jobs\/:jobId/);
 assert.match(billing,/j\.id=\$1 AND j\.user_id=\$2/,'job detail must stay scoped to the authenticated user');
