@@ -41,7 +41,7 @@ assert.match(billing,/API key generated\./,'one-time key page must be explicit')
 assert.match(billing,/Copy once/,'one-time key page must expose a single-use copy action');
 assert.match(billing,/Cache-Control/,'one-time secret response must disable caching');
 assert.match(billing,/no-store, max-age=0/,'one-time secret response must be non-cacheable');
-assert.match(billing,/Referrer-Policy','one-time secret page must not leak through referrers');
+assert.match(billing,/Referrer-Policy/,'one-time secret page must not leak through referrers');
 assert.match(billing,/history\.replaceState\(null,'','\/account'\)/,'refreshing the generated-key page must not resubmit key creation');
 assert.match(billing,/button\.disabled=true/,'copy control must disable after a successful copy');
 assert.match(billing,/key\.textContent=prefix\+'••••••••'/,'full key must be removed from the visible DOM after a successful copy');
