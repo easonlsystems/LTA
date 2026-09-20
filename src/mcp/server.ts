@@ -54,6 +54,7 @@ const linkResultOutputSchema=z.object({
   retry_after_seconds:z.number().nonnegative().optional(),
   retryable:z.boolean().optional(),
   remaining_usage_units:z.number().int().nonnegative().optional(),
+  required_usage_units:z.number().int().nonnegative().optional(),
 });
 
 const batchLinkResultOutputSchema=z.object({

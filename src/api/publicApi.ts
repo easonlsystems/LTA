@@ -34,6 +34,7 @@ function publicPayload(result:ToolJobResult){
     content_sections_truncated:result.content_sections_truncated??undefined,
     units_used:result.status==='completed'?result.usage_units??0:0,
     remaining_usage_units:result.remaining_usage_units,
+    required_usage_units:result.required_usage_units,
     error_code:result.error_code??undefined,
     message:result.message,
     retry_after_seconds:result.retry_after_seconds,

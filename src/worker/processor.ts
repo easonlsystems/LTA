@@ -311,7 +311,9 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     const transport=typeof err.details?.transport==='string'?err.details.transport.slice(0,40):undefined;
     logErrorEvent('job_error',e,{job_id:job.id,platform:job.platform,error_code:err.code,retryable:err.retryable,attempt:job.attempts,processing_ms:Date.now()-startedAt,...(causeCode?{cause_code:causeCode}:{}),...(transport?{transport}:{} )});
     if(err.code==='QUOTA_EXCEEDED'){
-      await markAwaitingPayment(job.id,err.code,err.message,null);return;
+      const requiredUnitsRaw=err.details?.required_usage_units??err.details?.required_usage_units_at_least;
+      const requiredUnits=typeof requiredUnitsRaw==='number'&&Number.isFinite(requiredUnitsRaw)?requiredUnitsRaw:undefined;
+      await markAwaitingPayment(job.id,err.code,err.message,null,requiredUnits);return;
     }
     if(err.retryable&&job.attempts<3){await markRetry(job,err.code,err.message);return;}
     await markFailed(job.id,err.code,err.message,err.retryable);

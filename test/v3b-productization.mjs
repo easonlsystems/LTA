@@ -16,6 +16,9 @@ assert.match(billing,/Recent jobs/);
 assert.match(billing,/\/account\/jobs\/:jobId/);
 assert.match(billing,/j\.id=\$1 AND j\.user_id=\$2/,'job detail must stay scoped to the authenticated user');
 assert.match(billing,/usage\.remaining_usage_units/,'dashboard must use authoritative processing-unit accounting');
+assert.match(billing,/Units required/,'job detail must show the processing units required for quota-blocked reads');
+assert.match(source,/required_usage_units/,'quota-blocked source results must expose the units required');
+assert.match(source,/requires \$\{required\}/,'quota guidance must tell users how many units the source needs when known');
 
 assert.match(main,/app\.get\('\/developers'/);
 assert.match(main,/POST \/v1\/read/);
