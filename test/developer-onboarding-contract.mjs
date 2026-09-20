@@ -30,10 +30,12 @@ assert.doesNotMatch(main,/Simulated Claude conversation/,'general homepage compa
 assert.match(main,/Same AI assistant · LTA connected/);
 assert.match(main,/specific claim and supports it with details from the caption and clip/,'homepage comparison should preserve the original With LTA Instagram answer');
 assert.match(billing,/data-api-key-id/,'one-time API key page must expose its non-secret key id for lifecycle management');
-assert.match(docs,/Give your app the source\./,'developer docs should lead with product value, not the raw contract');
-assert.match(docs,/From zero to source text in three steps\./,'developer docs should expose a short first-run path');
-assert.match(docs,/You do not need to learn the whole contract before making your first request\./,'advanced protocol details should not block first use');
-assert.match(docs,/LTA generates the secret for you/,'docs must make server-generated API keys explicit');
+assert.match(docs,/Connect LTA your way\./,'developer page should lead with the two supported integration paths');
+assert.match(docs,/Use LTA from your app\./,'developer page should expose REST API without teaching basic API usage');
+assert.match(docs,/Generate API key/,'developer page should send REST users directly to key generation');
+assert.match(docs,/POST \/v1\/read/,'developer page should expose the read endpoint');
+assert.match(docs,/Authorization: Bearer &lt;API_KEY&gt;/,'developer page should expose the required auth shape');
+assert.doesNotMatch(docs,/From zero to source text in three steps\.|Windows PowerShell|Complete examples|Read lifecycle|Usage & cache/,'developer page must not contain tutorial/reference sections');
 assert.match(docs,/Remote MCP/,'developer surface must expose MCP as a first-class integration path');
 assert.match(docs,/Use LTA inside an AI client\./,'developer surface must explain what MCP is for');
 assert.match(docs,/\/mcp/,'developer surface must publish the production MCP endpoint');
