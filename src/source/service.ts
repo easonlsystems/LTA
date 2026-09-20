@@ -39,6 +39,7 @@ export interface ToolJobResult {
   pages_extracted?:number|null;
   content_sections_truncated?:string[];
   remaining_usage_units?:number;
+  required_usage_units?:number;
 }
 
 export async function startTranscriptJob(userId:string,url:string,options:{refresh?:boolean;profile?:DistributionProfile}={}):Promise<ToolJobResult>{
@@ -110,7 +111,9 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
     }catch(e){
       const err=asLink2AIError(e);
       if(err.code==='QUOTA_EXCEEDED'){
-        await markAwaitingPayment(jobId,err.code,err.message,null);
+        const requiredUnitsRaw=err.details?.required_usage_units??err.details?.required_usage_units_at_least;
+        const requiredUnits=typeof requiredUnitsRaw==='number'&&Number.isFinite(requiredUnitsRaw)?requiredUnitsRaw:undefined;
+        await markAwaitingPayment(jobId,err.code,err.message,null,requiredUnits);
         return await getJobResult(userId,jobId,profile);
       }
       throw e;
@@ -180,14 +183,16 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
   if(row.status==='awaiting_payment'){
     const usage=await getUsageSnapshot(userId).catch(()=>null);
     const remaining=usage?.remaining_usage_units;
+    const required=Number(row.required_usage_units??0)>0?Number(row.required_usage_units):undefined;
     return {
       status:'payment_required',
       job_id:row.id,
       duration_seconds:row.duration_seconds??undefined,
       error_code:row.error_code??'QUOTA_EXCEEDED',
-      message:`Link2AI could not read the full source because the connected account${remaining===undefined?' does not have enough processing units':` has ${remaining} processing units remaining`}. Processing units for text sources are based on the amount of source text Link2AI must retrieve, so large discussions or pull-request diffs can require multiple units. Link2AI does not intentionally return a partial source just to fit the remaining balance. No processing units were charged for this failed read. To add units or review plan options, open ${env().PUBLIC_BASE_URL}/account in your browser.`,
+      message:`Link2AI could not read the full source because the connected account${remaining===undefined?' does not have enough processing units':` has ${remaining} processing units remaining`}${required===undefined?'':`, but this source requires ${required}`}. Processing units for text sources are based on the amount of source text Link2AI must retrieve, so large discussions or pull-request diffs can require multiple units. Link2AI does not intentionally return a partial source just to fit the remaining balance. No processing units were charged for this failed read. To add units or review plan options, open ${env().PUBLIC_BASE_URL}/account in your browser.`,
       usage_units:0,
-      ...(remaining===undefined?{}:{remaining_usage_units:remaining})
+      ...(remaining===undefined?{}:{remaining_usage_units:remaining}),
+      ...(required===undefined?{}:{required_usage_units:required})
     };
   }
   if(row.status==='failed')return {
