@@ -17,6 +17,7 @@ import { recordActivationEvent } from '../analytics/product.js';
 import { logErrorEvent, logEvent } from '../util/log.js';
 import { registerPublicApiRoutes } from './publicApi.js';
 import { developerDocs } from './developerDocs.js';
+import { clientSourceLabel, inferMcpClientSource } from '../source/clientSource.js';
 
 const allowedPublicHosts=publicHostAllowlist(env().PUBLIC_BASE_URL,[process.env.RAILWAY_PUBLIC_DOMAIN??'']);
 const redditOAuthReady=Boolean(env().REDDIT_CLIENT_ID&&env().REDDIT_CLIENT_SECRET);
@@ -40,6 +41,7 @@ const openaiMcpHandler=createMcpHandler(()=>buildMcpServer('openai'));
 const nodeOpenaiMcp=toNodeHandler(openaiMcpHandler,{onerror:(err)=>logErrorEvent('mcp_adapter_error',err,{distribution_profile:'openai'})});
 
 app.all('/mcp',async(request,reply)=>{
+  const ua=String(request.headers['user-agent']??'');
   const originHeader=Array.isArray(request.headers.origin)?request.headers.origin[0]:request.headers.origin;
   const originCheck=validateOriginHeader(originHeader,allowedPublicHosts);
   if(!originCheck.ok){
@@ -50,6 +52,7 @@ app.all('/mcp',async(request,reply)=>{
   // and full tool surface.
   const defaultAuth=await authInfoFromBearer(request.headers.authorization,mcpResource());
   if(defaultAuth){
+    defaultAuth.extra.clientSource=inferMcpClientSource(defaultAuth.clientId,ua,'default',defaultAuth.extra.clientName);
     return nodeMcp(Object.assign(request.raw,{auth:defaultAuth}),reply.raw,request.body);
   }
 
@@ -60,11 +63,11 @@ app.all('/mcp',async(request,reply)=>{
   // access: the OpenAI token never gains the general /mcp tool surface.
   const openaiAuth=await authInfoFromBearer(request.headers.authorization,mcpResource('openai'));
   if(openaiAuth){
+    openaiAuth.extra.clientSource='chatgpt';
     logEvent('openai_mcp_legacy_alias',{method:request.method,distribution_profile:'openai'});
     return nodeOpenaiMcp(Object.assign(request.raw,{auth:openaiAuth}),reply.raw,request.body);
   }
 
-  const ua=String(request.headers['user-agent']??'');
   const openaiRuntime=/^openai-mcp\//i.test(ua);
   const resourceMetadata=openaiRuntime
     ? `${env().PUBLIC_BASE_URL}/.well-known/oauth-protected-resource/mcp/openai`
@@ -100,6 +103,7 @@ app.all('/mcp/openai',async(request,reply)=>{
     reply.header('WWW-Authenticate',challenge);
     return reply.code(401).send({error:'unauthorized',message:`Connect ${env().PUBLIC_BRAND_NAME} to continue.`});
   }
+  auth.extra.clientSource='chatgpt';
   return nodeOpenaiMcp(Object.assign(request.raw,{auth}),reply.raw,request.body);
 });
 
@@ -779,8 +783,8 @@ app.get('/founder',async(req,reply)=>{
       COALESCE((SELECT SUM(seconds) FROM usage_ledger WHERE created_at>now()-interval '7 days'),0)::text AS seconds_7d,
       (SELECT COUNT(*) FROM transcript_jobs WHERE status='failed' AND created_at>now()-interval '24 hours')::text AS failed_24h,
       (SELECT COUNT(*) FROM transcript_jobs WHERE status='failed' AND created_at>now()-interval '7 days')::text AS failed_7d`),
-    pool.query<{user_id:string;email:string|null;platform:string;status:string;duration_seconds:number|null;error_code:string|null;created_at:string}>(
-      `SELECT j.user_id,u.email,j.platform,j.status,j.duration_seconds,j.error_code,j.created_at
+    pool.query<{user_id:string;email:string|null;platform:string;client_source:string;status:string;duration_seconds:number|null;error_code:string|null;created_at:string}>(
+      `SELECT j.user_id,u.email,j.platform,j.client_source,j.status,j.duration_seconds,j.error_code,j.created_at
        FROM transcript_jobs j LEFT JOIN users u ON u.id=j.user_id
        ORDER BY j.created_at DESC LIMIT 20`
     ),
@@ -978,7 +982,7 @@ app.get('/founder',async(req,reply)=>{
   const trackingStarted=founderTime(a?.tracking_started_at);
   const trackingLast=founderTime(a?.tracking_last_at);
   const topPages=topPagesResult.rows.map(row=>`<tr><td class="fd-email">${founderEscape(row.path)}</td><td>${founderNum(row.visitors)}</td><td>${founderNum(row.views)}</td></tr>`).join('')||'<tr><td colspan="3">目前還沒有網站瀏覽紀錄。</td></tr>';
-  const recentJobs=recentJobsResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td class="fd-email"><a href="/founder/user/${founderEscape(row.user_id)}">${founderEscape(row.email??'匿名')}</a></td><td>${founderEscape(row.platform)}</td><td><span class="fd-status ${row.status==='completed'?'ok':row.status==='failed'?'bad':'wait'}">${founderEscape(founderJobStatusLabel(row.status))}</span></td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)} 分鐘`:'—'}</td><td>${founderEscape(row.error_code??'—')}</td></tr>`).join('')||'<tr><td colspan="6">目前還沒有工作紀錄。</td></tr>';
+  const recentJobs=recentJobsResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td class="fd-email"><a href="/founder/user/${founderEscape(row.user_id)}">${founderEscape(row.email??'匿名')}</a></td><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderEscape(row.platform)}</td><td><span class="fd-status ${row.status==='completed'?'ok':row.status==='failed'?'bad':'wait'}">${founderEscape(founderJobStatusLabel(row.status))}</span></td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)} 分鐘`:'—'}</td><td>${founderEscape(row.error_code??'—')}</td></tr>`).join('')||'<tr><td colspan="7">目前還沒有工作紀錄。</td></tr>';
   const platforms=platformResult.rows.map(row=>`<span class="fd-chip">${founderEscape(row.platform)} · ${founderNum(row.count)}</span>`).join('')||'<span class="fd-chip">目前還沒有成功連結</span>';
   const totalMatched=founderNum(accountsCountResult.rows[0]?.count);
   const totalPages=Math.max(1,Math.ceil(totalMatched/pageSize));
@@ -1006,7 +1010,7 @@ app.get('/founder',async(req,reply)=>{
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>熱門網站頁面</h2><div class="fd-note">最近 7 天 · 匿名第一方統計</div></div><span class="fd-label">不儲存 IP</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:520px"><thead><tr><th>頁面</th><th>不重複訪客</th><th>瀏覽次數</th></tr></thead><tbody>${topPages}</tbody></table></div></section>
     <section><div class="fd-label" style="margin-bottom:8px">產品轉換漏斗</div><div class="fd-funnel"><div class="fd-step"><b>${accounts}</b><span>帳號</span></div><div class="fd-step"><b>${connected}</b><span>已連接 AI · ${founderPct(connected,accounts)}</span></div><div class="fd-step"><b>${activated}</b><span>首次成功連結 · ${founderPct(activated,accounts)}</span></div><div class="fd-step"><b>${paid}</b><span>付費 · 佔已啟用使用者 ${founderPct(paid,Math.max(activated,1))}</span></div></div></section>
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>所有帳號</h2><div class="fd-note">${totalMatched} 筆符合 · 第 ${page}／${totalPages} 頁</div></div><form method="get" action="/founder" class="fd-tools"><input class="fd-input" type="search" name="q" value="${searchValue}" placeholder="搜尋 Email"><button class="btn alt sm" type="submit">搜尋</button>${q?'<a class="btn alt sm" href="/founder">清除</a>':''}</form></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>Email</th><th>方案</th><th>狀態</th><th>試用資格</th><th>統計</th><th>AI</th><th>成功連結</th><th>Processing units</th><th>失敗</th><th>最後活動</th><th></th></tr></thead><tbody>${accountRows}</tbody></table></div><div class="fd-panel-head"><span class="fd-label">每頁 100 筆</span><div class="fd-nav">${prev}${next}</div></div></section>
-    <section class="fd-panel"><div class="fd-panel-head"><h2>最近工作</h2><span class="fd-label">最近 20 筆</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>Email</th><th>平台</th><th>狀態</th><th>長度</th><th>錯誤</th></tr></thead><tbody>${recentJobs}</tbody></table></div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><h2>最近工作</h2><span class="fd-label">最近 20 筆</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>Email</th><th>使用入口</th><th>平台</th><th>狀態</th><th>長度</th><th>錯誤</th></tr></thead><tbody>${recentJobs}</tbody></table></div></section>
     <div class="fd-warning">Analytics 上線前的可辨識網站瀏覽已從 Railway 舊 HTTP logs 回補。歷史不重複訪客是匿名估算值；明顯 bot／爬蟲已排除。回補資料只保存匿名識別碼、頁面與時間，不保存原始 IP 或 User-Agent，也不推測無法確認的歷史註冊歸因。</div><div class="fd-warning">後台調整不會刪除使用紀錄。額外額度會加在原方案上；手動修改方案後，之後仍可能被 Lemon Squeezy 的正式訂閱 webhook 更新。</div>
     <p class="fd-private">私人頁面。除了 FOUNDER_EMAIL 登入外，還需要 15 分鐘有效的 Founder Email 驗證；管理 POST 另外驗證 CSRF 與同源請求。</p></main>`;
   return reply.type('text/html').send(founderShell(html,`${env().PUBLIC_BRAND_NAME} 後台`));
@@ -1025,19 +1029,36 @@ app.get('/founder/user/:id',async(req,reply)=>{
       FROM users u WHERE u.id=$1`,[targetId]);
   if(!accountResult.rowCount)return reply.code(404).type('text/plain').send('Not found');
   const account=accountResult.rows[0];
-  const [usage,allTimeResult,jobsResult,auditResult]=await Promise.all([
+  const [usage,allTimeResult,jobsResult,clientUsageResult,accessResult,auditResult]=await Promise.all([
     getUsageSnapshot(targetId),
     pool.query<{links:string;seconds:string;failed:string;last_job:string|null}>(`SELECT
       (SELECT COUNT(*) FROM usage_ledger WHERE user_id=$1)::text links,
       COALESCE((SELECT SUM(seconds) FROM usage_ledger WHERE user_id=$1),0)::text seconds,
       (SELECT COUNT(*) FROM transcript_jobs WHERE user_id=$1 AND status='failed')::text failed,
       (SELECT MAX(created_at) FROM transcript_jobs WHERE user_id=$1) last_job`,[targetId]),
-    pool.query<{id:string;platform:string;status:string;duration_seconds:number|null;error_code:string|null;created_at:string}>(`SELECT id,platform,status,duration_seconds,error_code,created_at FROM transcript_jobs WHERE user_id=$1 ORDER BY created_at DESC LIMIT 30`,[targetId]),
+    pool.query<{id:string;platform:string;client_source:string;status:string;duration_seconds:number|null;error_code:string|null;created_at:string}>(`SELECT id,platform,client_source,status,duration_seconds,error_code,created_at FROM transcript_jobs WHERE user_id=$1 ORDER BY created_at DESC LIMIT 30`,[targetId]),
+    pool.query<{client_source:string;accesses:string;cache_reuses:string;billed_seconds:string}>(`WITH access AS (
+      SELECT client_source,COUNT(*)::bigint accesses,COUNT(*) FILTER(WHERE reused)::bigint cache_reuses
+      FROM source_access_events WHERE user_id=$1 GROUP BY client_source
+    ), billed AS (
+      SELECT j.client_source,COALESCE(SUM(l.seconds),0)::bigint billed_seconds
+      FROM usage_ledger l JOIN transcript_jobs j ON j.id=l.job_id
+      WHERE l.user_id=$1 GROUP BY j.client_source
+    )
+    SELECT COALESCE(a.client_source,b.client_source) client_source,
+      COALESCE(a.accesses,0)::text accesses,COALESCE(a.cache_reuses,0)::text cache_reuses,COALESCE(b.billed_seconds,0)::text billed_seconds
+    FROM access a FULL JOIN billed b ON b.client_source=a.client_source
+    ORDER BY COALESCE(a.accesses,0) DESC,COALESCE(b.billed_seconds,0) DESC`,[targetId]),
+    pool.query<{created_at:string;client_source:string;platform:string;reused:boolean;job_id:string|null;status:string|null}>(`SELECT e.created_at,e.client_source,e.platform,e.reused,e.job_id,j.status
+      FROM source_access_events e LEFT JOIN transcript_jobs j ON j.id=e.job_id
+      WHERE e.user_id=$1 ORDER BY e.created_at DESC LIMIT 30`,[targetId]),
     pool.query<{action:string;before_state:unknown;after_state:unknown;created_at:string}>(`SELECT action,before_state,after_state,created_at FROM founder_admin_events WHERE target_user_id=$1 ORDER BY created_at DESC LIMIT 10`,[targetId])
   ]);
   const a=allTimeResult.rows[0];
   const flash=String((req.query as {saved?:string;error?:string})?.saved??'')==='1'?'<div class="fd-okflash">已儲存。</div>':String((req.query as {error?:string})?.error??'')?`<div class="fd-badflash">${founderEscape((req.query as {error?:string}).error)}</div>`:'';
-  const jobRows=jobsResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(row.platform)}</td><td>${founderEscape(founderJobStatusLabel(row.status))}</td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)} 分鐘`:'—'}</td><td>${founderEscape(row.error_code??'—')}</td><td class="fd-email">${founderEscape(row.id)}</td></tr>`).join('')||'<tr><td colspan="6">目前還沒有工作紀錄。</td></tr>';
+  const jobRows=jobsResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderEscape(row.platform)}</td><td>${founderEscape(founderJobStatusLabel(row.status))}</td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)} 分鐘`:'—'}</td><td>${founderEscape(row.error_code??'—')}</td><td class="fd-email">${founderEscape(row.id)}</td></tr>`).join('')||'<tr><td colspan="7">目前還沒有工作紀錄。</td></tr>';
+  const clientUsageRows=clientUsageResult.rows.map(row=>`<tr><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderNum(row.accesses)}</td><td>${founderNum(row.cache_reuses)}</td><td>${founderUnits(row.billed_seconds)}</td></tr>`).join('')||'<tr><td colspan="4">本帳號尚無可歸因的使用紀錄。</td></tr>';
+  const accessRows=accessResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderEscape(row.platform)}</td><td>${row.reused?'Cache / in-flight reuse':'New job'}</td><td>${founderEscape(row.status?founderJobStatusLabel(row.status):'—')}</td><td class="fd-email">${founderEscape(row.job_id??'—')}</td></tr>`).join('')||'<tr><td colspan="6">目前還沒有使用入口紀錄。</td></tr>';
   const auditRows=auditResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(founderActionLabel(row.action))}</td><td class="fd-muted">${founderEscape(JSON.stringify(row.after_state??{}))}</td></tr>`).join('')||'<tr><td colspan="3">目前還沒有 Founder 調整紀錄。</td></tr>';
   const self=targetId===founder.id;
   const html=`<main class="fd">${founderCss()}<div class="fd-head"><div><a href="/founder" class="fd-note">← 所有帳號</a><h1 style="font-size:clamp(30px,5vw,52px)">${founderEscape(account.email??'匿名')}</h1><p class="fd-sub fd-email">${founderEscape(account.id)}</p></div><div class="fd-tools"><span class="fd-security">Founder 驗證中</span><a class="btn alt sm" href="/founder/user/${founderEscape(targetId)}">重新整理</a><form method="post" action="/founder/lock" style="margin:0"><input type="hidden" name="csrf" value="${founderEscape(founderCsrf)}"><button class="btn alt sm" type="submit">鎖定</button></form></div></div>${flash}
@@ -1059,7 +1080,9 @@ app.get('/founder/user/:id',async(req,reply)=>{
       <div class="fd-field"><label>額外 processing units</label><input class="fd-input" type="number" name="bonus_minutes" min="0" max="100000" step="1" value="${Math.floor(founderNum(account.admin_bonus_seconds)/60)}"><small>直接加在原方案額度上，不會更動既有使用紀錄。</small></div>
       <div class="fd-field"><label>額外連結數</label><input class="fd-input" type="number" name="bonus_links" min="0" max="100000" step="1" value="${founderNum(account.admin_bonus_videos)}"><small>Legacy 欄位，目前 V2 不再以連結數限制方案；保留值只為相容舊資料。</small></div>
     </div><div class="fd-actions"><button class="btn purple" type="submit">儲存變更</button><a class="btn alt" href="/founder">返回</a></div></form></div></section>
-    <section class="fd-panel"><div class="fd-panel-head"><h2>最近工作</h2><span class="fd-label">最近 30 筆</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>平台</th><th>狀態</th><th>長度</th><th>錯誤</th><th>工作 ID</th></tr></thead><tbody>${jobRows}</tbody></table></div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><div><h2>使用入口</h2><div class="fd-note">同一個 Link2AI 帳號共用方案與餘額；這裡分開顯示實際 read 次數、cache reuse 與真正產生的 billed units。</div></div><span class="fd-label">account-wide</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>Client</th><th>Reads</th><th>Cache reuse</th><th>Billed units</th></tr></thead><tbody>${clientUsageRows}</tbody></table></div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><h2>最近使用入口</h2><span class="fd-label">最近 30 次 read</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>Client</th><th>來源平台</th><th>處理方式</th><th>Job 狀態</th><th>工作 ID</th></tr></thead><tbody>${accessRows}</tbody></table></div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><h2>最近工作</h2><span class="fd-label">最近 30 筆</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>Job origin</th><th>平台</th><th>狀態</th><th>長度</th><th>錯誤</th><th>工作 ID</th></tr></thead><tbody>${jobRows}</tbody></table></div></section>
     <section class="fd-panel"><div class="fd-panel-head"><h2>Founder 調整紀錄</h2><span class="fd-label">最近 10 筆</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>動作</th><th>新狀態</th></tr></thead><tbody>${auditRows}</tbody></table></div></section>
     <p class="fd-private">完整 Email 與帳號控制只會顯示給 FOUNDER_EMAIL。</p></main>`;
   return reply.type('text/html').send(founderShell(html,`${env().PUBLIC_BRAND_NAME} 帳號管理`));

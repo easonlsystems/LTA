@@ -23,7 +23,7 @@ assert.match(api,/app\.post\('\/v1\/read'/);
 assert.match(api,/app\.get\('\/v1\/jobs\/:jobId'/);
 assert.match(api,/app\.get\('\/v1\/usage'/);
 assert.match(api,/app\.get\('\/v1\/sources'/);
-assert.match(api,/startTranscriptJob\(auth\.userId,url,\{refresh:body\.refresh===true,profile:'default'\}\)/);
+assert.match(api,/startTranscriptJob\(auth\.userId,url,\{refresh:body\.refresh===true,profile:'default',clientSource:'rest_api'\}\)/);
 assert.match(api,/getJobResult\(auth\.userId,jobId,'default'\)/);
 assert.match(api,/source_completeness/);
 assert.match(api,/canonical_url/);

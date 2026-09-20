@@ -70,7 +70,7 @@ export async function registerPublicApiRoutes(app:FastifyInstance):Promise<void>
     const url=String(body.url??'').trim();
     if(!url)return reply.code(400).send(errorPayload('invalid_request','url is required.'));
     try{
-      const result=await startTranscriptJob(auth.userId,url,{refresh:body.refresh===true,profile:'default'});
+      const result=await startTranscriptJob(auth.userId,url,{refresh:body.refresh===true,profile:'default',clientSource:'rest_api'});
       return sendResult(reply,result);
     }catch(error){
       const err=asLink2AIError(error);

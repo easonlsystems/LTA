@@ -1,6 +1,7 @@
 import { McpServer, type AuthInfo } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { getJobResult, startTranscriptJob, usageForTool, type ToolJobResult } from '../source/service.js';
+import { normalizeClientSource } from '../source/clientSource.js';
 import { asLink2AIError, Link2AIError, publicErrorMessage } from '../util/errors.js';
 import { env } from '../config/env.js';
 import { supportedSourcesForProfile, parseAllowedMediaUrl, type DistributionProfile } from '../source/policy.js';
@@ -148,11 +149,14 @@ const openaiUsageOutputSchema=z.object({
   period_end:z.string().nullable().optional()
 });
 
-type Link2AIHandlerContext={http?:{authInfo?:AuthInfo & {extra?:{userId?:unknown}}}};
+type Link2AIHandlerContext={http?:{authInfo?:AuthInfo & {extra?:{userId?:unknown;clientSource?:unknown}}}};
 function userIdFromContext(ctx:Link2AIHandlerContext):string{
   const id=ctx?.http?.authInfo?.extra?.userId;
   if(typeof id!=='string'||!id)throw new Error('Authenticated Link2AI user is missing.');
   return id;
+}
+function clientSourceFromContext(ctx:Link2AIHandlerContext,profile:DistributionProfile){
+  return normalizeClientSource(ctx?.http?.authInfo?.extra?.clientSource??(profile==='openai'?'chatgpt':'mcp'));
 }
 
 function kindFor(result:ToolJobResult):'video'|'post'|'page'{
@@ -423,7 +427,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
     _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true}
   } as any;
-  const readPublicLink=async(args:Record<string,unknown>,ctx:any)=>{const {url,refresh}=args as {url:string;refresh?:boolean};return safeToolCall(async()=>chunkResult(await startTranscriptJob(userIdFromContext(ctx),url,{refresh:Boolean(refresh),profile})));};
+  const readPublicLink=async(args:Record<string,unknown>,ctx:any)=>{const {url,refresh}=args as {url:string;refresh?:boolean};return safeToolCall(async()=>chunkResult(await startTranscriptJob(userIdFromContext(ctx),url,{refresh:Boolean(refresh),profile,clientSource:clientSourceFromContext(ctx,profile)})));};
 
   server.registerTool('read_public_link',readPublicLinkConfig,readPublicLink);
 
@@ -457,7 +461,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
     const perSourceInitialChars=Math.max(2000,Math.min(12000,Math.floor(50_000/Math.max(1,unique.length))));
     const results=await Promise.all(unique.map(async(inputUrl)=>{
       try{
-        const result=await startTranscriptJob(userId,inputUrl,{refresh:Boolean(refresh),profile});
+        const result=await startTranscriptJob(userId,inputUrl,{refresh:Boolean(refresh),profile,clientSource:clientSourceFromContext(ctx,profile)});
         return {input_url:inputUrl,...chunkResult(result,0,perSourceInitialChars)};
       }catch(error){
         const err=asLink2AIError(error);
@@ -476,7 +480,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
     securitySchemes:LINK2AI_OAUTH_SECURITY,
     _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true}
-  } as any,async(args:Record<string,unknown>,ctx:any)=>{const {url,refresh}=args as {url:string;refresh?:boolean};return safeToolCall(async()=>chunkResult(await startTranscriptJob(userIdFromContext(ctx),url,{refresh:Boolean(refresh),profile})));});
+  } as any,async(args:Record<string,unknown>,ctx:any)=>{const {url,refresh}=args as {url:string;refresh?:boolean};return safeToolCall(async()=>chunkResult(await startTranscriptJob(userIdFromContext(ctx),url,{refresh:Boolean(refresh),profile,clientSource:clientSourceFromContext(ctx,profile)})));});
 
   server.registerTool('get_transcript_result',{
     title:'Get link result',

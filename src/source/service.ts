@@ -7,6 +7,7 @@ import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limi
 import { cacheProvenanceEpoch, findCache } from '../worker/cache.js';
 import { planForUser, priorityForPlan, markAwaitingPayment, markCompleted, setJobMetadata } from '../worker/jobs.js';
 import { recordActivationEvent } from '../analytics/product.js';
+import { normalizeClientSource, type ClientSource } from './clientSource.js';
 
 export interface ToolJobResult {
   status: 'processing'|'completed'|'payment_required'|'failed';
@@ -42,16 +43,28 @@ export interface ToolJobResult {
   required_usage_units?:number;
 }
 
-export async function startTranscriptJob(userId:string,url:string,options:{refresh?:boolean;profile?:DistributionProfile}={}):Promise<ToolJobResult>{
+async function recordSourceAccessEvent(userId:string,jobId:string,platform:string,clientSource:ClientSource,reused:boolean):Promise<void>{
+  try{
+    await pool.query(
+      `INSERT INTO source_access_events(user_id,job_id,platform,client_source,reused) VALUES($1,$2,$3,$4,$5)`,
+      [userId,jobId,platform,clientSource,reused]
+    );
+  }catch{
+    // Attribution must never block source processing.
+  }
+}
+
+export async function startTranscriptJob(userId:string,url:string,options:{refresh?:boolean;profile?:DistributionProfile;clientSource?:ClientSource|string}={}):Promise<ToolJobResult>{
   const profile=options.profile??'default';
+  const clientSource=normalizeClientSource(options.clientSource??(profile==='openai'?'chatgpt':'mcp'));
   const parsed=parseAllowedMediaUrl(url,profile);
   await recordActivationEvent(userId,'connector_enabled',{
     platform:parsed.platform,distributionProfile:profile,
-    metadata:{inferred_from:'authenticated_link_tool_call'}
+    metadata:{inferred_from:'authenticated_link_tool_call',client_source:clientSource}
   });
   await recordActivationEvent(userId,'first_link_attempt',{
     platform:parsed.platform,distributionProfile:profile,
-    metadata:{refresh:Boolean(options.refresh)}
+    metadata:{refresh:Boolean(options.refresh),client_source:clientSource}
   });
   const active=await pool.query<{id:string}>(
     `SELECT j.id FROM transcript_jobs j WHERE j.user_id=$1 AND j.platform=$2
@@ -59,7 +72,7 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
      AND j.status IN ('queued','processing','awaiting_payment') ORDER BY j.created_at DESC LIMIT 1`,
     [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl]
   );
-  if(active.rowCount)return await waitForJob(userId,active.rows[0].id,env().MCP_INLINE_WAIT_MS,profile);
+  if(active.rowCount){await recordSourceAccessEvent(userId,active.rows[0].id,parsed.platform,clientSource,true);return await waitForJob(userId,active.rows[0].id,env().MCP_INLINE_WAIT_MS,profile);}
 
   // A model may call the same read tool more than once while answering. Reuse a still-cached successful result
   // for this user so retries/follow-ups do not consume quota twice. Explicit refresh bypasses successful-result
@@ -74,16 +87,16 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
        ORDER BY j.completed_at DESC LIMIT 1`,
       [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl,provenanceEpoch]
     );
-    if(completed.rowCount)return await getJobResult(userId,completed.rows[0].id,profile);
+    if(completed.rowCount){await recordSourceAccessEvent(userId,completed.rows[0].id,parsed.platform,clientSource,true);return await getJobResult(userId,completed.rows[0].id,profile);}
   }
 
   const plan=await planForUser(userId);
   const job=await pool.query<{id:string}>(
-    `INSERT INTO transcript_jobs(user_id,platform,source_url,normalized_url,canonical_media_id,language,status,priority)
-     VALUES($1,$2,$3,$4,$5,'auto','queued',$6)
+    `INSERT INTO transcript_jobs(user_id,platform,source_url,normalized_url,canonical_media_id,language,status,priority,client_source)
+     VALUES($1,$2,$3,$4,$5,'auto','queued',$6,$7)
      ON CONFLICT DO NOTHING
      RETURNING id`,
-    [userId,parsed.platform,parsed.sourceUrl,parsed.normalizedUrl,parsed.canonicalMediaId,priorityForPlan(plan)]
+    [userId,parsed.platform,parsed.sourceUrl,parsed.normalizedUrl,parsed.canonicalMediaId,priorityForPlan(plan),clientSource]
   );
   if(!job.rowCount){
     const concurrent=await pool.query<{id:string}>(
@@ -91,10 +104,11 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
        AND status IN ('queued','processing','awaiting_payment') ORDER BY created_at DESC LIMIT 1`,
       [userId,parsed.platform,parsed.normalizedUrl]
     );
-    if(concurrent.rowCount)return await waitForJob(userId,concurrent.rows[0].id,env().MCP_INLINE_WAIT_MS,profile);
+    if(concurrent.rowCount){await recordSourceAccessEvent(userId,concurrent.rows[0].id,parsed.platform,clientSource,true);return await waitForJob(userId,concurrent.rows[0].id,env().MCP_INLINE_WAIT_MS,profile);}
     throw new Link2AIError('INTERNAL_ERROR','Could not create transcript job.',500,true);
   }
   const jobId=job.rows[0].id;
+  await recordSourceAccessEvent(userId,jobId,parsed.platform,clientSource,false);
 
   // Fast path: avoid queue/extraction when this canonical media is already cached. Explicit refresh bypasses it.
   const cached=options.refresh||parsed.platform==='x'?null:await findCache(parsed.platform,parsed.canonicalMediaId,'auto');
