@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
-const [docs,main,billing,cert,workflow]=await Promise.all([
+const [docs,main,billing,apiKeys,cert,workflow]=await Promise.all([
   readFile(new URL('../src/api/developerDocs.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/api/main.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/billing/routes.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/api/apiKeys.ts',import.meta.url),'utf8'),
   readFile(new URL('./production-authenticated-cert.mjs',import.meta.url),'utf8'),
   readFile(new URL('../.github/workflows/production-authenticated-certification.yml',import.meta.url),'utf8')
 ]);
@@ -33,20 +34,28 @@ assert.match(docs,/Give your app the source\./,'developer docs should lead with 
 assert.match(docs,/From zero to source text in three steps\./,'developer docs should expose a short first-run path');
 assert.match(docs,/You do not need to learn the whole contract before making your first request\./,'advanced protocol details should not block first use');
 assert.match(docs,/LTA generates the secret for you/,'docs must make server-generated API keys explicit');
-assert.match(billing,/Key name/,'account API key form must label the user input as a key name');
-assert.match(billing,/Generate API key/,'account should present API key creation as server generation');
-assert.match(billing,/This is only a label so you know where the key is used/,'account must explain that the input is not the secret');
-assert.match(billing,/Your API key is ready\./,'one-time key screen should read as a product handoff');
-assert.match(billing,/copy-api-key/,'one-time key screen should offer a copy action');
-assert.doesNotMatch(billing,/Claude and API reads share the same jobs/,'account API copy must not imply a Claude-only product');
-assert.match(docs,/I just want LTA inside an AI/,'developer docs must tell non-developers they do not need the API');
-assert.match(docs,/No API key needed/,'developer docs must clearly separate connected-AI use from Developer API use');
-assert.match(docs,/Windows PowerShell/,'quickstart must include a runnable Windows path');
-assert.match(docs,/Invoke-RestMethod/,'PowerShell quickstart must show the actual first request');
-assert.match(billing,/Do you need an API key\?/,'account must explain whether the Developer API is relevant');
-assert.match(billing,/I just want LTA in an AI/,'account must route ordinary AI users away from API key creation');
-assert.match(billing,/What do I do with this\?/,'one-time key screen must explain the next action');
-assert.match(billing,/PASTE_YOUR_KEY_HERE/,'one-time key screen must include a directly runnable terminal example');
+assert.match(billing,/Key name/,'account API key form must only ask for a key name');
+assert.match(billing,/Generate API key/,'account must generate the secret server-side');
+assert.match(billing,/The full key is shown once and cannot be viewed again\./,'account must explain one-time visibility');
+assert.match(billing,/API key generated\./,'one-time key page must be explicit');
+assert.match(billing,/Copy once/,'one-time key page must expose a single-use copy action');
+assert.match(billing,/Cache-Control','one-time secret response must disable caching');
+assert.match(billing,/no-store, max-age=0/,'one-time secret response must be non-cacheable');
+assert.match(billing,/Referrer-Policy','one-time secret page must not leak through referrers');
+assert.match(billing,/history\.replaceState\(null,'','\/account'\)/,'refreshing the generated-key page must not resubmit key creation');
+assert.match(billing,/button\.disabled=true/,'copy control must disable after a successful copy');
+assert.match(billing,/key\.textContent=prefix\+'••••••••'/,'full key must be removed from the visible DOM after a successful copy');
+assert.match(billing,/>Delete<\/button>/,'existing keys must only offer deletion');
+assert.doesNotMatch(billing,/>Revoke<\/button>/,'user-facing key management must not expose a separate revoke workflow');
+assert.doesNotMatch(billing,/Do you need an API key\?/,'account must not teach developers basic API concepts');
+assert.doesNotMatch(billing,/What do I do with this\?/,'one-time key page must not turn into an API tutorial');
+assert.doesNotMatch(billing,/Invoke-RestMethod/,'one-time key page must not include terminal tutorials');
+assert.doesNotMatch(billing,/View API quickstart/,'account key management must stay focused on keys');
+assert.doesNotMatch(billing,/account\/api-keys\/update/,'API keys must not be editable');
+assert.match(apiKeys,/sha256\(key\)/,'server must persist only a one-way hash of the full API key');
+assert.match(apiKeys,/SELECT id,name,key_prefix,created_at,last_used_at,revoked_at/,'key listing must expose metadata only');
+assert.doesNotMatch(apiKeys,/SELECT[^;]*key_hash[^;]*FROM api_keys WHERE user_id=\$1 AND revoked_at IS NULL/s,'account key listing must never retrieve key hashes');
+assert.match(apiKeys,/WHERE user_id=\$1 AND revoked_at IS NULL/,'deleted keys must disappear from the active key list');
 
 for(const required of ['/auth/reviewer','/account/api-keys','/v1/usage','/v1/sources','/v1/read','/v1/jobs/','/account/api-keys/revoke']){
   assert.ok(cert.includes(required),`production cert must exercise ${required}`);
