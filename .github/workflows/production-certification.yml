@@ -1,0 +1,33 @@
+name: Production certification
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-certification
+  cancel-in-progress: true
+
+jobs:
+  public-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Wait for production and certify public surface
+        env:
+          LINK2AI_PRODUCTION_URL: https://api-production-0383e.up.railway.app
+          LINK2AI_PROD_CERT_ATTEMPTS: 20
+          LINK2AI_PROD_CERT_DELAY_MS: 15000
+        run: node test/production-public-cert.mjs
