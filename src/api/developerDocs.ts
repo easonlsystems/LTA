@@ -66,10 +66,10 @@ print(result["content"])`;
     <div class="api-hero-copy">
       <span class="badge"><span class="badge-dot"></span>Public REST API</span>
       <h1>Give your app the source.</h1>
-      <p>Send a supported public URL. Link2AI returns AI-ready source context with provenance, completeness, and usage in one shared source engine.</p>
+      <p>Send a supported public URL. LTA returns AI-ready source context with provenance, completeness, and usage in one shared source engine.</p>
       <div class="api-paths">
-        <a class="api-path" href="/connect"><span>I just want Link2AI inside an AI</span><strong>Connect an AI →</strong><small>No API key needed.</small></a>
-        <a class="api-path active" href="#quickstart"><span>I'm building an app or automation</span><strong>Use the Developer API →</strong><small>Generate a key, then call Link2AI from your code.</small></a>
+        <a class="api-path" href="/connect"><span>I just want LTA inside an AI</span><strong>Connect an AI →</strong><small>No API key needed.</small></a>
+        <a class="api-path active" href="#quickstart"><span>I'm building an app or automation</span><strong>Use the Developer API →</strong><small>Generate a key, then call LTA from your code.</small></a>
       </div>
       <div class="actions"><a class="btn purple" href="/account">Generate API key →</a><a class="btn alt" href="#quickstart">Make your first request</a><a class="btn alt" href="/sources">Supported sources</a></div>
       <div class="api-hero-meta"><span>Base URL <code>${esc(base)}</code></span><span>Bearer auth</span><span>Failed reads cost 0 units</span></div>
@@ -89,7 +89,7 @@ print(result["content"])`;
       <article class="api-start-card">
         <span class="api-number">1</span>
         <h3>Generate a key</h3>
-        <p>Go to <a href="/account"><strong>Account → Developer API</strong></a>. Choose a label such as <code>Production</code> or <code>n8n</code>. Link2AI generates the secret for you and shows it once.</p>
+        <p>Go to <a href="/account"><strong>Account → Developer API</strong></a>. Choose a label such as <code>Production</code> or <code>n8n</code>. LTA generates the secret for you and shows it once.</p>
         <a class="api-inline-link" href="/account">Open Account →</a>
       </article>
       <article class="api-start-card">
@@ -116,7 +116,7 @@ print(result["content"])`;
   </section>
 
   <section class="api-product-grid">
-    <article class="api-product-card"><span>01</span><h3>One endpoint to start</h3><p>Use <code>POST /v1/read</code> for supported public links. Link2AI handles platform-specific extraction behind the same API.</p></article>
+    <article class="api-product-card"><span>01</span><h3>One endpoint to start</h3><p>Use <code>POST /v1/read</code> for supported public links. LTA handles platform-specific extraction behind the same API.</p></article>
     <article class="api-product-card"><span>02</span><h3>Shared account & usage</h3><p>REST and connected AI clients use the same account balance, jobs, cache, and billing rules.</p></article>
     <article class="api-product-card"><span>03</span><h3>Know when context is partial</h3><p><code>source_completeness</code> tells you whether the returned source is complete or partial instead of silently pretending truncated content is the whole source.</p></article>
   </section>
@@ -137,7 +137,7 @@ print(result["content"])`;
       <details class="api-detail" id="auth">
         <summary><div><span>Authentication</span><strong>Create and protect an API key</strong></div><b>+</b></summary>
         <div class="api-detail-body">
-          <p>Link2AI generates the secret. In <a href="/account"><strong>Account</strong></a>, enter only a key name, then copy the generated key immediately. The full secret is shown once and only its hash is stored.</p>
+          <p>LTA generates the secret. In <a href="/account"><strong>Account</strong></a>, enter only a key name, then copy the generated key immediately. The full secret is shown once and only its hash is stored.</p>
           <p>Send it on every request as <code>Authorization: Bearer l2ai_live_…</code>. Keep it in a secret manager or environment variable—never source control, browser code, logs, or a URL. Revoke keys from Account when no longer needed.</p>
         </div>
       </details>
@@ -179,7 +179,7 @@ Authorization: Bearer $LINK2AI_API_KEY`)}
   "units_used": 1,
   "remaining_usage_units": 9
 }`)}
-          <p><code>canonical_url</code> is Link2AI's normalized source URL and <code>source_key</code> is its stable source identity. <code>metadata</code> carries source-specific counts and provenance; <code>evidence</code> carries timestamped or located excerpts when available.</p>
+          <p><code>canonical_url</code> is LTA's normalized source URL and <code>source_key</code> is its stable source identity. <code>metadata</code> carries source-specific counts and provenance; <code>evidence</code> carries timestamped or located excerpts when available.</p>
           <p><code>source_completeness</code> is <code>complete</code> or <code>partial</code>. For partial results inspect <code>truncation_reason</code> and <code>content_sections_truncated</code>; never silently treat partial content as the whole source.</p>
         </div>
       </details>
@@ -227,7 +227,7 @@ curl ${base}/v1/sources \\\
   </section>
 
   <section class="api-bottom-cta">
-    <div><span class="api-step">Ready to build?</span><h2>Generate a key and make one request.</h2><p>Your API usage and connected AI usage stay on the same Link2AI account.</p></div>
+    <div><span class="api-step">Ready to build?</span><h2>Generate a key and make one request.</h2><p>Your API usage and connected AI usage stay on the same LTA account.</p></div>
     <div class="actions"><a class="btn purple" href="/account">Generate API key →</a><a class="btn alt" href="/account">View usage & jobs</a></div>
   </section>
 
