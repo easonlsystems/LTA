@@ -54,6 +54,9 @@ await eventually('production revision availability',async()=>{
   const developers=await request('/developers');
   assert.equal(developers.response.status,200);
   assert.match(developers.text,/Public REST API/);
+  assert.match(developers.text,/Give your app the source\./,'production developer docs must lead with product value');
+  assert.match(developers.text,/From zero to source text in three steps\./,'production developer docs must expose the short quickstart');
+  assert.match(developers.text,/Generate API key/,'production developer docs must use generated-key onboarding');
   return true;
 });
 
