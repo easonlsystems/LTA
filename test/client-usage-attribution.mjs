@@ -25,7 +25,7 @@ assert.equal(clientSourceLabel('rest_api'),'REST API');
 assert.match(api,/clientSource:'rest_api'/);
 assert.match(mcp,/clientSourceFromContext/);
 assert.match(mcp,/startTranscriptJob[\s\S]*clientSource:clientSourceFromContext/);
-assert.match(main,/inferMcpClientSource\(defaultAuth\.clientId,ua,'default'\)/);
+assert.match(main,/inferMcpClientSource\(defaultAuth\.clientId,ua,'default',defaultAuth\.extra\.clientName\)/);
 assert.match(main,/openaiAuth\.extra\.clientSource='chatgpt'/);
 assert.match(main,/auth\.extra\.clientSource='chatgpt'/);
 
