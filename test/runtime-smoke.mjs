@@ -70,7 +70,7 @@ try{
     if(route==='/use-cases'){assert.match(body,/Use the link normally/);assert.match(body,/Summaries grounded in the source/);}
     if(route==='/sources'){assert.match(body,/Supported sources/);assert.match(body,/Video & social/);assert.match(body,/Reddit/);assert.match(body,/Paused until approved Reddit OAuth Data API credentials are configured/);}
     if(route==='/pricing'){assert.match(body,/Founding offer/);assert.match(body,/First 50 paid users get 50% more usage/);assert.match(body,/500 paid units \+ 250 founding bonus/);assert.match(body,/2,000 paid units \+ 1,000 founding bonus/);assert.match(body,/Unused paid units roll over while subscribed/);assert.match(body,/founding bonus resets each billing cycle and does not roll over/);assert.match(body,/No plan-specific video length limit/);assert.match(body,/What does 1 processing unit mean/);assert.match(body,/Units depend on content size, not platform/);}
-    if(route==='/connect'){assert.match(body,/Add Link2AI to Claude/);assert.match(body,/custom-connector setup/);assert.match(body,/prefilled/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Always available/);assert.doesNotMatch(body,/available in Claude's Connectors Directory|Open Claude Connectors Directory|Use the published connector|Search “Link2AI”|Choose the published Link2AI connector/);}
+    if(route==='/connect'){assert.match(body,/Add Link2AI to Claude/);assert.match(body,/custom-connector setup/);assert.match(body,/prefilled/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Load tools when needed/);assert.match(body,/Tools already loaded/);assert.doesNotMatch(body,/available in Claude's Connectors Directory|Open Claude Connectors Directory|Use the published connector|Search “Link2AI”|Choose the published Link2AI connector/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render|google-client-secret-must-not-render/);
   }
 
@@ -203,10 +203,10 @@ try{
   const connectPage=await fetch(`http://127.0.0.1:${port}/connect`,{headers:{host:'link2ai.example'}});
   assert.equal(connectPage.status,200);
   const connectPageText=await connectPage.text();
-  assert.match(connectPageText,/\+ → Connectors → Link2AI/,'post-connect page must show the exact Claude activation path');
+  assert.match(connectPageText,/\+ → Connectors/,'post-connect page must show where to confirm Link2AI availability');
   assert.match(connectPageText,/normal message box/,'post-connect page must say where to paste the source link');
-  assert.match(connectPageText,/Repeat in each conversation where you want Link2AI/,'post-connect page must disclose per-conversation activation');
-  assert.match(connectPageText,/Connected ✓ One Claude-side step remains/,'Connected must not be presented as the end of setup');
+  assert.match(connectPageText,/Connected = authorization finished/,'post-connect page must distinguish authorization from tool availability');
+  assert.match(connectPageText,/Connected ✓ Authorization is done/,'Connected must be presented as authorization completion, not the end of Claude setup');
 
   const connectStart=await fetch(`http://127.0.0.1:${port}/connect/start`,{headers:{host:'link2ai.example'},redirect:'manual'});
   assert.equal(connectStart.status,302);
