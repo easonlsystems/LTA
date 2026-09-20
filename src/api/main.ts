@@ -1130,11 +1130,18 @@ app.get('/founder/user/:id',async(req,reply)=>{
   const accessRows=accessResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderEscape(row.platform)}</td><td>${row.reused?'Cache / in-flight reuse':'New job'}</td><td>${founderEscape(row.status?founderJobStatusLabel(row.status):'—')}</td><td class="fd-email">${founderEscape(row.job_id??'—')}</td></tr>`).join('')||'<tr><td colspan="6">目前還沒有使用入口紀錄。</td></tr>';
   const auditRows=auditResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(founderActionLabel(row.action))}</td><td class="fd-muted">${founderEscape(JSON.stringify(row.after_state??{}))}</td></tr>`).join('')||'<tr><td colspan="3">目前還沒有 Founder 調整紀錄。</td></tr>';
   const self=targetId===founder.id;
+  const usageLabel=account.plan==='trial'?'試用累積用量':'目前用量';
+  const usageLimitNote=account.plan==='trial'
+    ? `試用總額度 ${founderUnits(usage.limit_seconds)} units · 不按月重置`
+    : `本期上限 ${founderUnits(usage.limit_seconds)} units · 連結數不設固定上限`;
+  const remainingNote=account.plan==='trial'
+    ? 'Trial 是 lifetime allowance；已成功處理的用量會持續累計。'
+    : `本期到 ${founderTime(usage.period_end)}`;
   const html=`<main class="fd">${founderCss()}<div class="fd-head"><div><a href="/founder" class="fd-note">← 所有帳號</a><h1 style="font-size:clamp(30px,5vw,52px)">${founderEscape(account.email??'匿名')}</h1><p class="fd-sub fd-email">${founderEscape(account.id)}</p></div><div class="fd-tools"><span class="fd-security">Founder 驗證中</span><a class="btn alt sm" href="/founder/user/${founderEscape(targetId)}">重新整理</a><form method="post" action="/founder/lock" style="margin:0"><input type="hidden" name="csrf" value="${founderEscape(founderCsrf)}"><button class="btn alt sm" type="submit">鎖定</button></form></div></div>${flash}
     <section class="fd-grid">
       <div class="fd-card"><div class="fd-label">方案</div><div class="fd-value" style="font-size:26px">${founderEscape(founderPlanLabel(account.plan))}</div><div class="fd-note">${founderEscape(founderAccountStatusLabel(account.account_status))}</div></div>
-      <div class="fd-card"><div class="fd-label">目前用量</div><div class="fd-measure"><div class="fd-value" style="font-size:26px">${founderUnits(usage.used_seconds)}</div><div class="fd-unitline">processing units</div></div><div class="fd-note">本期上限 ${founderUnits(usage.limit_seconds)} units · 連結數不設固定上限</div></div>
-      <div class="fd-card"><div class="fd-label">剩餘額度</div><div class="fd-measure"><div class="fd-value" style="font-size:26px">${founderUnits(usage.remaining_seconds)}</div><div class="fd-unitline">processing units</div></div><div class="fd-note">本期到 ${founderTime(usage.period_end)}</div></div>
+      <div class="fd-card"><div class="fd-label">${usageLabel}</div><div class="fd-measure"><div class="fd-value" style="font-size:26px">${founderUnits(usage.used_seconds)}</div><div class="fd-unitline">processing units</div></div><div class="fd-note">${usageLimitNote}</div></div>
+      <div class="fd-card"><div class="fd-label">剩餘額度</div><div class="fd-measure"><div class="fd-value" style="font-size:26px">${founderUnits(usage.remaining_seconds)}</div><div class="fd-unitline">processing units</div></div><div class="fd-note">${remainingNote}</div></div>
       <div class="fd-card"><div class="fd-label">AI connection</div><div class="fd-value" style="font-size:26px">${account.connected?'已連接':'—'}</div><div class="fd-note">試用資格：${account.trial_eligible?'有':'無'}</div></div>
       <div class="fd-card"><div class="fd-label">累計成功連結</div><div class="fd-value">${founderNum(a?.links)}</div><div class="fd-note">累計 ${founderUnits(a?.seconds)} processing units</div></div>
       <div class="fd-card"><div class="fd-label">失敗工作</div><div class="fd-value">${founderNum(a?.failed)}</div><div class="fd-note">最後工作 ${founderTime(a?.last_job)}</div></div>
@@ -1179,6 +1186,16 @@ app.post('/founder/user/:id/update',async(req,reply)=>{
     const before=await client.query<{id:string;email:string|null;plan:string;account_status:string;trial_eligible:boolean;analytics_excluded:boolean;admin_bonus_seconds:number;admin_bonus_videos:number}>(`SELECT id,email,plan,account_status,trial_eligible,analytics_excluded,admin_bonus_seconds,admin_bonus_videos FROM users WHERE id=$1 FOR UPDATE`,[targetId]);
     if(!before.rowCount){await client.query('ROLLBACK');return reply.code(404).type('text/plain').send('Not found');}
     const after=await client.query<{id:string;email:string|null;plan:string;account_status:string;trial_eligible:boolean;analytics_excluded:boolean;admin_bonus_seconds:number;admin_bonus_videos:number}>(`UPDATE users SET plan=$2,account_status=$3,trial_eligible=$4,analytics_excluded=$5,admin_bonus_seconds=$6,admin_bonus_videos=$7,updated_at=now() WHERE id=$1 RETURNING id,email,plan,account_status,trial_eligible,analytics_excluded,admin_bonus_seconds,admin_bonus_videos`,[targetId,plan,accountStatus,trialEligible,analyticsExcluded,bonusMinutes*60,bonusLinks]);
+    if(accountStatus!=='disabled'){
+      await client.query(
+        `UPDATE transcript_jobs SET status='queued',
+           priority=CASE $2 WHEN 'pro' THEN 20 WHEN 'basic' THEN 10 ELSE 0 END,
+           next_attempt_at=now(),error_code=NULL,error_message=NULL,checkout_url=NULL,
+           required_usage_units=NULL,retryable=true,locked_at=NULL,locked_by=NULL,updated_at=now()
+         WHERE user_id=$1 AND status='awaiting_payment' AND error_code='QUOTA_EXCEEDED'`,
+        [targetId,plan]
+      );
+    }
     await client.query(`INSERT INTO founder_admin_events(founder_user_id,target_user_id,action,before_state,after_state) VALUES($1,$2,'account_update',$3::jsonb,$4::jsonb)`,[founder.id,targetId,JSON.stringify(before.rows[0]),JSON.stringify(after.rows[0])]);
     await client.query('COMMIT');
     return reply.redirect(`/founder/user/${encodeURIComponent(targetId)}?saved=1`);
