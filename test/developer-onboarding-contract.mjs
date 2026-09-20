@@ -27,7 +27,7 @@ assert.match(main,/id="sim-comparison-panels"[^>]*hidden/,'homepage comparison m
 assert.match(main,/resetDemo\(false,false\)/,'initial homepage state must wait for the user to run the comparison');
 assert.doesNotMatch(main,/Simulated Claude conversation/,'general homepage comparison must not imply Link2AI only works with Claude');
 assert.match(main,/Same AI assistant · Link2AI connected/);
-assert.match(main,/Marcus Lemonis/,'homepage comparison should use the real recorded Instagram proof rather than invented generic content');
+assert.match(main,/specific claim and supports it with details from the caption and clip/,'homepage comparison should preserve the original With Link2AI Instagram answer');
 assert.match(billing,/data-api-key-id/,'one-time API key page must expose its non-secret key id for lifecycle management');
 
 for(const required of ['/auth/reviewer','/account/api-keys','/v1/usage','/v1/sources','/v1/read','/v1/jobs/','/account/api-keys/revoke']){
