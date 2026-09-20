@@ -27,6 +27,8 @@ assert.match(api,/startTranscriptJob\(auth\.userId,url,\{refresh:body\.refresh==
 assert.match(api,/getJobResult\(auth\.userId,jobId,'default'\)/);
 assert.match(api,/source_completeness/);
 assert.match(api,/canonical_url/);
+assert.match(api,/job_id:result\.job_id/,'job_id must remain an alias of the canonical id field');
+assert.match(api,/return \{error,error_code:error,message,retryable\}/,'all API errors must expose compatible error aliases');
 assert.doesNotMatch(api,/mode\s*:/,'public API beta must not introduce a fast/partial mode by default');
 
 assert.match(main,/registerPublicApiRoutes\(app\)/);

@@ -7,6 +7,7 @@ import { asLink2AIError } from '../util/errors.js';
 function publicPayload(result:ToolJobResult){
   return {
     id:result.job_id,
+    job_id:result.job_id,
     status:result.status,
     source_type:result.platform,
     source_url:result.source_url,
@@ -36,10 +37,15 @@ function publicPayload(result:ToolJobResult){
     remaining_usage_units:result.remaining_usage_units,
     required_usage_units:result.required_usage_units,
     error_code:result.error_code??undefined,
+    error:result.error_code??undefined,
     message:result.message,
     retry_after_seconds:result.retry_after_seconds,
     retryable:result.retryable
   };
+}
+
+function errorPayload(error:string,message:string,retryable=false){
+  return {error,error_code:error,message,retryable};
 }
 
 function sendResult(reply:FastifyReply,result:ToolJobResult){
@@ -53,7 +59,7 @@ async function requireApiKey(req:FastifyRequest,reply:FastifyReply){
   const auth=await authenticateApiKey(req.headers.authorization);
   if(auth)return auth;
   reply.header('WWW-Authenticate','Bearer');
-  reply.code(401).send({error:'unauthorized',message:'Use a valid Link2AI API key.'});
+  reply.code(401).send(errorPayload('unauthorized','Use a valid Link2AI API key.'));
   return null;
 }
 
@@ -62,13 +68,13 @@ export async function registerPublicApiRoutes(app:FastifyInstance):Promise<void>
     const auth=await requireApiKey(req,reply); if(!auth)return;
     const body=(req.body??{}) as {url?:unknown;refresh?:unknown};
     const url=String(body.url??'').trim();
-    if(!url)return reply.code(400).send({error:'invalid_request',message:'url is required.'});
+    if(!url)return reply.code(400).send(errorPayload('invalid_request','url is required.'));
     try{
       const result=await startTranscriptJob(auth.userId,url,{refresh:body.refresh===true,profile:'default'});
       return sendResult(reply,result);
     }catch(error){
       const err=asLink2AIError(error);
-      return reply.code(err.status).send({error:err.code,message:err.message,retryable:err.retryable});
+      return reply.code(err.status).send(errorPayload(err.code,err.message,err.retryable));
     }
   });
 
@@ -76,13 +82,13 @@ export async function registerPublicApiRoutes(app:FastifyInstance):Promise<void>
     const auth=await requireApiKey(req,reply); if(!auth)return;
     const jobId=String((req.params as {jobId?:unknown}).jobId??'');
     if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(jobId)){
-      return reply.code(400).send({error:'invalid_request',message:'jobId must be a UUID.'});
+      return reply.code(400).send(errorPayload('invalid_request','jobId must be a UUID.'));
     }
     try{
       return sendResult(reply,await getJobResult(auth.userId,jobId,'default'));
     }catch(error){
       const err=asLink2AIError(error);
-      return reply.code(err.status).send({error:err.code,message:err.message,retryable:err.retryable});
+      return reply.code(err.status).send(errorPayload(err.code,err.message,err.retryable));
     }
   });
 

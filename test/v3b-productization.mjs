@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
-const [billing,main,source,keys]=await Promise.all([
+const [billing,main,source,keys,docs]=await Promise.all([
   readFile(new URL('../src/billing/routes.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/api/main.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/source/service.ts',import.meta.url),'utf8'),
-  readFile(new URL('../src/api/apiKeys.ts',import.meta.url),'utf8')
+  readFile(new URL('../src/api/apiKeys.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/api/developerDocs.ts',import.meta.url),'utf8')
 ]);
 
 assert.match(billing,/Developer API/);
@@ -21,8 +22,8 @@ assert.match(source,/required_usage_units/,'quota-blocked source results must ex
 assert.match(source,/requires \$\{required\}/,'quota guidance must tell users how many units the source needs when known');
 
 assert.match(main,/app\.get\('\/developers'/);
-assert.match(main,/POST \/v1\/read/);
-assert.match(main,/GET \/v1\/jobs\/\{job_id\}/);
+assert.match(docs,/POST \/v1\/read/);
+assert.match(docs,/GET \/v1\/jobs\/\{id\}/);
 assert.match(main,/href="\/developers"/);
 assert.match(main,/API-key hashes and non-secret key prefixes/);
 
