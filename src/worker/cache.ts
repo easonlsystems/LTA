@@ -37,6 +37,17 @@ export function cacheProvenanceEpoch(platform:string):string|null{
   return CACHE_PROVENANCE_EPOCHS[platform]??null;
 }
 
+function visualPostNeedsAssets(platform:string,canonicalId:string):boolean{
+  return (platform==='instagram'&&canonicalId.startsWith('post_'))
+    ||(platform==='tiktok'&&canonicalId.startsWith('photo_'));
+}
+
+function validVisualPostCache(row:CacheRow|null,platform:string,canonicalId:string):CacheRow|null{
+  if(!row)return null;
+  if(visualPostNeedsAssets(platform,canonicalId)&&!(Array.isArray(row.visual_assets)&&row.visual_assets.length))return null;
+  return row;
+}
+
 export async function findCache(platform: string, canonicalId: string, language: string): Promise<CacheRow | null> {
   const params: unknown[] = [platform, canonicalId];
   const clauses=['platform=$1','canonical_media_id=$2','expires_at > now()'];
@@ -53,7 +64,7 @@ export async function findCache(platform: string, canonicalId: string, language:
     `SELECT * FROM transcript_cache WHERE ${clauses.join(' AND ')}
      ORDER BY created_at DESC LIMIT 1`, params
   );
-  return r.rows[0] ?? null;
+  return validVisualPostCache(r.rows[0]??null,platform,canonicalId);
 }
 
 export async function findUserCompletedCache(userId:string,platform:string,canonicalId:string):Promise<CacheRow|null>{
@@ -70,7 +81,7 @@ export async function findUserCompletedCache(userId:string,platform:string,canon
      ORDER BY j.completed_at DESC LIMIT 1`,
     params
   );
-  return r.rows[0]??null;
+  return validVisualPostCache(r.rows[0]??null,platform,canonicalId);
 }
 
 export async function saveCache(payload: TranscriptPayload): Promise<CacheRow> {
