@@ -132,6 +132,10 @@ assert.match(providerHealthMigration,/PRIMARY KEY\(bucket_start,platform,operati
 assert.match(processorSource,/if\(reserved\)\{await releaseQuota\(job\.id\)/,'Failed provider\/extraction paths must release reserved quota before retry or failure');
 assert.match(billingSource,/j\.error_code='QUOTA_EXCEEDED'/,'A successful top-up must resume quota-blocked jobs');
 assert.match(apiSource,/status='queued'[\s\S]*status='awaiting_payment'[\s\S]*error_code='QUOTA_EXCEEDED'/,'Founder allowance changes must requeue quota-blocked jobs instead of leaving stale awaiting-payment results');
+assert.match(mcpServiceSource,/reviveAffordableAwaitingQuotaJob/,'A reused quota-blocked job must re-check the current wallet instead of returning stale payment_required forever');
+assert.match(mcpServiceSource,/remaining_usage_units<required/,'Quota self-healing must only requeue a blocked job when the current wallet can cover the known requirement');
+assert.match(apiSource,/accounts_total[\s\S]*analytics_excluded=false[\s\S]*connected_total[\s\S]*analytics_excluded=false[\s\S]*activated_total[\s\S]*analytics_excluded=false/,'Founder product conversion totals must exclude internal/test accounts consistently');
+assert.match(apiSource,/熱門網站頁面[\s\S]*external only[\s\S]*排除 Founder \/ 內部測試/,'Founder top-pages analytics must be explicitly external-only');
 assert.match(apiSource,/試用累積用量/,'Founder trial usage must be labeled as lifetime cumulative usage');
 assert.match(billingRoutesSource,/trial units used \(lifetime\)/,'Account UI must not describe trial usage as a billing-cycle counter');
 assert.doesNotMatch(apiSource,/supports videos up to 30 minutes|supports videos up to 120 minutes|very large sources may return partial context/i,'Published copy must match the unit-bounded full-source policy');
