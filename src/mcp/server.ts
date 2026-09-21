@@ -558,7 +558,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
 
   server.registerTool('read_public_links',{
     title:'Read multiple public links',
-    description:`Read two or more supported public URLs in one request and return a separate structured result for each source. This is intended for comparison or synthesis tasks that require multiple source contents. Each result preserves its own source identity, job id, completeness, provenance, usage, and continuation metadata. For image-heavy posts, call get_visual_assets with the returned job_id to deliver the original attached images to the AI. The optional refresh flag forces fresh reads for all supplied sources and may consume processing units again.`,
+    description:`Read two or more supported public URLs in one request and return a separate result for each source. This is intended for comparison or synthesis tasks that require multiple source contents. Each result preserves its own source identity, job id, completeness, provenance, usage, and continuation metadata. For image-heavy posts, call get_visual_assets with the returned job_id to deliver the original attached images to the AI. The optional refresh flag forces fresh reads for all supplied sources and may consume processing units again.`,
     inputSchema:{
       urls:z.array(z.string().url()).min(2).max(20).describe('Supported public links needed for one comparison or synthesis task'),
       refresh:z.boolean().optional().describe('Force fresh reads for all supplied sources only when freshness is explicitly required')
