@@ -836,17 +836,17 @@ app.get('/founder',async(req,reply)=>{
       paid_total:string;basic_total:string;pro_total:string;links_total:string;links_24h:string;links_7d:string;
       seconds_total:string;seconds_7d:string;failed_24h:string;failed_7d:string;
     }>(`SELECT
-      (SELECT COUNT(*) FROM users WHERE email IS NOT NULL)::text AS accounts_total,
-      (SELECT COUNT(*) FROM users WHERE email IS NOT NULL AND created_at>now()-interval '24 hours')::text AS accounts_24h,
-      (SELECT COUNT(*) FROM users WHERE email IS NOT NULL AND created_at>now()-interval '7 days')::text AS accounts_7d,
-      (SELECT COUNT(DISTINCT user_id) FROM (
+      (SELECT COUNT(*) FROM users WHERE email IS NOT NULL AND analytics_excluded=false)::text AS accounts_total,
+      (SELECT COUNT(*) FROM users WHERE email IS NOT NULL AND analytics_excluded=false AND created_at>now()-interval '24 hours')::text AS accounts_24h,
+      (SELECT COUNT(*) FROM users WHERE email IS NOT NULL AND analytics_excluded=false AND created_at>now()-interval '7 days')::text AS accounts_7d,
+      (SELECT COUNT(DISTINCT c.user_id) FROM (
         SELECT user_id FROM oauth_access_tokens WHERE revoked_at IS NULL AND expires_at>now()
         UNION SELECT user_id FROM oauth_refresh_tokens WHERE revoked_at IS NULL AND expires_at>now()
-      ) connected)::text AS connected_total,
-      (SELECT COUNT(DISTINCT user_id) FROM usage_ledger)::text AS activated_total,
-      (SELECT COUNT(*) FROM users WHERE plan IN ('basic','pro') AND account_status='active')::text AS paid_total,
-      (SELECT COUNT(*) FROM users WHERE plan='basic' AND account_status='active')::text AS basic_total,
-      (SELECT COUNT(*) FROM users WHERE plan='pro' AND account_status='active')::text AS pro_total,
+      ) c JOIN users u ON u.id=c.user_id WHERE u.analytics_excluded=false)::text AS connected_total,
+      (SELECT COUNT(DISTINCT l.user_id) FROM usage_ledger l JOIN users u ON u.id=l.user_id WHERE u.analytics_excluded=false)::text AS activated_total,
+      (SELECT COUNT(*) FROM users WHERE analytics_excluded=false AND plan IN ('basic','pro') AND account_status='active')::text AS paid_total,
+      (SELECT COUNT(*) FROM users WHERE analytics_excluded=false AND plan='basic' AND account_status='active')::text AS basic_total,
+      (SELECT COUNT(*) FROM users WHERE analytics_excluded=false AND plan='pro' AND account_status='active')::text AS pro_total,
       (SELECT COUNT(*) FROM usage_ledger)::text AS links_total,
       (SELECT COUNT(*) FROM usage_ledger WHERE created_at>now()-interval '24 hours')::text AS links_24h,
       (SELECT COUNT(*) FROM usage_ledger WHERE created_at>now()-interval '7 days')::text AS links_7d,
@@ -902,9 +902,15 @@ app.get('/founder',async(req,reply)=>{
         (SELECT MAX(created_at) FROM transcript_jobs)
       ) AS tracking_last_at`,[founderEmail]),
     pool.query<{path:string;views:string;visitors:string}>(
-      `SELECT path,COUNT(*)::text AS views,COUNT(DISTINCT visitor_id)::text AS visitors
-       FROM website_pageviews WHERE created_at>now()-interval '7 days'
-       GROUP BY path ORDER BY COUNT(*) DESC,COUNT(DISTINCT visitor_id) DESC LIMIT 10`
+      `SELECT p.path,COUNT(*)::text AS views,COUNT(DISTINCT p.visitor_id)::text AS visitors
+       FROM website_pageviews p
+       JOIN website_visitors v ON v.visitor_id=p.visitor_id
+       LEFT JOIN users u ON u.id=v.user_id
+       WHERE p.created_at>now()-interval '7 days'
+         AND COALESCE(lower(u.email),'')<>$1
+         AND COALESCE(u.analytics_excluded,false)=false
+       GROUP BY p.path ORDER BY COUNT(*) DESC,COUNT(DISTINCT p.visitor_id) DESC LIMIT 10`,
+      [founderEmail]
     ),
     pool.query<{
       external_visitors_all:string;activation_visitors:string;activation_started_at:string|null;
@@ -1069,15 +1075,15 @@ app.get('/founder',async(req,reply)=>{
       <div class="fd-card"><div class="fd-label">首次成功使用</div><div class="fd-value">${externalActivated}</div><div class="fd-note">外部已連接 AI ${externalConnected} · 註冊→首次成功 ${founderPct(externalActivated,Math.max(externalSignups,1))}</div></div>
       <div class="fd-card"><div class="fd-label">成功讀取</div><div class="fd-value">${links}</div><div class="fd-note">今天 +${founderNum(m?.links_24h)} · 近 7 天 +${founderNum(m?.links_7d)}</div></div>
       <div class="fd-card"><div class="fd-label">失敗工作</div><div class="fd-value">${founderNum(m?.failed_24h)}</div><div class="fd-note">今天 · 近 7 天 ${founderNum(m?.failed_7d)}</div></div>
-      <div class="fd-card"><div class="fd-label">付費使用者</div><div class="fd-value">${paid}</div><div class="fd-note">Basic ${founderNum(m?.basic_total)} · Pro ${founderNum(m?.pro_total)}</div></div>
+      <div class="fd-card"><div class="fd-label">付費使用者</div><div class="fd-value">${paid}</div><div class="fd-note">Basic ${founderNum(m?.basic_total)} · Pro ${founderNum(m?.pro_total)} · 排除 Founder / 內部測試</div></div>
       <div class="fd-card"><div class="fd-label">已處理內容</div><div class="fd-measure"><div class="fd-value">${founderUnits(seconds)}</div><div class="fd-unitline">processing units</div></div><div class="fd-note">近 7 天 ${founderUnits(m?.seconds_7d)} units</div></div>
     </section>
     <section><div class="fd-label" style="margin-bottom:8px">外部啟用漏斗 · 排除 Founder / 內部測試 · 自 ${activationStarted} 起</div><div class="fd-funnel activation"><div class="fd-step"><b>${activationVisitors}</b><span>可比較外部訪客</span></div><div class="fd-step"><b>${ctaStarts}</b><span>點主 CTA · ${founderPct(ctaStarts,Math.max(activationVisitors,1))}</span></div><div class="fd-step"><b>${signupViews}</b><span>看註冊頁 · ${founderPct(signupViews,Math.max(activationVisitors,1))}</span></div><div class="fd-step"><b>${signupSubmits}</b><span>送出註冊 · ${founderPct(signupSubmits,Math.max(signupViews,1))}</span></div><div class="fd-step"><b>${externalSignups}</b><span>完成註冊 · ${founderPct(externalSignups,Math.max(signupSubmits,1))}</span></div><div class="fd-step"><b>${externalConnected}</b><span>AI connected · ${founderPct(externalConnected,Math.max(externalSignups,1))}</span></div><div class="fd-step"><b>${externalActivated}</b><span>首次成功 read · ${founderPct(externalActivated,Math.max(externalConnected,1))}</span></div><div class="fd-step"><b>${externalPaid}</b><span>付費 · ${founderPct(externalPaid,Math.max(externalActivated,1))}</span></div></div><div class="fd-note">舊 Railway 回補流量仍保留在總訪客與熱門頁面，但不混進這條新漏斗的轉換率；這樣接下來累積到約 100 個 relevant external visitors 時才可直接比較。</div></section>
     <section><div class="fd-label" style="margin-bottom:8px">Claude 連線 → 首次成功讀取 · 新 activation 埋點</div><div class="fd-funnel activation"><div class="fd-step"><b>${productConnectCta}</b><span>Connect CTA</span></div><div class="fd-step"><b>${productConnectionStarted}</b><span>OAuth started · ${founderPct(productConnectionStarted,Math.max(productConnectCta,1))}</span></div><div class="fd-step"><b>${productConnectionSuccess}</b><span>Connected · ${founderPct(productConnectionSuccess,Math.max(productConnectionStarted,1))}</span></div><div class="fd-step"><b>${productConnectorEnabled}</b><span>Connector usable* · ${founderPct(productConnectorEnabled,Math.max(productConnectionSuccess,1))}</span></div><div class="fd-step"><b>${productFirstLinkAttempt}</b><span>First link attempt · ${founderPct(productFirstLinkAttempt,Math.max(productConnectorEnabled,1))}</span></div><div class="fd-step"><b>${productFirstSuccessfulRead}</b><span>First successful read · ${founderPct(productFirstSuccessfulRead,Math.max(productFirstLinkAttempt,1))}</span></div></div><div class="fd-note">* Claude 不提供「使用者剛剛切開 connector toggle」的 server-side webhook，因此 connector usable 是在第一個已驗證 LTA tool call 抵達後推定；它可以區分「已授權但從未真正用到」與「connector 已經在對話中可被呼叫」。這組資料從本版上線後開始累積，不回推舊使用者。</div></section>
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>Source provider health</h2><div class="fd-note">最近 24 小時 · 每個 provider attempt 都會記成功／失敗、延遲與錯誤類型；不保存來源 URL 或內容。</div></div><span class="fd-label">rolling 24h</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:980px"><thead><tr><th>平台</th><th>操作</th><th>Provider</th><th>Attempts</th><th>成功率</th><th>失敗</th><th>可重試失敗</th><th>平均延遲</th><th>最近錯誤</th></tr></thead><tbody>${providerHealthRows}</tbody></table></div></section>
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>流量來源</h2><div class="fd-note">UTM source 優先；沒有 UTM 時只保存 referrer hostname，不保存完整 referrer URL、IP 或 User-Agent。</div></div><span class="fd-label">external only</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:620px"><thead><tr><th>來源</th><th>訪客</th><th>註冊</th><th>註冊率</th></tr></thead><tbody>${sourceRows}</tbody></table></div></section>
-    <section class="fd-panel"><div class="fd-panel-head"><div><h2>熱門網站頁面</h2><div class="fd-note">最近 7 天 · 匿名第一方統計</div></div><span class="fd-label">不儲存 IP</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:520px"><thead><tr><th>頁面</th><th>不重複訪客</th><th>瀏覽次數</th></tr></thead><tbody>${topPages}</tbody></table></div></section>
-    <section><div class="fd-label" style="margin-bottom:8px">產品轉換漏斗</div><div class="fd-funnel"><div class="fd-step"><b>${accounts}</b><span>帳號</span></div><div class="fd-step"><b>${connected}</b><span>已連接 AI · ${founderPct(connected,accounts)}</span></div><div class="fd-step"><b>${activated}</b><span>首次成功連結 · ${founderPct(activated,accounts)}</span></div><div class="fd-step"><b>${paid}</b><span>付費 · 佔已啟用使用者 ${founderPct(paid,Math.max(activated,1))}</span></div></div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><div><h2>熱門網站頁面</h2><div class="fd-note">最近 7 天 · external only · 排除 Founder / 內部測試</div></div><span class="fd-label">不儲存 IP</span></div><div class="fd-scroll"><table class="fd-table" style="min-width:520px"><thead><tr><th>頁面</th><th>不重複訪客</th><th>瀏覽次數</th></tr></thead><tbody>${topPages}</tbody></table></div></section>
+    <section><div class="fd-label" style="margin-bottom:8px">產品轉換漏斗 · external only · 排除 Founder / 內部測試</div><div class="fd-funnel"><div class="fd-step"><b>${accounts}</b><span>帳號</span></div><div class="fd-step"><b>${connected}</b><span>已連接 AI · ${founderPct(connected,accounts)}</span></div><div class="fd-step"><b>${activated}</b><span>首次成功連結 · ${founderPct(activated,accounts)}</span></div><div class="fd-step"><b>${paid}</b><span>付費 · 佔已啟用使用者 ${founderPct(paid,Math.max(activated,1))}</span></div></div></section>
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>所有帳號</h2><div class="fd-note">${totalMatched} 筆符合 · 第 ${page}／${totalPages} 頁</div></div><form method="get" action="/founder" class="fd-tools"><input class="fd-input" type="search" name="q" value="${searchValue}" placeholder="搜尋 Email"><button class="btn alt sm" type="submit">搜尋</button>${q?'<a class="btn alt sm" href="/founder">清除</a>':''}</form></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>Email</th><th>方案</th><th>狀態</th><th>試用資格</th><th>統計</th><th>AI</th><th>成功連結</th><th>Processing units</th><th>失敗</th><th>最後活動</th><th></th></tr></thead><tbody>${accountRows}</tbody></table></div><div class="fd-panel-head"><span class="fd-label">每頁 100 筆</span><div class="fd-nav">${prev}${next}</div></div></section>
     <section class="fd-panel"><div class="fd-panel-head"><h2>最近工作</h2><span class="fd-label">最近 20 筆</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>Email</th><th>使用入口</th><th>平台</th><th>狀態</th><th>長度</th><th>錯誤</th></tr></thead><tbody>${recentJobs}</tbody></table></div></section>
     <div class="fd-warning">Analytics 上線前的可辨識網站瀏覽已從 Railway 舊 HTTP logs 回補。歷史不重複訪客是匿名估算值；明顯 bot／爬蟲已排除。回補資料只保存匿名識別碼、頁面與時間，不保存原始 IP 或 User-Agent，也不推測無法確認的歷史註冊歸因。</div><div class="fd-warning">後台調整不會刪除使用紀錄。額外額度會加在原方案上；手動修改方案後，之後仍可能被 Lemon Squeezy 的正式訂閱 webhook 更新。</div>
