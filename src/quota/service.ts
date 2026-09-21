@@ -6,24 +6,26 @@ import { usageUnitsToLegacySeconds } from '../content/limits.js';
 import { foundingBonusUnits, type FoundingPlan } from '../billing/foundingPolicy.js';
 
 interface Period { start: Date | null; end: Date | null; }
+const INTERNAL_TEST_SOURCE_BUDGET_UNITS=PLAN_LIMITS.pro.secondsPerPeriod/60;
 
 function sameInstant(a:Date|null,b:Date|null):boolean{
   return Boolean(a&&b&&a.getTime()===b.getTime());
 }
 
-async function getUserAndPeriod(client: PoolClient, userId: string): Promise<{plan:Plan; period:Period; trialEligible:boolean; bonusSeconds:number; bonusVideos:number; rolloverSeconds:number; periodBaseSeconds:number}> {
-  const user = await client.query<{plan:Plan;trial_eligible:boolean;admin_bonus_seconds:number;admin_bonus_videos:number;founding_plan:FoundingPlan|null;founding_claimed_at:Date|null;founding_cycles_used:number;founding_period_start:Date|null;founding_ended_at:Date|null;founding_slot_released_at:Date|null;paid_rollover_seconds:number;paid_rollover_settled_period_start:Date|null}>(
-    'SELECT plan,trial_eligible,admin_bonus_seconds,admin_bonus_videos,founding_plan,founding_claimed_at,founding_cycles_used,founding_period_start,founding_ended_at,founding_slot_released_at,paid_rollover_seconds,paid_rollover_settled_period_start FROM users WHERE id=$1 FOR UPDATE', [userId]
+async function getUserAndPeriod(client: PoolClient, userId: string): Promise<{plan:Plan; period:Period; trialEligible:boolean; quotaExempt:boolean; bonusSeconds:number; bonusVideos:number; rolloverSeconds:number; periodBaseSeconds:number}> {
+  const user = await client.query<{plan:Plan;trial_eligible:boolean;analytics_excluded:boolean;admin_bonus_seconds:number;admin_bonus_videos:number;founding_plan:FoundingPlan|null;founding_claimed_at:Date|null;founding_cycles_used:number;founding_period_start:Date|null;founding_ended_at:Date|null;founding_slot_released_at:Date|null;paid_rollover_seconds:number;paid_rollover_settled_period_start:Date|null}>(
+    'SELECT plan,trial_eligible,analytics_excluded,admin_bonus_seconds,admin_bonus_videos,founding_plan,founding_claimed_at,founding_cycles_used,founding_period_start,founding_ended_at,founding_slot_released_at,paid_rollover_seconds,paid_rollover_settled_period_start FROM users WHERE id=$1 FOR UPDATE', [userId]
   );
   if (!user.rowCount) throw new Link2AIError('AUTH_REQUIRED', 'User account not found.', 401);
   const row=user.rows[0];
   const plan = row.plan;
   const trialEligible=Boolean(row.trial_eligible);
+  const quotaExempt=Boolean(row.analytics_excluded);
   const foundingActive=plan!=='trial'&&Boolean(row.founding_claimed_at)&&!row.founding_ended_at&&!row.founding_slot_released_at&&row.founding_plan===plan&&row.founding_cycles_used>=1&&row.founding_cycles_used<=3;
   const foundingBonusSeconds=foundingActive?foundingBonusUnits(plan as FoundingPlan)*60:0;
   const bonusSeconds=Math.max(0,Number(row.admin_bonus_seconds??0)||0)+foundingBonusSeconds;
   const bonusVideos=Math.max(0,Number(row.admin_bonus_videos??0)||0);
-  if (plan === 'trial') return { plan, period: { start: null, end: null }, trialEligible, bonusSeconds, bonusVideos, rolloverSeconds:0, periodBaseSeconds:PLAN_LIMITS.trial.secondsPerPeriod };
+  if (plan === 'trial') return { plan, period: { start: null, end: null }, trialEligible, quotaExempt, bonusSeconds, bonusVideos, rolloverSeconds:0, periodBaseSeconds:PLAN_LIMITS.trial.secondsPerPeriod };
   const sub = await client.query<{current_period_start:Date|null; current_period_end:Date|null}>(
     `SELECT current_period_start, current_period_end FROM subscriptions
      WHERE user_id=$1 AND plan=$2 AND status IN ('active','trialing','past_due')
@@ -43,7 +45,7 @@ async function getUserAndPeriod(client: PoolClient, userId: string): Promise<{pl
   // If a paid period was already settled into the rollover wallet (for example after
   // cancellation), do not credit that same billing period's base allowance twice.
   const periodBaseSeconds=sameInstant(row.paid_rollover_settled_period_start,period.start)?0:PLAN_LIMITS[plan].secondsPerPeriod;
-  return { plan, period, trialEligible, bonusSeconds, bonusVideos, rolloverSeconds, periodBaseSeconds };
+  return { plan, period, trialEligible, quotaExempt, bonusSeconds, bonusVideos, rolloverSeconds, periodBaseSeconds };
 }
 
 function periodSql(period: Period, alias: string): {sql:string; params:unknown[]} {
@@ -56,7 +58,11 @@ export async function availableUsageUnits(userId:string,excludeJobId?:string):Pr
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
-    const {plan,period,trialEligible,bonusSeconds,rolloverSeconds,periodBaseSeconds}=await getUserAndPeriod(client,userId);
+    const {plan,period,trialEligible,quotaExempt,bonusSeconds,rolloverSeconds,periodBaseSeconds}=await getUserAndPeriod(client,userId);
+    if(quotaExempt){
+      await client.query('COMMIT');
+      return {plan,remaining_usage_units:INTERNAL_TEST_SOURCE_BUDGET_UNITS,remaining_seconds:INTERNAL_TEST_SOURCE_BUDGET_UNITS*60};
+    }
     if(plan==='trial'&&!trialEligible){
       await client.query('COMMIT');
       return {plan,remaining_usage_units:0,remaining_seconds:0};
@@ -85,11 +91,21 @@ export async function reserveQuota(userId: string, jobId: string, usageUnits: nu
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { plan, period, trialEligible, bonusSeconds, bonusVideos, rolloverSeconds, periodBaseSeconds } = await getUserAndPeriod(client, userId);
+    const { plan, period, trialEligible, quotaExempt, bonusSeconds, bonusVideos, rolloverSeconds, periodBaseSeconds } = await getUserAndPeriod(client, userId);
     // If a previous attempt finalized quota but crashed before marking the job completed,
     // retrying this same job must not reserve or charge it a second time.
     const finalized=await client.query('SELECT 1 FROM usage_ledger WHERE user_id=$1 AND job_id=$2',[userId,jobId]);
     if(finalized.rowCount){await client.query('COMMIT');return;}
+    if(quotaExempt){
+      await client.query(
+        `INSERT INTO quota_reservations(user_id, job_id, seconds, expires_at)
+         VALUES($1,$2,0,now() + interval '60 minutes')
+         ON CONFLICT(job_id) DO UPDATE SET seconds=0, expires_at=EXCLUDED.expires_at`,
+        [userId,jobId]
+      );
+      await client.query('COMMIT');
+      return;
+    }
     const limits = PLAN_LIMITS[plan];
     const limitSeconds=periodBaseSeconds+rolloverSeconds+bonusSeconds;
     const limitVideos=limits.videosPerPeriod===null?null:limits.videosPerPeriod+bonusVideos;
@@ -180,13 +196,14 @@ export interface UsageSnapshot {
   limit_usage_units:number;
   remaining_usage_units:number;
   rollover_usage_units:number;
+  quota_exempt:boolean;
 }
 
 export async function getUsageSnapshot(userId: string): Promise<UsageSnapshot> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { plan, period, trialEligible, bonusSeconds, bonusVideos, rolloverSeconds, periodBaseSeconds } = await getUserAndPeriod(client, userId);
+    const { plan, period, trialEligible, quotaExempt, bonusSeconds, bonusVideos, rolloverSeconds, periodBaseSeconds } = await getUserAndPeriod(client, userId);
     const limits = PLAN_LIMITS[plan];
     const limitSeconds=periodBaseSeconds+rolloverSeconds+bonusSeconds;
     const limitVideos=limits.videosPerPeriod===null?null:limits.videosPerPeriod+bonusVideos;
@@ -215,7 +232,8 @@ export async function getUsageSnapshot(userId: string): Promise<UsageSnapshot> {
       used_usage_units:Math.ceil(usedSeconds/60),
       limit_usage_units:Math.floor((plan==='trial'&&!trialEligible?0:limitSeconds)/60),
       remaining_usage_units:Math.floor((plan==='trial'&&!trialEligible?0:Math.max(0,limitSeconds-usedSeconds))/60),
-      rollover_usage_units:plan==='trial'?0:Math.floor(rolloverSeconds/60)
+      rollover_usage_units:plan==='trial'?0:Math.floor(rolloverSeconds/60),
+      quota_exempt:quotaExempt
     };
   } catch (err) {
     await client.query('ROLLBACK');
