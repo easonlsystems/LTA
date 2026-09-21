@@ -131,6 +131,7 @@ const usageOutputSchema=z.object({
   concurrent_jobs:z.number().int().nonnegative(),
   concurrency_limit:z.number().int().nonnegative(),
   period_end:z.string().nullable().optional(),
+  quota_exempt:z.boolean().optional().describe('True only for founder/internal test accounts. When true, source reads are not charged processing units and the normal unit balance does not block testing.'),
   used_seconds:z.number().nonnegative().optional().describe('Legacy compatibility field derived from processing-unit accounting.'),
   limit_seconds:z.number().nonnegative().optional().describe('Legacy compatibility field derived from processing-unit accounting.'),
   remaining_seconds:z.number().nonnegative().optional().describe('Legacy compatibility field derived from processing-unit accounting.'),
@@ -146,7 +147,8 @@ const openaiUsageOutputSchema=z.object({
   remaining_usage_units:z.number().int().nonnegative().describe('Authoritative processing units remaining. Use this field to answer questions about how many LTA processing units are left.'),
   concurrent_jobs:z.number().int().nonnegative(),
   concurrency_limit:z.number().int().nonnegative(),
-  period_end:z.string().nullable().optional()
+  period_end:z.string().nullable().optional(),
+  quota_exempt:z.boolean().optional().describe('True only for founder/internal test accounts. When true, source reads are not charged processing units and the normal unit balance does not block testing.')
 });
 
 type Link2AIHandlerContext={http?:{authInfo?:AuthInfo & {extra?:{userId?:unknown;clientSource?:unknown}}}};
