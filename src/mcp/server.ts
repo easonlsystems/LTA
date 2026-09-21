@@ -5,8 +5,12 @@ import { normalizeClientSource } from '../source/clientSource.js';
 import { asLink2AIError, Link2AIError, publicErrorMessage } from '../util/errors.js';
 import { env } from '../config/env.js';
 import { supportedSourcesForProfile, parseAllowedMediaUrl, type DistributionProfile } from '../source/policy.js';
+import { safeGetBuffer } from '../util/safeHttp.js';
 
 const MAX_CHARS=50_000;
+const MAX_INLINE_VISUAL_ASSETS=3;
+const MAX_VISUAL_IMAGE_BYTES=4_500_000;
+const MAX_VISUAL_TOTAL_BYTES=10_000_000;
 
 const LINK2AI_OAUTH_SECURITY=[{type:'oauth2' as const,scopes:['link2ai:read']}];
 
@@ -46,6 +50,11 @@ const linkResultOutputSchema=z.object({
   content_sections_truncated:z.array(z.string()).optional(),
   content_scope:z.string().optional(),
   visual_content_included:z.boolean().optional(),
+  visual_assets_available:z.number().int().nonnegative().optional(),
+  visual_assets_delivered:z.number().int().nonnegative().optional(),
+  visual_assets_failed:z.number().int().nonnegative().optional(),
+  visual_assets_next_offset:z.number().int().nonnegative().nullable().optional(),
+  visual_video_assets_available:z.number().int().nonnegative().optional(),
   limitation_notice:z.string().optional(),
   transcript_offset:z.number().int().nonnegative().optional(),
   next_offset:z.number().int().nonnegative().nullable().optional(),
@@ -64,6 +73,22 @@ const batchLinkResultOutputSchema=z.object({
   unique_source_count:z.number().int().nonnegative(),
   per_source_initial_chars:z.number().int().positive(),
   results:z.array(linkResultOutputSchema.extend({input_url:z.string().url()}))
+});
+
+const visualAssetOutputSchema=z.object({
+  status:z.enum(['completed','processing','payment_required','failed']),
+  job_id:z.string().uuid(),
+  visual_assets_available:z.number().int().nonnegative().optional(),
+  visual_assets_delivered:z.number().int().nonnegative().optional(),
+  visual_assets_failed:z.number().int().nonnegative().optional(),
+  visual_offset:z.number().int().nonnegative().optional(),
+  next_visual_offset:z.number().int().nonnegative().nullable().optional(),
+  visual_video_assets_available:z.number().int().nonnegative().optional(),
+  visual_content_included:z.boolean().optional(),
+  usage_units:z.number().int().nonnegative().optional(),
+  error_code:z.string().nullable().optional(),
+  retryable:z.boolean().optional(),
+  message:z.string().optional()
 });
 
 const timeRangeOutputSchema=z.object({
@@ -183,9 +208,13 @@ export function chunkResult(result:ToolJobResult,offset=0,maxChars=MAX_CHARS):Re
   const contentText=chunk.text;
   const next=chunk.end<result.transcript.length?chunk.end:null;
   const contentType=kindFor(result);
+  const imageAssets=(result.visual_assets??[]).filter(asset=>asset.kind==='image');
+  const videoAssets=(result.visual_assets??[]).filter(asset=>asset.kind==='video');
   const visualNotice=contentType==='video'
-    ? 'Visual-only text, layout, gestures, charts, pairings, and other on-screen relationships may be missing. Do not infer them unless supported by transcript/caption text.'
-    : 'Images, visual layout, attached media and other non-text details are not fully represented unless explicitly present in the returned text.';
+    ? 'Visual-only text, layout, gestures, charts, pairings, and other on-screen relationships may be missing. LTA currently returns spoken/caption text for this video; visual frame passthrough is not included yet.'
+    : imageAssets.length
+      ? undefined
+      : 'Images, visual layout, attached media and other non-text details were not available as model-readable image blocks in this result.';
   const sourceTruncated=Boolean(result.truncated);
   const timelineCoverageVerified=contentType!=='video'||Boolean(result.segments?.length);
   const sourceCompleteness=sourceTruncated?'partial':timelineCoverageVerified?'complete':'unverified';
@@ -211,26 +240,119 @@ export function chunkResult(result:ToolJobResult,offset=0,maxChars=MAX_CHARS):Re
     // Keep transcript for backward compatibility with already-connected MCP clients.
     transcript:contentText,
     content_scope:contentType==='video'?'spoken_and_caption_text':contentType==='post'?'public_post_text':'public_page_text',
-    visual_content_included:false,continuation_notice:continuationNotice,limitation_notice:sourceTruncated
+    visual_content_included:false,visual_assets_available:imageAssets.length,visual_assets_delivered:0,
+    visual_assets_failed:0,visual_assets_next_offset:imageAssets.length?0:null,visual_video_assets_available:videoAssets.length,
+    continuation_notice:continuationNotice,limitation_notice:sourceTruncated
       ? `Note: The upstream source or provider did not expose a complete result.${result.pages_extracted!==undefined&&result.pages_available!==undefined?` Processed ${result.pages_extracted} of ${result.pages_available} pages.`:''}${result.content_sections_truncated?.length?` Incomplete sections: ${result.content_sections_truncated.join(', ')}.`:''}`
       : sourceCompleteness==='unverified'
-        ? `LTA received transcript text, but this source did not provide timestamps that can prove timeline coverage. ${visualNotice}`
+        ? `LTA received transcript text, but this source did not provide timestamps that can prove timeline coverage.${visualNotice?` ${visualNotice}`:''}`
         : continuationNotice??visualNotice,
     transcript_offset:chunk.start,next_offset:next,total_characters:result.transcript.length,
     ...(safeOffset===0&&result.transcript.length<=size?{segments:result.segments}: {})
   };
 }
 
-function toolResponse(data:Record<string,unknown>,isError=false){
+type McpContentBlock=
+  | {type:'text';text:string}
+  | {type:'image';data:string;mimeType:string};
+
+function toolResponse(data:Record<string,unknown>,isError=false,extraContent:McpContentBlock[]=[]){
   // MCP server instructions and tool descriptions carry model-facing behavior guidance.
   // Tool results must contain only the actual result payload: some hosts surface
   // content[0].text directly to end users, so never prepend internal operating guidance.
   const text=JSON.stringify(data);
-  return { content:[{type:'text' as const,text}], structuredContent:data, ...(isError?{isError:true}:{}) };
+  return { content:[{type:'text' as const,text},...extraContent], structuredContent:data, ...(isError?{isError:true}:{}) };
 }
 
 async function safeToolCall(action:()=>Promise<Record<string,unknown>>){
   try{return toolResponse(await action());}
+  catch(error){
+    const err=asLink2AIError(error);
+    return toolResponse({status:'failed',error_code:err.code,message:publicErrorMessage(err.code),retryable:err.retryable,usage_units:0},true);
+  }
+}
+
+function normalizedImageMime(contentType:string|null,hinted?:string):string|null{
+  const value=String(contentType??hinted??'').split(';',1)[0].trim().toLowerCase();
+  return ['image/jpeg','image/png','image/webp','image/gif'].includes(value)?value:null;
+}
+
+async function loadVisualImagePage(result:ToolJobResult,offset=0,limit=MAX_INLINE_VISUAL_ASSETS):Promise<{
+  blocks:McpContentBlock[];available:number;delivered:number;failed:number;nextOffset:number|null;videoAvailable:number;
+}>{
+  const images=(result.visual_assets??[]).filter(asset=>asset.kind==='image');
+  const videoAvailable=(result.visual_assets??[]).filter(asset=>asset.kind==='video').length;
+  const start=Math.max(0,Math.min(offset,images.length));
+  const cap=Math.max(1,Math.min(MAX_INLINE_VISUAL_ASSETS,limit));
+  const selected=images.slice(start,start+cap);
+  const blocks:McpContentBlock[]=[];
+  let totalBytes=0,failed=0;
+  for(const asset of selected){
+    const remaining=MAX_VISUAL_TOTAL_BYTES-totalBytes;
+    if(remaining<64_000){failed+=selected.length-blocks.length-failed;break;}
+    try{
+      const response=await safeGetBuffer(asset.url,{
+        maxBytes:Math.min(MAX_VISUAL_IMAGE_BYTES,remaining),timeoutMs:12_000,maxRedirects:4,
+        userAgent:'LTA/1.0 visual-passthrough',accept:'image/jpeg,image/png,image/webp,image/gif;q=0.9,*/*;q=0.1'
+      });
+      const mimeType=normalizedImageMime(response.contentType,asset.mimeType);
+      if(!mimeType){failed++;continue;}
+      totalBytes+=response.bytes.length;
+      blocks.push({type:'image',data:response.bytes.toString('base64'),mimeType});
+    }catch{failed++;}
+  }
+  const attemptedEnd=Math.min(images.length,start+selected.length);
+  return {
+    blocks,available:images.length,delivered:blocks.length,failed,
+    nextOffset:attemptedEnd<images.length?attemptedEnd:null,videoAvailable
+  };
+}
+
+function applyVisualDelivery(data:Record<string,unknown>,delivery:{
+  available:number;delivered:number;failed:number;nextOffset:number|null;videoAvailable:number;
+}):Record<string,unknown>{
+  const visualIncluded=delivery.delivered>0;
+  const visualPending=delivery.nextOffset!==null;
+  const unresolvedVideo=delivery.videoAvailable>0;
+  const baseContinuation=Boolean(data.continuation_required);
+  const baseComplete=Boolean(data.content_complete);
+  const existingNotice=typeof data.limitation_notice==='string'?data.limitation_notice:undefined;
+  let limitationNotice=existingNotice;
+  if(delivery.available>0&&delivery.delivered===0){
+    limitationNotice='LTA found attached images, but no image bytes could be delivered to the AI client on this attempt.';
+  }else if(visualPending){
+    limitationNotice=`More attached images remain. Call get_visual_assets with job_id=${String(data.job_id??'')} and offset=${delivery.nextOffset} to deliver the next image set.`;
+  }else if(unresolvedVideo){
+    limitationNotice='This post also contains attached video media. Image passthrough is available now; attached-video frame passthrough is not included yet.';
+  }else if(visualIncluded&&existingNotice?.startsWith('Images, visual layout')){
+    limitationNotice=undefined;
+  }
+  return {
+    ...data,
+    content_scope:visualIncluded&&data.content_type==='post'?'public_post_text_and_images':data.content_scope,
+    visual_content_included:visualIncluded,
+    visual_assets_available:delivery.available,
+    visual_assets_delivered:delivery.delivered,
+    visual_assets_failed:delivery.failed,
+    visual_assets_next_offset:delivery.nextOffset,
+    visual_video_assets_available:delivery.videoAvailable,
+    delivery_complete:Boolean(data.delivery_complete)&&!visualPending,
+    continuation_required:baseContinuation||visualPending,
+    content_complete:baseComplete&&!visualPending&&!unresolvedVideo&&delivery.failed===0,
+    ...(limitationNotice?{limitation_notice:limitationNotice}:{limitation_notice:undefined})
+  };
+}
+
+async function linkToolResponse(result:ToolJobResult,offset=0,maxChars=MAX_CHARS,includeVisuals=true){
+  let data=chunkResult(result,offset,maxChars);
+  if(result.status!=='completed'||!includeVisuals||offset!==0)return toolResponse(data);
+  const delivery=await loadVisualImagePage(result,0,MAX_INLINE_VISUAL_ASSETS);
+  data=applyVisualDelivery(data,delivery);
+  return toolResponse(data,false,delivery.blocks);
+}
+
+async function safeLinkToolCall(action:()=>Promise<ToolJobResult>,offset=0,maxChars=MAX_CHARS,includeVisuals=true){
+  try{return await linkToolResponse(await action(),offset,maxChars,includeVisuals);}
   catch(error){
     const err=asLink2AIError(error);
     return toolResponse({status:'failed',error_code:err.code,message:publicErrorMessage(err.code),retryable:err.retryable,usage_units:0},true);
