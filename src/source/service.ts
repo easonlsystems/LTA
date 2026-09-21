@@ -8,6 +8,7 @@ import { cacheProvenanceEpoch, findCache } from '../worker/cache.js';
 import { planForUser, priorityForPlan, markAwaitingPayment, markCompleted, setJobMetadata } from '../worker/jobs.js';
 import { recordActivationEvent } from '../analytics/product.js';
 import { normalizeClientSource, type ClientSource } from './clientSource.js';
+import type { VisualAssetRef } from '../media/types.js';
 
 export interface ToolJobResult {
   status: 'processing'|'completed'|'payment_required'|'failed';
@@ -39,6 +40,7 @@ export interface ToolJobResult {
   pages_available?:number|null;
   pages_extracted?:number|null;
   content_sections_truncated?:string[];
+  visual_assets?:VisualAssetRef[];
   remaining_usage_units?:number;
   required_usage_units?:number;
 }
@@ -181,7 +183,7 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
   const r=await pool.query<any>(
     `SELECT j.*, c.title,c.creator,c.caption,c.language AS cache_language,c.transcript,c.segments,c.source AS transcript_source,c.duration_seconds AS cache_duration,
        c.created_at AS source_fetched_at,c.expires_at AS cache_expires_at,
-       c.truncated,c.truncation_reason,c.extracted_token_estimate,c.usage_units,c.items_available,c.items_extracted,c.pages_available,c.pages_extracted,c.content_sections_truncated
+       c.truncated,c.truncation_reason,c.extracted_token_estimate,c.usage_units,c.items_available,c.items_extracted,c.pages_available,c.pages_extracted,c.content_sections_truncated,c.visual_assets
      FROM transcript_jobs j LEFT JOIN transcript_cache c ON c.id=j.transcript_cache_id
      WHERE j.id=$1 AND j.user_id=$2`,[jobId,userId]
   );
@@ -222,7 +224,8 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
       caption:row.caption,duration_seconds:row.cache_duration??row.duration_seconds,language:row.cache_language??'und',
       transcript:row.transcript,segments:row.segments??[],transcript_source:row.transcript_source,
       truncated:Boolean(row.truncated),truncation_reason:row.truncation_reason,extracted_token_estimate:Number(row.extracted_token_estimate??0)||estimateTokens(row.transcript),usage_units:returnedUsageUnits,
-      items_available:row.items_available,items_extracted:row.items_extracted,pages_available:row.pages_available,pages_extracted:row.pages_extracted,content_sections_truncated:row.content_sections_truncated??[]
+      items_available:row.items_available,items_extracted:row.items_extracted,pages_available:row.pages_available,pages_extracted:row.pages_extracted,content_sections_truncated:row.content_sections_truncated??[],
+      visual_assets:Array.isArray(row.visual_assets)?row.visual_assets:[]
     };
   }
   if(row.status==='awaiting_payment'){
