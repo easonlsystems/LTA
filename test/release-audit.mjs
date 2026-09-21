@@ -135,6 +135,9 @@ assert.match(apiSource,/status='queued'[\s\S]*status='awaiting_payment'[\s\S]*er
 assert.match(mcpServiceSource,/reviveAffordableAwaitingQuotaJob/,'A reused quota-blocked job must re-check the current wallet instead of returning stale payment_required forever');
 assert.match(mcpServiceSource,/remaining_usage_units<required/,'Quota self-healing must only requeue a blocked job when the current wallet can cover the known requirement');
 assert.match(apiSource,/accounts_total[\s\S]*analytics_excluded=false[\s\S]*connected_total[\s\S]*analytics_excluded=false[\s\S]*activated_total[\s\S]*analytics_excluded=false/,'Founder product conversion totals must exclude internal/test accounts consistently');
+assert.match(apiSource,/成功 read 也不扣 processing units/,'Founder UI must state that internal-test reads are quota-exempt');
+assert.match(billingRoutesSource,/internal test account/,'Account UI must show the no-charge state for internal test accounts');
+assert.match(mcpServiceSource,/quota_exempt:usage\.quota_exempt/,'Usage tools must expose internal quota exemption explicitly');
 assert.match(apiSource,/熱門網站頁面[\s\S]*external only[\s\S]*排除 Founder \/ 內部測試/,'Founder top-pages analytics must be explicitly external-only');
 assert.match(apiSource,/試用累積用量/,'Founder trial usage must be labeled as lifetime cumulative usage');
 assert.match(billingRoutesSource,/trial units used \(lifetime\)/,'Account UI must not describe trial usage as a billing-cycle counter');
