@@ -1,6 +1,6 @@
 import { pool } from '../db/pool.js';
 import { env } from '../config/env.js';
-import type { TranscriptPayload } from '../media/types.js';
+import type { TranscriptPayload, VisualAssetRef } from '../media/types.js';
 
 export interface CacheRow {
   id: string;
@@ -23,6 +23,7 @@ export interface CacheRow {
   pages_available:number|null;
   pages_extracted:number|null;
   content_sections_truncated:string[];
+  visual_assets:VisualAssetRef[];
 }
 
 const CACHE_PROVENANCE_EPOCHS:Record<string,string>={
@@ -74,8 +75,8 @@ export async function findUserCompletedCache(userId:string,platform:string,canon
 
 export async function saveCache(payload: TranscriptPayload): Promise<CacheRow> {
   const r = await pool.query<CacheRow>(
-    `INSERT INTO transcript_cache(platform,canonical_media_id,language,title,creator,caption,duration_seconds,transcript,segments,source,expires_at,truncated,truncation_reason,extracted_token_estimate,usage_units,items_available,items_extracted,pages_available,pages_extracted,content_sections_truncated)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,now() + ($11 || ' hours')::interval,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb)
+    `INSERT INTO transcript_cache(platform,canonical_media_id,language,title,creator,caption,duration_seconds,transcript,segments,source,expires_at,truncated,truncation_reason,extracted_token_estimate,usage_units,items_available,items_extracted,pages_available,pages_extracted,content_sections_truncated,visual_assets)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,now() + ($11 || ' hours')::interval,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21::jsonb)
      ON CONFLICT(platform,canonical_media_id,language) DO UPDATE SET
        title=EXCLUDED.title, creator=EXCLUDED.creator, caption=EXCLUDED.caption,
        duration_seconds=EXCLUDED.duration_seconds, transcript=EXCLUDED.transcript, segments=EXCLUDED.segments,
@@ -84,13 +85,14 @@ export async function saveCache(payload: TranscriptPayload): Promise<CacheRow> {
        extracted_token_estimate=EXCLUDED.extracted_token_estimate,usage_units=EXCLUDED.usage_units,
        items_available=EXCLUDED.items_available,items_extracted=EXCLUDED.items_extracted,
        pages_available=EXCLUDED.pages_available,pages_extracted=EXCLUDED.pages_extracted,
-       content_sections_truncated=EXCLUDED.content_sections_truncated
+       content_sections_truncated=EXCLUDED.content_sections_truncated,
+       visual_assets=EXCLUDED.visual_assets
      RETURNING *`,
     [payload.platform,payload.canonicalMediaId,payload.language,payload.title ?? null,payload.creator ?? null,
      payload.caption ?? null,payload.durationSeconds,payload.transcript,JSON.stringify(payload.segments),payload.source,env().TRANSCRIPT_CACHE_HOURS,
      payload.completeness.truncated,payload.completeness.truncationReason??null,payload.completeness.extractedTokenEstimate,payload.completeness.usageUnits,
      payload.completeness.itemsAvailable??null,payload.completeness.itemsExtracted??null,payload.completeness.pagesAvailable??null,payload.completeness.pagesExtracted??null,
-     JSON.stringify(payload.completeness.contentSectionsTruncated??[])]
+     JSON.stringify(payload.completeness.contentSectionsTruncated??[]),JSON.stringify(payload.visualAssets??[])]
   );
   return r.rows[0];
 }
