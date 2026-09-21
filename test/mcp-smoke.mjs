@@ -166,16 +166,17 @@ try{
   assert.match(initialized.result.instructions??'',/source identity, completeness\/provenance metadata/i);
 
   const listed=await call({jsonrpc:'2.0',id:2,method:'tools/list',params:{}});
-  assert.deepEqual(listed.result.tools.map(tool=>tool.name),['read_public_link','read_public_links','get_video_transcript','get_transcript_result','get_video_time_range','find_in_link','get_video_map','get_usage']);
+  assert.deepEqual(listed.result.tools.map(tool=>tool.name),['read_public_link','read_public_links','get_video_transcript','get_transcript_result','get_visual_assets','get_video_time_range','find_in_link','get_video_map','get_usage']);
   assert.match(listed.result.tools[0].description,/Read one supported public URL/i);
   assert.match(listed.result.tools[0].description,/Profiles, feeds, private\/login-gated content/i);
   assert.match(listed.result.tools[1].description,/two or more supported public URLs/i);
   assert.match(listed.result.tools[1].description,/comparison|synthesis/i);
   assert.match(listed.result.tools[2].description,/Compatibility reader for existing LTA connections/i);
   assert.match(listed.result.tools[3].description,/LaunchBrand/);
-  assert.match(listed.result.tools[4].description,/timestamped transcript text/i);
-  assert.match(listed.result.tools[5].description,/Search the text of an already processed LTA source/i);
-  assert.match(listed.result.tools[6].description,/compact timeline map/i);
+  assert.match(listed.result.tools[4].description,/attached images/i);
+  assert.match(listed.result.tools[5].description,/timestamped transcript text/i);
+  assert.match(listed.result.tools[6].description,/Search the text of an already processed LTA source/i);
+  assert.match(listed.result.tools[8].description,/compact timeline map/i);
   assert.doesNotMatch(JSON.stringify(listed.result.tools),/\$\{env\(\)/);
   assert.deepEqual(listed.result.tools[0].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true});
   assert.deepEqual(listed.result.tools[1].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true});
@@ -185,22 +186,24 @@ try{
   assert.equal(listed.result.tools[5].annotations.readOnlyHint,true);
   assert.equal(listed.result.tools[6].annotations.readOnlyHint,true);
   assert.equal(listed.result.tools[7].annotations.readOnlyHint,true);
+  assert.equal(listed.result.tools[8].annotations.readOnlyHint,true);
   for(const tool of listed.result.tools){
     assert.deepEqual(tool.securitySchemes,[{type:'oauth2',scopes:['link2ai:read']}],tool.name+' must declare OAuth explicitly for ChatGPT plugin review');
     assert.ok(tool.outputSchema&&tool.outputSchema.type==='object',tool.name+' must publish an output schema');
   }
   assert.ok(listed.result.tools[0].outputSchema.properties.source_completeness,'read_public_link output schema must expose completeness');
   assert.ok(listed.result.tools[0].outputSchema.properties.continuation_required,'read_public_link output schema must expose pagination state');
-  assert.ok(listed.result.tools[7].outputSchema.properties.remaining_usage_units,'get_usage output schema must expose remaining units');
-  assert.match(listed.result.tools[7].description,/authoritative available processing-unit balance/i,'get_usage must identify the authoritative quota balance');
-  assert.match(JSON.stringify(listed.result.tools[7].outputSchema.properties.limit_links),/null/,'Legacy link limit must allow null when there is no link-count cap');
-  assert.match(JSON.stringify(listed.result.tools[7].outputSchema.properties.remaining_links),/null/,'Legacy remaining-link limit must allow null when there is no link-count cap');
-  assert.match(listed.result.tools[7].outputSchema.properties.remaining_usage_units.description??'',/Authoritative processing units remaining/i);
+  assert.ok(listed.result.tools[8].outputSchema.properties.remaining_usage_units,'get_usage output schema must expose remaining units');
+  assert.match(listed.result.tools[8].description,/authoritative available processing-unit balance/i,'get_usage must identify the authoritative quota balance');
+  assert.match(JSON.stringify(listed.result.tools[8].outputSchema.properties.limit_links),/null/,'Legacy link limit must allow null when there is no link-count cap');
+  assert.match(JSON.stringify(listed.result.tools[8].outputSchema.properties.remaining_links),/null/,'Legacy remaining-link limit must allow null when there is no link-count cap');
+  assert.match(listed.result.tools[8].outputSchema.properties.remaining_usage_units.description??'',/Authoritative processing units remaining/i);
   assert.ok(listed.result.tools[1].outputSchema.properties.results,'read_public_links must preserve per-source results');
-  assert.ok(listed.result.tools[4].outputSchema.properties.timed_text,'get_video_time_range must expose timed source text');
-  assert.ok(listed.result.tools[5].outputSchema.properties.matches,'find_in_link must expose ranked source matches');
-  assert.ok(listed.result.tools[5].outputSchema.properties.matches.items.properties.start_seconds,'video source search must expose time ranges');
-  assert.ok(listed.result.tools[6].outputSchema.properties.sections,'get_video_map must expose timeline sections');
+  assert.ok(listed.result.tools[4].outputSchema.properties.visual_assets_delivered,'get_visual_assets must expose delivered image count');
+  assert.ok(listed.result.tools[5].outputSchema.properties.timed_text,'get_video_time_range must expose timed source text');
+  assert.ok(listed.result.tools[6].outputSchema.properties.matches,'find_in_link must expose ranked source matches');
+  assert.ok(listed.result.tools[6].outputSchema.properties.matches.items.properties.start_seconds,'video source search must expose time ranges');
+  assert.ok(listed.result.tools[7].outputSchema.properties.sections,'get_video_map must expose timeline sections');
 
   const openaiInitialized=await callOpenai({jsonrpc:'2.0',id:20,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'openai-audit',version:'1'}}});
   assert.match(openaiInitialized.result.instructions??'',/same supported-source matrix as LTA's default\/Claude distribution/i);
@@ -208,7 +211,7 @@ try{
   assert.doesNotMatch(openaiInitialized.result.instructions??'',/use get_video_time_range|use get_video_map/i);
 
   const openaiListed=await callOpenai({jsonrpc:'2.0',id:21,method:'tools/list',params:{}});
-  assert.deepEqual(openaiListed.result.tools.map(tool=>tool.name),['read_public_link','read_public_links','get_transcript_result','find_in_link','get_usage']);
+  assert.deepEqual(openaiListed.result.tools.map(tool=>tool.name),['read_public_link','read_public_links','get_transcript_result','get_visual_assets','find_in_link','get_usage']);
   assert.doesNotMatch(JSON.stringify(openaiListed.result.tools),/get_video_transcript|get_video_time_range|get_video_map/);
   assert.match(openaiListed.result.tools[0].description,/YouTube\/Shorts, TikTok, Instagram, X, Bluesky, GitHub Issue\/PR, Hacker News, readable webpage\/article, or text-layer PDF/i);
   assert.match(openaiListed.result.tools[0].description,/Read one supported public URL/i);
@@ -230,8 +233,8 @@ try{
   assert.doesNotMatch(get_video_transcript_desc,/Reddit/i,'Without approved Reddit OAuth credentials, MCP must not advertise Reddit as live');
   assert.doesNotMatch(listed.result.tools[0].description,/Reddit/i,'Primary tool must also hide unavailable Reddit support');
   assert.match(listed.result.tools[1].description,/separate result for each source/i);
-  assert.match(listed.result.tools[5].description,/lexical matching/i);
-  assert.match(listed.result.tools[6].description,/overview of where topics appear/i);
+  assert.match(listed.result.tools[6].description,/lexical matching/i);
+  assert.match(listed.result.tools[7].description,/overview of where topics appear/i);
   assert.doesNotMatch(listed.result.tools[0].description,/Reuse a successful result|native source access|Do not call LTA merely because/i);
   assert.ok(listed.result.tools[0].inputSchema.properties.refresh,'read_public_link must expose explicit refresh control');
 
