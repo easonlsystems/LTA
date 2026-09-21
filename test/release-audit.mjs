@@ -141,7 +141,9 @@ assert.match(apiSource,/accounts_total[\s\S]*analytics_excluded=false[\s\S]*conn
 assert.match(apiSource,/成功 read 也不扣 processing units/,'Founder UI must state that internal-test reads are quota-exempt');
 assert.match(billingRoutesSource,/internal test account/,'Account UI must show the no-charge state for internal test accounts');
 assert.match(mcpServiceSource,/quota_exempt:usage\.quota_exempt/,'Usage tools must expose internal quota exemption explicitly');
-assert.match(apiSource,/熱門網站頁面[\s\S]*external only[\s\S]*排除 Founder \/ 內部測試/,'Founder top-pages analytics must be explicitly external-only');
+assert.match(apiSource,/各頁面被打開的情況[\s\S]*這不是「從首頁點進去」的人數[\s\S]*排除 Founder \/ 內部測試/,'Founder page-traffic UI must explain page loads in plain language and keep internal traffic excluded');
+assert.match(apiSource,/頁面被打開次數[\s\S]*不是按鈕點擊數/,'Founder pageview KPI must not be mistaken for click-throughs');
+assert.match(apiSource,/以 visitor ID \/ 瀏覽器計算[\s\S]*不代表保證是/,'Founder unique-visitor KPI must state its browser-level limitation');
 assert.match(apiSource,/試用累積用量/,'Founder trial usage must be labeled as lifetime cumulative usage');
 assert.match(billingRoutesSource,/trial units used \(lifetime\)/,'Account UI must not describe trial usage as a billing-cycle counter');
 assert.doesNotMatch(apiSource,/supports videos up to 30 minutes|supports videos up to 120 minutes|very large sources may return partial context/i,'Published copy must match the unit-bounded full-source policy');
