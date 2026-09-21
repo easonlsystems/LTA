@@ -2,7 +2,7 @@ import { env } from '../config/env.js';
 import { pool } from '../db/pool.js';
 import { assertPlatformAllowedForProfile, parseAllowedMediaUrl, type DistributionProfile } from './policy.js';
 import { asLink2AIError, Link2AIError, publicErrorMessage } from '../util/errors.js';
-import { reserveQuota, finalizeQuota, getUsageSnapshot } from '../quota/service.js';
+import { availableUsageUnits, reserveQuota, finalizeQuota, getUsageSnapshot } from '../quota/service.js';
 import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limits.js';
 import { cacheProvenanceEpoch, findCache } from '../worker/cache.js';
 import { planForUser, priorityForPlan, markAwaitingPayment, markCompleted, setJobMetadata } from '../worker/jobs.js';
@@ -54,6 +54,29 @@ async function recordSourceAccessEvent(userId:string,jobId:string,platform:strin
   }
 }
 
+
+async function reviveAffordableAwaitingQuotaJob(userId:string,jobId:string):Promise<void>{
+  const waiting=await pool.query<{required_usage_units:number|null}>(
+    `SELECT required_usage_units FROM transcript_jobs
+     WHERE id=$1 AND user_id=$2 AND status='awaiting_payment' AND error_code='QUOTA_EXCEEDED'
+     LIMIT 1`,
+    [jobId,userId]
+  );
+  if(!waiting.rowCount)return;
+  const requiredRaw=waiting.rows[0].required_usage_units;
+  const required=typeof requiredRaw==='number'&&Number.isFinite(requiredRaw)?Math.max(1,Math.ceil(requiredRaw)):1;
+  const availability=await availableUsageUnits(userId,jobId);
+  if(availability.remaining_usage_units<required)return;
+  const plan=await planForUser(userId);
+  await pool.query(
+    `UPDATE transcript_jobs SET status='queued',priority=$3,next_attempt_at=now(),
+       error_code=NULL,error_message=NULL,checkout_url=NULL,required_usage_units=NULL,retryable=true,
+       locked_at=NULL,locked_by=NULL,updated_at=now()
+     WHERE id=$1 AND user_id=$2 AND status='awaiting_payment' AND error_code='QUOTA_EXCEEDED'`,
+    [jobId,userId,priorityForPlan(plan)]
+  );
+}
+
 export async function startTranscriptJob(userId:string,url:string,options:{refresh?:boolean;profile?:DistributionProfile;clientSource?:ClientSource|string}={}):Promise<ToolJobResult>{
   const profile=options.profile??'default';
   const clientSource=normalizeClientSource(options.clientSource??(profile==='openai'?'chatgpt':'mcp'));
@@ -72,7 +95,11 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
      AND j.status IN ('queued','processing','awaiting_payment') ORDER BY j.created_at DESC LIMIT 1`,
     [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl]
   );
-  if(active.rowCount){await recordSourceAccessEvent(userId,active.rows[0].id,parsed.platform,clientSource,true);return await waitForJob(userId,active.rows[0].id,env().MCP_INLINE_WAIT_MS,profile);}
+  if(active.rowCount){
+    await reviveAffordableAwaitingQuotaJob(userId,active.rows[0].id);
+    await recordSourceAccessEvent(userId,active.rows[0].id,parsed.platform,clientSource,true);
+    return await waitForJob(userId,active.rows[0].id,env().MCP_INLINE_WAIT_MS,profile);
+  }
 
   // A model may call the same read tool more than once while answering. Reuse a still-cached successful result
   // for this user so retries/follow-ups do not consume quota twice. Explicit refresh bypasses successful-result
@@ -104,7 +131,11 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
        AND status IN ('queued','processing','awaiting_payment') ORDER BY created_at DESC LIMIT 1`,
       [userId,parsed.platform,parsed.normalizedUrl]
     );
-    if(concurrent.rowCount){await recordSourceAccessEvent(userId,concurrent.rows[0].id,parsed.platform,clientSource,true);return await waitForJob(userId,concurrent.rows[0].id,env().MCP_INLINE_WAIT_MS,profile);}
+    if(concurrent.rowCount){
+      await reviveAffordableAwaitingQuotaJob(userId,concurrent.rows[0].id);
+      await recordSourceAccessEvent(userId,concurrent.rows[0].id,parsed.platform,clientSource,true);
+      return await waitForJob(userId,concurrent.rows[0].id,env().MCP_INLINE_WAIT_MS,profile);
+    }
     throw new Link2AIError('INTERNAL_ERROR','Could not create transcript job.',500,true);
   }
   const jobId=job.rows[0].id;
