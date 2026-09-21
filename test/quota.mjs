@@ -4,11 +4,11 @@ Object.assign(process.env,{DATABASE_URL:'postgres://127.0.0.1:1/link2ai',PUBLIC_
 const [{pool},{availableUsageUnits,reserveQuota,finalizeQuota}]=await Promise.all([import('../dist/src/db/pool.js'),import('../dist/src/quota/service.js')]);
 const originalConnect=pool.connect.bind(pool);
 
-function clientFor({ledger=false,reservationSeconds=120}={}){
+function clientFor({ledger=false,reservationSeconds=120,excluded=false}={}){
   const queries=[];
   return {queries,release(){},async query(sql,params){
     const text=String(sql);queries.push({sql:text,params});
-    if(text.includes('SELECT plan,trial_eligible'))return {rowCount:1,rows:[{plan:'basic',trial_eligible:true,admin_bonus_seconds:0,admin_bonus_videos:0}]};
+    if(text.includes('SELECT plan,trial_eligible'))return {rowCount:1,rows:[{plan:'basic',trial_eligible:true,analytics_excluded:excluded,admin_bonus_seconds:0,admin_bonus_videos:0}]};
     if(text.includes('FROM subscriptions'))return {rowCount:1,rows:[{current_period_start:new Date('2026-09-01Z'),current_period_end:new Date('2026-10-01Z')}]};
     if(text.includes('SELECT 1 FROM usage_ledger'))return {rowCount:ledger?1:0,rows:ledger?[{}]:[]};
     if(text.includes('FROM usage_ledger u'))return {rowCount:1,rows:[{seconds:'0',videos:'0'}]};
@@ -33,6 +33,16 @@ try{
   assert.match(competing.sql,/job_id<>\$2/,'reconciliation must exclude the current reservation');
   const insert=reserveClient.queries.find(q=>q.sql.includes('INSERT INTO quota_reservations'));
   assert.equal(insert.params[2],120,'2 units persist as 120 compatibility seconds');
+
+  const internalBudgetClient=clientFor({excluded:true});pool.connect=async()=>internalBudgetClient;
+  const internalBudget=await availableUsageUnits('internal-user','internal-job');
+  assert.equal(internalBudget.remaining_usage_units,2000,'internal test accounts should bypass the normal wallet while retaining a bounded per-source processing budget');
+
+  const internalReserveClient=clientFor({excluded:true});pool.connect=async()=>internalReserveClient;
+  await reserveQuota('internal-user','internal-job',19);
+  const internalInsert=internalReserveClient.queries.find(q=>q.sql.includes('INSERT INTO quota_reservations'));
+  assert.equal(internalInsert.params.length,2,'internal quota reservation should not persist billable seconds');
+  assert.match(internalInsert.sql,/VALUES\(\$1,\$2,0/,'internal test reads must reserve zero billed units');
 
   const retryClient=clientFor({ledger:true});pool.connect=async()=>retryClient;
   await reserveQuota('user-1','job-1',2);

@@ -265,7 +265,8 @@ export async function usageForTool(userId:string,profile:DistributionProfile='de
     remaining_usage_units:usage.remaining_usage_units,
     concurrent_jobs:usage.concurrent_jobs,
     concurrency_limit:usage.concurrency_limit,
-    period_end:usage.period_end
+    period_end:usage.period_end,
+    quota_exempt:usage.quota_exempt
   };
   if(profile==='openai')return authoritative;
   return {
