@@ -176,7 +176,7 @@ try{
   assert.match(listed.result.tools[4].description,/attached images/i);
   assert.match(listed.result.tools[5].description,/timestamped transcript text/i);
   assert.match(listed.result.tools[6].description,/Search the text of an already processed LTA source/i);
-  assert.match(listed.result.tools[8].description,/compact timeline map/i);
+  assert.match(listed.result.tools[7].description,/compact timeline map/i);
   assert.doesNotMatch(JSON.stringify(listed.result.tools),/\$\{env\(\)/);
   assert.deepEqual(listed.result.tools[0].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true});
   assert.deepEqual(listed.result.tools[1].annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true});
