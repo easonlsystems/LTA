@@ -7,6 +7,15 @@ export interface TranscriptSegment {
   text: string;
 }
 
+export interface VisualAssetRef {
+  kind: 'image' | 'video';
+  url: string;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+  position: number;
+}
+
 export interface TranscriptPayload {
   platform: Platform;
   canonicalMediaId: string;
@@ -19,6 +28,7 @@ export interface TranscriptPayload {
   transcript: string;
   segments: TranscriptSegment[];
   source: 'caption' | 'asr' | 'post' | 'page';
+  visualAssets?: VisualAssetRef[];
   completeness: CompletenessMetadata;
 }
 

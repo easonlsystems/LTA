@@ -125,6 +125,9 @@ assert.match(providerChainSource,/source_provider_failover/,'Provider transition
 assert.match(orchestratorSource,/name:'x_syndication'[\s\S]*name:'ytdlp'/,'X audio must preserve structured-X then yt-dlp failover order');
 assert.match(orchestratorSource,/MEDIA_PROVIDER_URL/,'Managed external provider must remain an optional route, not a required recurring dependency');
 assert.match(linkSource,/name:'gallery_dl'[\s\S]*name:'public_page'/,'Instagram and TikTok text posts must use an explicit primary-to-page fallback chain');
+assert.match(linkSource,/extractGalleryVisualAssets/,'Social post extraction must preserve attached media references for AI passthrough');
+assert.match(mcpSource,/type:'image'/,'MCP tool results must be able to deliver attached images as image content blocks');
+assert.match(mcpSource,/get_visual_assets/,'MCP must expose visual continuation for social carousels');
 assert.match(processorSource,/provider:'youtube_transcript'/,'YouTube transcript fallback must report provider health separately from yt-dlp');
 assert.match(providerTelemetrySource,/provider_health_hourly/,'Provider outcomes must feed rolling health telemetry');
 assert.doesNotMatch(providerTelemetrySource,/\b(?:source_url|normalized_url|canonical_media_id|content_text|transcript)\s*:/,'Provider health telemetry must not accept or persist source URLs, identifiers, or source content fields');

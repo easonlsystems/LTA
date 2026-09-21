@@ -119,7 +119,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       const cache=await saveCache({
         platform:parsed.platform,canonicalMediaId:parsed.canonicalMediaId,sourceUrl:content.sourceUrl,
         title:content.title,creator:content.creator,caption:content.caption,durationSeconds:0,
-        language:content.language,transcript:content.text,segments:[],source:content.source,completeness:content.completeness
+        language:content.language,transcript:content.text,segments:[],source:content.source,visualAssets:content.visualAssets,completeness:content.completeness
       });
       await finalizeQuota(job.user_id,job.id);reserved=false;
       await markCompleted(job.id,cache.id,0);

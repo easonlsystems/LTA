@@ -4,6 +4,7 @@ import { Link2AIError } from '../util/errors.js';
 import { env } from '../config/env.js';
 import { clipExternalText, METADATA_LIMITS } from '../media/text.js';
 import { parseMediaUrl, type ParsedMediaUrl } from '../media/url.js';
+import type { VisualAssetRef } from '../media/types.js';
 import { runProviderChain } from '../resolvers/providerChain.js';
 import { boundExtractedText, estimateTokens, textUsageUnits, type CompletenessMetadata, type TextContentClass } from './limits.js';
 
@@ -21,6 +22,7 @@ export interface LinkTextPayload{
   language:string;
   text:string;
   source:'post'|'page';
+  visualAssets?:VisualAssetRef[];
   completeness:CompletenessMetadata;
 }
 
@@ -630,6 +632,70 @@ async function fetchRedditPost(input:ParsedMediaUrl,budget?:TextExtractionBudget
   return parseRedditJson(input,await redditOAuthJson(input.canonicalMediaId,budget),budget);
 }
 
+function galleryAssetKind(url:string,metadata:Record<string,unknown>|null):'image'|'video'|null{
+  const rawExt=String(metadata?.extension??metadata?.ext??'').trim().toLowerCase().replace(/^\./,'');
+  const imageExts=new Set(['jpg','jpeg','png','webp','gif','avif']);
+  const videoExts=new Set(['mp4','m4v','mov','webm']);
+  if(imageExts.has(rawExt))return 'image';
+  if(videoExts.has(rawExt))return 'video';
+  const rawType=String(metadata?.subcategory??metadata?.media_type??metadata?.type??'').toLowerCase();
+  if(rawType.includes('image')||rawType.includes('photo'))return 'image';
+  if(rawType.includes('video'))return 'video';
+  try{
+    const ext=new URL(url).pathname.toLowerCase().match(/\.([a-z0-9]{2,5})$/)?.[1]??'';
+    if(imageExts.has(ext))return 'image';
+    if(videoExts.has(ext))return 'video';
+  }catch{}
+  return null;
+}
+
+function galleryAssetMime(kind:'image'|'video',url:string,metadata:Record<string,unknown>|null):string|undefined{
+  const rawExt=String(metadata?.extension??metadata?.ext??'').trim().toLowerCase().replace(/^\./,'');
+  let ext=rawExt;
+  if(!ext){try{ext=new URL(url).pathname.toLowerCase().match(/\.([a-z0-9]{2,5})$/)?.[1]??'';}catch{}}
+  if(kind==='image'){
+    if(ext==='jpg'||ext==='jpeg')return 'image/jpeg';
+    if(ext==='png')return 'image/png';
+    if(ext==='webp')return 'image/webp';
+    if(ext==='gif')return 'image/gif';
+    if(ext==='avif')return 'image/avif';
+  }else{
+    if(ext==='mp4'||ext==='m4v')return 'video/mp4';
+    if(ext==='webm')return 'video/webm';
+    if(ext==='mov')return 'video/quicktime';
+  }
+  return undefined;
+}
+
+export function extractGalleryVisualAssets(data:unknown):VisualAssetRef[]{
+  const out:VisualAssetRef[]=[];
+  const seen=new Set<string>();
+  const visit=(node:unknown):void=>{
+    if(Array.isArray(node)){
+      if(node[0]===3&&typeof node[1]==='string'){
+        const url=node[1].trim();
+        const metadata=node[2]&&typeof node[2]==='object'&&!Array.isArray(node[2])?node[2] as Record<string,unknown>:null;
+        const kind=galleryAssetKind(url,metadata);
+        if(kind&&url.startsWith('https://')&&!seen.has(url)){
+          seen.add(url);
+          const width=Number(metadata?.width),height=Number(metadata?.height);
+          out.push({
+            kind,url,mimeType:galleryAssetMime(kind,url,metadata),position:out.length,
+            ...(Number.isFinite(width)&&width>0?{width}:{}),
+            ...(Number.isFinite(height)&&height>0?{height}:{})
+          });
+        }
+      }
+      for(const item of node)visit(item);
+      return;
+    }
+    if(!node||typeof node!=='object')return;
+    for(const value of Object.values(node as Record<string,unknown>))if(value&&typeof value==='object')visit(value);
+  };
+  visit(data);
+  return out.slice(0,20);
+}
+
 function collectGalleryCandidates(node:unknown,out:{texts:string[];creators:string[];titles:string[]}):void{
   if(Array.isArray(node)){for(const item of node)collectGalleryCandidates(item,out);return;}
   if(!node||typeof node!=='object')return;
@@ -667,12 +733,14 @@ async function fetchGalleryPost(input:ParsedMediaUrl,budget?:TextExtractionBudge
   }
   const found={texts:[] as string[],creators:[] as string[],titles:[] as string[]};
   collectGalleryCandidates(data,found);
+  const visualAssets=extractGalleryVisualAssets(data);
   const unique=[...new Set(found.texts.map(v=>cleanText(v)).filter(Boolean))];
-  const text=unique.sort((a,b)=>b.length-a.length)[0]??'';
-  if(!text)throw new Link2AIError('EXTRACTION_FAILED','The primary social-post provider did not expose readable post text.',502,true,{cause_code:'gallery_dl_no_text'});
   const creator=[...new Set(found.creators.map(v=>cleanText(v,METADATA_LIMITS.creator)).filter(Boolean))][0];
   const title=[...new Set(found.titles.map(v=>cleanText(v,METADATA_LIMITS.title)).filter(Boolean))][0];
-  return complete({platform:input.platform,canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title,creator,caption:clipExternalText(text,METADATA_LIMITS.description),language:'und',text,source:'post'},'social',{},budget);
+  const primaryText=unique.sort((a,b)=>b.length-a.length)[0]??'';
+  if(!primaryText&&!visualAssets.length)throw new Link2AIError('EXTRACTION_FAILED','The primary social-post provider did not expose readable post text or media.',502,true,{cause_code:'gallery_dl_no_content'});
+  const text=primaryText||`${input.platform==='instagram'?'Instagram':'TikTok'} post with ${visualAssets.length} attached media item${visualAssets.length===1?'':'s'}.`;
+  return complete({platform:input.platform,canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title,creator,caption:primaryText?clipExternalText(primaryText,METADATA_LIMITS.description):undefined,language:'und',text,source:'post',visualAssets},'social',{},budget);
 }
 
 export async function extractTextLink(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
