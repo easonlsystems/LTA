@@ -113,8 +113,10 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
        WHERE j.user_id=$1 AND j.platform=$2 AND (j.canonical_media_id=$3 OR j.normalized_url=$4)
          AND j.status='completed' AND c.expires_at>now()
          AND ($5::timestamptz IS NULL OR c.created_at >= $5::timestamptz)
+         AND NOT ($6::boolean AND jsonb_array_length(COALESCE(c.visual_assets,'[]'::jsonb))=0)
        ORDER BY j.completed_at DESC LIMIT 1`,
-      [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl,provenanceEpoch]
+      [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl,provenanceEpoch,
+       (parsed.platform==='instagram'&&parsed.kind==='post')||(parsed.platform==='tiktok'&&parsed.canonicalMediaId.startsWith('photo_'))]
     );
     if(completed.rowCount){await recordSourceAccessEvent(userId,completed.rows[0].id,parsed.platform,clientSource,true);return await getJobResult(userId,completed.rows[0].id,profile);}
   }
