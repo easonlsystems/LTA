@@ -34,10 +34,10 @@ assert.match(service,/client_source\)\s*VALUES/);
 assert.match(service,/recordSourceAccessEvent\([^)]*true\)/);
 assert.match(service,/recordSourceAccessEvent\([^)]*false\)/);
 
-assert.match(main,/>使用入口</);
-assert.match(main,/>最近使用入口</);
-assert.match(main,/Cache reuse/);
-assert.match(main,/Billed units/);
-assert.match(main,/Job origin/);
+assert.match(main,/>從哪裡使用 LTA</);
+assert.match(main,/>最近使用紀錄</);
+assert.match(main,/沿用已處理內容/);
+assert.match(main,/實際扣除單位/);
+assert.match(main,/從哪裡使用/);
 
 console.log('client usage attribution contract tests PASS');

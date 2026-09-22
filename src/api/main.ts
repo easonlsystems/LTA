@@ -710,6 +710,38 @@ function founderActionLabel(value:unknown):string{
   const v=String(value??'');
   return ({account_update:'帳號調整'} as Record<string,string>)[v]??v;
 }
+function founderOperationLabel(value:unknown):string{
+  const v=String(value??'');
+  return ({metadata:'取得基本資料',audio:'取得音訊',transcript:'取得字幕／逐字稿',text:'讀取文字內容'} as Record<string,string>)[v]??'其他處理';
+}
+function founderErrorLabel(value:unknown):string{
+  const v=String(value??'');
+  return ({
+    INVALID_URL:'網址格式不正確',
+    UNSUPPORTED_URL:'目前不支援這種連結',
+    PRIVATE_MEDIA:'內容不是公開的',
+    MEDIA_NOT_FOUND:'找不到來源內容',
+    LOGIN_REQUIRED:'來源需要登入',
+    GEO_BLOCKED:'來源有地區限制',
+    RATE_LIMITED:'來源平台暫時限制讀取',
+    PLATFORM_BLOCKED:'來源平台目前無法讀取',
+    EXTRACTION_FAILED:'沒有取得足夠可靠的內容',
+    DOWNLOAD_TOO_LARGE:'來源內容超過目前處理範圍',
+    DURATION_LIMIT_EXCEEDED:'來源超過目前處理範圍',
+    QUOTA_EXCEEDED:'使用者額度不足',
+    AUTH_REQUIRED:'需要重新連接 LTA',
+    JOB_NOT_FOUND:'讀取工作已不存在',
+    INVALID_TIME_RANGE:'指定時間範圍不正確',
+    TIMELINE_UNAVAILABLE:'沒有可用的時間軸',
+    TRANSCRIPTION_FAILED:'逐字稿產生失敗',
+    INTERNAL_ERROR:'LTA 內部處理錯誤'
+  } as Record<string,string>)[v]??(v?'其他錯誤':'—');
+}
+function founderTrafficSourceLabel(value:unknown):string{
+  const v=String(value??'').trim();
+  if(!v||v==='direct / unknown')return '直接進站／無法判斷';
+  return v;
+}
 function founderShell(body:string,title=`${env().PUBLIC_BRAND_NAME} 後台`){
   const supportEmail=env().SUPPORT_EMAIL?.trim();
   return `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow,noarchive"><title>${title}</title><link rel="icon" href="/logo.svg"><style>${siteCss}</style></head><body class="founder-page"><div class="wrap"><nav><a class="brand" href="/"><img src="/logo.svg" alt=""><span>${env().PUBLIC_BRAND_NAME}</span></a><div class="navlinks"><a class="hide-sm" href="/">首頁</a><a class="hide-sm" href="/pricing">方案</a><a class="hide-sm" href="/support">客服</a><a class="btn sm purple" href="/connect">連接 AI</a></div></nav>${body}<footer><span>© 2026 ${env().PUBLIC_BRAND_NAME}</span><span class="legal-links"><a href="/privacy">隱私權</a> · <a href="/terms">服務條款</a> · <a href="/status">系統狀態</a> · <a href="/account">帳號</a>${supportEmail?` · <a href="mailto:${supportEmail}">客服：${supportEmail}</a>`:''}</span></footer></div></body></html>`;
@@ -854,20 +886,25 @@ app.get('/founder',async(req,reply)=>{
       (SELECT COUNT(*) FROM users WHERE analytics_excluded=false AND plan IN ('basic','pro') AND account_status='active')::text AS paid_total,
       (SELECT COUNT(*) FROM users WHERE analytics_excluded=false AND plan='basic' AND account_status='active')::text AS basic_total,
       (SELECT COUNT(*) FROM users WHERE analytics_excluded=false AND plan='pro' AND account_status='active')::text AS pro_total,
-      (SELECT COUNT(*) FROM usage_ledger)::text AS links_total,
-      (SELECT COUNT(*) FROM usage_ledger WHERE created_at>now()-interval '24 hours')::text AS links_24h,
-      (SELECT COUNT(*) FROM usage_ledger WHERE created_at>now()-interval '7 days')::text AS links_7d,
-      COALESCE((SELECT SUM(seconds) FROM usage_ledger),0)::text AS seconds_total,
-      COALESCE((SELECT SUM(seconds) FROM usage_ledger WHERE created_at>now()-interval '7 days'),0)::text AS seconds_7d,
-      (SELECT COUNT(*) FROM transcript_jobs WHERE status='failed' AND created_at>now()-interval '24 hours')::text AS failed_24h,
-      (SELECT COUNT(*) FROM transcript_jobs WHERE status='failed' AND created_at>now()-interval '7 days')::text AS failed_7d`),
+      (SELECT COUNT(*) FROM usage_ledger l JOIN users u ON u.id=l.user_id WHERE u.analytics_excluded=false)::text AS links_total,
+      (SELECT COUNT(*) FROM usage_ledger l JOIN users u ON u.id=l.user_id WHERE u.analytics_excluded=false AND l.created_at>now()-interval '24 hours')::text AS links_24h,
+      (SELECT COUNT(*) FROM usage_ledger l JOIN users u ON u.id=l.user_id WHERE u.analytics_excluded=false AND l.created_at>now()-interval '7 days')::text AS links_7d,
+      COALESCE((SELECT SUM(l.seconds) FROM usage_ledger l JOIN users u ON u.id=l.user_id WHERE u.analytics_excluded=false),0)::text AS seconds_total,
+      COALESCE((SELECT SUM(l.seconds) FROM usage_ledger l JOIN users u ON u.id=l.user_id WHERE u.analytics_excluded=false AND l.created_at>now()-interval '7 days'),0)::text AS seconds_7d,
+      (SELECT COUNT(*) FROM transcript_jobs j JOIN users u ON u.id=j.user_id WHERE u.analytics_excluded=false AND j.status='failed' AND j.created_at>now()-interval '24 hours')::text AS failed_24h,
+      (SELECT COUNT(*) FROM transcript_jobs j JOIN users u ON u.id=j.user_id WHERE u.analytics_excluded=false AND j.status='failed' AND j.created_at>now()-interval '7 days')::text AS failed_7d`),
     pool.query<{user_id:string;email:string|null;platform:string;client_source:string;status:string;duration_seconds:number|null;error_code:string|null;created_at:string}>(
       `SELECT j.user_id,u.email,j.platform,j.client_source,j.status,j.duration_seconds,j.error_code,j.created_at
        FROM transcript_jobs j LEFT JOIN users u ON u.id=j.user_id
        ORDER BY j.created_at DESC LIMIT 20`
     ),
     pool.query<{platform:string;count:string}>(
-      `SELECT j.platform,COUNT(*)::text AS count FROM usage_ledger l JOIN transcript_jobs j ON j.id=l.job_id GROUP BY j.platform ORDER BY COUNT(*) DESC`
+      `SELECT j.platform,COUNT(*)::text AS count
+       FROM usage_ledger l
+       JOIN transcript_jobs j ON j.id=l.job_id
+       JOIN users u ON u.id=l.user_id
+       WHERE u.analytics_excluded=false
+       GROUP BY j.platform ORDER BY COUNT(*) DESC`
     ),
     pool.query<{count:string}>(`SELECT COUNT(*)::text AS count FROM users WHERE email IS NOT NULL AND ($1='' OR email ILIKE '%'||$1||'%')`,[q]),
     pool.query<{
@@ -1045,14 +1082,18 @@ app.get('/founder',async(req,reply)=>{
   const providerHealthRows=providerHealthResult.rows.map(row=>{
     const attempts=founderNum(row.attempts),successes=founderNum(row.successes),failures=founderNum(row.failures);
     const health=attempts>0?Math.round(successes/attempts*100):0;
-    return `<tr><td>${founderEscape(row.platform)}</td><td>${founderEscape(row.operation)}</td><td class="fd-email">${founderEscape(row.provider)}</td><td>${attempts}</td><td><span class="fd-status ${health>=90?'ok':health>=60?'wait':'bad'}">${health}%</span></td><td>${failures}</td><td>${founderNum(row.retryable_failures)}</td><td>${founderNum(row.avg_duration_ms)} ms</td><td>${founderEscape(row.last_error_code??'—')}</td></tr>`;
-  }).join('')||'<tr><td colspan="9">最近 24 小時尚無 provider attempts。</td></tr>';
-  const sourceRows=sourceResult.rows.map(row=>`<tr><td class="fd-source">${founderEscape(row.source)}</td><td>${founderNum(row.visitors)}</td></tr>`).join('')||'<tr><td colspan="2">尚無外部來源資料。</td></tr>';
+    const averageSeconds=(founderNum(row.avg_duration_ms)/1000).toFixed(1).replace(/\.0$/,'');
+    return `<tr><td>${founderEscape(row.platform)}</td><td>${founderEscape(founderOperationLabel(row.operation))}</td><td>${attempts}</td><td><span class="fd-status ${health>=90?'ok':health>=60?'wait':'bad'}">${health}%</span></td><td>${failures}</td><td>${averageSeconds} 秒</td><td>${founderEscape(founderErrorLabel(row.last_error_code))}</td></tr>`;
+  }).join('')||'<tr><td colspan="7">最近 24 小時還沒有來源處理紀錄。</td></tr>';
+  const sourceRows=sourceResult.rows.map(row=>`<tr><td class="fd-source">${founderEscape(founderTrafficSourceLabel(row.source))}</td><td>${founderNum(row.visitors)}</td></tr>`).join('')||'<tr><td colspan="2">目前還沒有可辨識的外部來源。</td></tr>';
   const renderedAt=founderTime(new Date().toISOString());
   const trackingStarted=founderTime(a?.tracking_started_at);
   const trackingLast=founderTime(a?.tracking_last_at);
-  const recentJobs=recentJobsResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td class="fd-email"><a href="/founder/user/${founderEscape(row.user_id)}">${founderEscape(row.email??'匿名')}</a></td><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderEscape(row.platform)}</td><td><span class="fd-status ${row.status==='completed'?'ok':row.status==='failed'?'bad':'wait'}">${founderEscape(founderJobStatusLabel(row.status))}</span></td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)} 分鐘`:'—'}</td><td>${founderEscape(row.error_code??'—')}</td></tr>`).join('')||'<tr><td colspan="7">目前還沒有工作紀錄。</td></tr>';
+  const recentJobs=recentJobsResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td class="fd-email"><a href="/founder/user/${founderEscape(row.user_id)}">${founderEscape(row.email??'匿名')}</a></td><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderEscape(row.platform)}</td><td><span class="fd-status ${row.status==='completed'?'ok':row.status==='failed'?'bad':'wait'}">${founderEscape(founderJobStatusLabel(row.status))}</span></td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)} 分鐘`:'—'}</td><td>${founderEscape(founderErrorLabel(row.error_code))}</td></tr>`).join('')||'<tr><td colspan="7">目前還沒有讀取紀錄。</td></tr>';
   const platforms=platformResult.rows.map(row=>`<span class="fd-chip">${founderEscape(row.platform)} · ${founderNum(row.count)}</span>`).join('')||'<span class="fd-chip">目前還沒有成功連結</span>';
+  const successful24h=founderNum(m?.links_24h),successful7d=founderNum(m?.links_7d),failed24h=founderNum(m?.failed_24h),failed7d=founderNum(m?.failed_7d);
+  const attempts7d=successful7d+failed7d;
+  const successRate7d=attempts7d>0?founderPct(successful7d,attempts7d):'—';
   const totalMatched=founderNum(accountsCountResult.rows[0]?.count);
   const totalPages=Math.max(1,Math.ceil(totalMatched/pageSize));
   const accountRows=accountsResult.rows.map(row=>`<tr><td class="fd-email"><a href="/founder/user/${founderEscape(row.id)}">${founderEscape(row.email)}</a></td><td>${founderEscape(founderPlanLabel(row.plan))}</td><td>${row.connected?'已連接':'未連接'}</td><td>${founderNum(row.links)}</td><td>${founderUnits(row.seconds)} units</td><td>${founderTime(row.last_activity)}</td><td><a class="btn alt sm" href="/founder/user/${founderEscape(row.id)}">查看</a></td></tr>`).join('')||'<tr><td colspan="7">找不到符合的帳號。</td></tr>';
@@ -1068,7 +1109,7 @@ app.get('/founder',async(req,reply)=>{
   const prev=page>1?`<a class="btn alt sm" href="/founder?page=${page-1}${querySuffix}">← 上一頁</a>`:'';
   const next=page<totalPages?`<a class="btn alt sm" href="/founder?page=${page+1}${querySuffix}">下一頁 →</a>`:'';
 
-  const html=`<main class="fd">${founderCss()}<div class="fd-head"><div><span class="badge"><span class="badge-dot"></span>Founder 私人後台</span><h1>LTA 後台</h1><p class="fd-sub">只看現在產品有沒有人來、有人用、有人付費。</p></div><div class="fd-head-actions"><div class="fd-data-status"><span class="fd-live-dot"></span><div><strong>資料截至 ${renderedAt}</strong><span>台灣時間 · 網站記錄自 ${trackingStarted} · 最近事件 ${trackingLast}</span></div></div><span class="fd-security">已通過 Founder 驗證 · 15 分鐘</span><a class="btn alt sm" href="/founder">重新整理</a><form method="post" action="/founder/lock" style="margin:0"><input type="hidden" name="csrf" value="${founderEscape(founderCsrf)}"><button class="btn alt sm" type="submit">鎖定後台</button></form></div></div>
+  const html=`<main class="fd">${founderCss()}<div class="fd-head"><div><span class="badge"><span class="badge-dot"></span>Founder 私人後台</span><h1>LTA 後台</h1><p class="fd-sub">一眼看懂：有沒有人來、連上、用成功、付費，以及最近讀取穩不穩。</p></div><div class="fd-head-actions"><div class="fd-data-status"><span class="fd-live-dot"></span><div><strong>資料截至 ${renderedAt}</strong><span>不會自動更新 · 按「重新整理」取得最新資料</span></div></div><span class="fd-security">已通過 Founder 驗證 · 15 分鐘</span><a class="btn alt sm" href="/founder">重新整理</a><form method="post" action="/founder/lock" style="margin:0"><input type="hidden" name="csrf" value="${founderEscape(founderCsrf)}"><button class="btn alt sm" type="submit">鎖定後台</button></form></div></div>
     <section class="fd-grid">
       <div class="fd-card"><div class="fd-label">外部訪客</div><div class="fd-value">${activationVisitors}</div><div class="fd-note">自 ${activationStarted} 起 · 排除 Founder / 內部測試</div></div>
       <div class="fd-card"><div class="fd-label">點 Add LTA</div><div class="fd-value">${connectClicks}</div><div class="fd-note">訪客 → 安裝點擊 ${founderPct(connectClicks,Math.max(activationVisitors,1))}</div></div>
@@ -1077,16 +1118,26 @@ app.get('/founder',async(req,reply)=>{
       <div class="fd-card"><div class="fd-label">付費使用者</div><div class="fd-value">${externalPaid}</div><div class="fd-note">首次成功 → 付費 ${founderPct(externalPaid,Math.max(externalActivated,1))}</div></div>
     </section>
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>現在最該注意</h2><div class="fd-note">${founderEscape(funnelInsight)}</div></div></div></section>
+    <section class="fd-panel">
+      <div class="fd-panel-head"><div><h2>最近使用狀況</h2><div class="fd-note">只看外部使用者，已排除 Founder / 內部測試。</div></div></div>
+      <div class="fd-grid" style="margin:0;padding:16px">
+        <div class="fd-card"><div class="fd-label">今天成功讀取</div><div class="fd-value">${successful24h}</div><div class="fd-note">真的成功把內容交給 AI 的次數</div></div>
+        <div class="fd-card"><div class="fd-label">最近 7 天成功讀取</div><div class="fd-value">${successful7d}</div><div class="fd-note">成功率 ${successRate7d}</div></div>
+        <div class="fd-card"><div class="fd-label">最近 7 天失敗</div><div class="fd-value">${failed7d}</div><div class="fd-note">今天 ${failed24h} 次</div></div>
+        <div class="fd-card"><div class="fd-label">最近 7 天處理量</div><div class="fd-value">${founderUnits(m?.seconds_7d)}</div><div class="fd-note">processing units</div></div>
+      </div>
+      <div style="padding:0 16px 16px"><div class="fd-label" style="margin-bottom:8px">成功讀取主要來自</div><div class="fd-chips">${platforms}</div></div>
+    </section>
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>人從哪裡來</h2><div class="fd-note">看哪個宣傳來源真的有帶人進來。</div></div></div><div class="fd-scroll"><table class="fd-table" style="min-width:420px"><thead><tr><th>來源</th><th>訪客</th></tr></thead><tbody>${sourceRows}</tbody></table></div></section>
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>使用者</h2><div class="fd-note">${totalMatched} 個帳號 · 點進去再看詳細資料</div></div><form method="get" action="/founder" class="fd-tools"><input class="fd-input" type="search" name="q" value="${searchValue}" placeholder="搜尋 Email"><button class="btn alt sm" type="submit">搜尋</button>${q?'<a class="btn alt sm" href="/founder">清除</a>':''}</form></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>Email</th><th>方案</th><th>AI</th><th>成功 read</th><th>使用量</th><th>最後活動</th><th></th></tr></thead><tbody>${accountRows}</tbody></table></div><div class="fd-panel-head"><span class="fd-label">每頁 100 筆</span><div class="fd-nav">${prev}${next}</div></div></section>
     <details class="fd-panel"><summary style="cursor:pointer;padding:18px;font-weight:800">進階診斷（平常不用看）</summary>
       <div style="padding:0 18px 18px">
-        <div class="fd-label" style="margin:8px 0">連線細節</div>
-        <div class="fd-funnel activation"><div class="fd-step"><b>${productConnectCta}</b><span>Connect CTA</span></div><div class="fd-step"><b>${productConnectionStarted}</b><span>OAuth started</span></div><div class="fd-step"><b>${productConnectionSuccess}</b><span>Connected</span></div><div class="fd-step"><b>${productConnectorEnabled}</b><span>Connector usable</span></div><div class="fd-step"><b>${productFirstLinkAttempt}</b><span>First link attempt</span></div><div class="fd-step"><b>${productFirstSuccessfulRead}</b><span>First successful read</span></div></div>
-        <div class="fd-label" style="margin:18px 0 8px">來源處理狀況</div>
-        <div class="fd-scroll"><table class="fd-table" style="min-width:980px"><thead><tr><th>平台</th><th>操作</th><th>Provider</th><th>Attempts</th><th>成功率</th><th>失敗</th><th>可重試</th><th>延遲</th><th>最近錯誤</th></tr></thead><tbody>${providerHealthRows}</tbody></table></div>
-        <div class="fd-label" style="margin:18px 0 8px">最近工作</div>
-        <div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>Email</th><th>入口</th><th>平台</th><th>狀態</th><th>長度</th><th>錯誤</th></tr></thead><tbody>${recentJobs}</tbody></table></div>
+        <div class="fd-label" style="margin:8px 0">連接到第一次成功使用</div>
+        <div class="fd-funnel activation"><div class="fd-step"><b>${productConnectCta}</b><span>點「Add LTA」</span></div><div class="fd-step"><b>${productConnectionStarted}</b><span>開始登入／授權</span></div><div class="fd-step"><b>${productConnectionSuccess}</b><span>完成連接</span></div><div class="fd-step"><b>${productConnectorEnabled}</b><span>Claude 已能叫到 LTA</span></div><div class="fd-step"><b>${productFirstLinkAttempt}</b><span>第一次丟連結</span></div><div class="fd-step"><b>${productFirstSuccessfulRead}</b><span>第一次成功讀取</span></div></div>
+        <div class="fd-label" style="margin:18px 0 8px">各平台最近 24 小時讀取狀況</div>
+        <div class="fd-scroll"><table class="fd-table" style="min-width:760px"><thead><tr><th>平台</th><th>在做什麼</th><th>嘗試次數</th><th>成功率</th><th>失敗</th><th>平均時間</th><th>最近問題</th></tr></thead><tbody>${providerHealthRows}</tbody></table></div>
+        <div class="fd-label" style="margin:18px 0 8px">最近讀取紀錄</div>
+        <div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>使用者</th><th>從哪裡使用</th><th>來源平台</th><th>結果</th><th>內容長度</th><th>問題</th></tr></thead><tbody>${recentJobs}</tbody></table></div>
       </div>
     </details>
     <p class="fd-private">私人頁面。除了 FOUNDER_EMAIL 登入外，還需要 15 分鐘有效的 Founder Email 驗證；管理 POST 另外驗證 CSRF 與同源請求。</p></main>`;
@@ -1135,7 +1186,7 @@ app.get('/founder/user/:id',async(req,reply)=>{
   const flash=String((req.query as {saved?:string;error?:string})?.saved??'')==='1'?'<div class="fd-okflash">已儲存。</div>':String((req.query as {error?:string})?.error??'')?`<div class="fd-badflash">${founderEscape((req.query as {error?:string}).error)}</div>`:'';
   const jobRows=jobsResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderEscape(row.platform)}</td><td>${founderEscape(founderJobStatusLabel(row.status))}</td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)} 分鐘`:'—'}</td><td>${founderEscape(row.error_code??'—')}</td><td class="fd-email">${founderEscape(row.id)}</td></tr>`).join('')||'<tr><td colspan="7">目前還沒有工作紀錄。</td></tr>';
   const clientUsageRows=clientUsageResult.rows.map(row=>`<tr><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderNum(row.accesses)}</td><td>${founderNum(row.cache_reuses)}</td><td>${founderUnits(row.billed_seconds)}</td></tr>`).join('')||'<tr><td colspan="4">本帳號尚無可歸因的使用紀錄。</td></tr>';
-  const accessRows=accessResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderEscape(row.platform)}</td><td>${row.reused?'Cache / in-flight reuse':'New job'}</td><td>${founderEscape(row.status?founderJobStatusLabel(row.status):'—')}</td><td class="fd-email">${founderEscape(row.job_id??'—')}</td></tr>`).join('')||'<tr><td colspan="6">目前還沒有使用入口紀錄。</td></tr>';
+  const accessRows=accessResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderEscape(row.platform)}</td><td>${row.reused?'沿用已處理內容':'重新處理來源'}</td><td>${founderEscape(row.status?founderJobStatusLabel(row.status):'—')}</td><td class="fd-email">${founderEscape(row.job_id??'—')}</td></tr>`).join('')||'<tr><td colspan="6">目前還沒有使用入口紀錄。</td></tr>';
   const auditRows=auditResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(founderActionLabel(row.action))}</td><td class="fd-muted">${founderEscape(JSON.stringify(row.after_state??{}))}</td></tr>`).join('')||'<tr><td colspan="3">目前還沒有 Founder 調整紀錄。</td></tr>';
   const self=targetId===founder.id;
   const usageLabel=account.plan==='trial'?'試用累積用量':'目前用量';
@@ -1148,12 +1199,12 @@ app.get('/founder/user/:id',async(req,reply)=>{
   const html=`<main class="fd">${founderCss()}<div class="fd-head"><div><a href="/founder" class="fd-note">← 所有帳號</a><h1 style="font-size:clamp(30px,5vw,52px)">${founderEscape(account.email??'匿名')}</h1><p class="fd-sub fd-email">${founderEscape(account.id)}</p></div><div class="fd-tools"><span class="fd-security">Founder 驗證中</span><a class="btn alt sm" href="/founder/user/${founderEscape(targetId)}">重新整理</a><form method="post" action="/founder/lock" style="margin:0"><input type="hidden" name="csrf" value="${founderEscape(founderCsrf)}"><button class="btn alt sm" type="submit">鎖定</button></form></div></div>${flash}
     <section class="fd-grid">
       <div class="fd-card"><div class="fd-label">方案</div><div class="fd-value" style="font-size:26px">${founderEscape(founderPlanLabel(account.plan))}</div><div class="fd-note">${founderEscape(founderAccountStatusLabel(account.account_status))}</div></div>
-      <div class="fd-card"><div class="fd-label">${usageLabel}</div><div class="fd-measure"><div class="fd-value" style="font-size:26px">${founderUnits(usage.used_seconds)}</div><div class="fd-unitline">processing units</div></div><div class="fd-note">${usageLimitNote}</div></div>
-      <div class="fd-card"><div class="fd-label">${account.analytics_excluded?'內部測試額度':'剩餘額度'}</div><div class="fd-measure"><div class="fd-value" style="font-size:26px">${account.analytics_excluded?'不扣除':founderUnits(usage.remaining_seconds)}</div><div class="fd-unitline">${account.analytics_excluded?'quota exempt':'processing units'}</div></div><div class="fd-note">${account.analytics_excluded?'Founder / 內部測試 read 保留紀錄，但 billed units = 0。':remainingNote}</div></div>
-      <div class="fd-card"><div class="fd-label">AI connection</div><div class="fd-value" style="font-size:26px">${account.connected?'已連接':'—'}</div><div class="fd-note">試用資格：${account.trial_eligible?'有':'無'}</div></div>
+      <div class="fd-card"><div class="fd-label">${usageLabel}</div><div class="fd-measure"><div class="fd-value" style="font-size:26px">${founderUnits(usage.used_seconds)}</div><div class="fd-unitline">處理單位</div></div><div class="fd-note">${usageLimitNote}</div></div>
+      <div class="fd-card"><div class="fd-label">${account.analytics_excluded?'內部測試額度':'剩餘額度'}</div><div class="fd-measure"><div class="fd-value" style="font-size:26px">${account.analytics_excluded?'不扣除':founderUnits(usage.remaining_seconds)}</div><div class="fd-unitline">${account.analytics_excluded?'內部測試免扣':'處理單位'}</div></div><div class="fd-note">${account.analytics_excluded?'Founder / 內部測試 read 保留紀錄，但 billed units = 0。':remainingNote}</div></div>
+      <div class="fd-card"><div class="fd-label">AI 連接</div><div class="fd-value" style="font-size:26px">${account.connected?'已連接':'未連接'}</div><div class="fd-note">試用資格：${account.trial_eligible?'有':'無'}</div></div>
       <div class="fd-card"><div class="fd-label">累計成功連結</div><div class="fd-value">${founderNum(a?.links)}</div><div class="fd-note">累計 ${founderUnits(a?.seconds)} processing units</div></div>
       <div class="fd-card"><div class="fd-label">失敗工作</div><div class="fd-value">${founderNum(a?.failed)}</div><div class="fd-note">最後工作 ${founderTime(a?.last_job)}</div></div>
-      <div class="fd-card"><div class="fd-label">額外額度</div><div class="fd-measure"><div class="fd-value" style="font-size:26px">${founderUnits(account.admin_bonus_seconds)}</div><div class="fd-unitline">processing units</div></div><div class="fd-note">Legacy link bonus ${founderNum(account.admin_bonus_videos)}（V2 不再限制連結數）</div></div>
+      <div class="fd-card"><div class="fd-label">額外額度</div><div class="fd-measure"><div class="fd-value" style="font-size:26px">${founderUnits(account.admin_bonus_seconds)}</div><div class="fd-unitline">processing units</div></div><div class="fd-note">舊版額外連結額度 ${founderNum(account.admin_bonus_videos)}（目前不再限制連結數）</div></div>
       <div class="fd-card"><div class="fd-label">建立時間</div><div class="fd-value" style="font-size:20px">${founderTime(account.created_at)}</div><div class="fd-note">更新於 ${founderTime(account.updated_at)}</div></div>
     </section>
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>調整帳號</h2><div class="fd-note">使用紀錄不會被刪除。</div></div></div><div style="padding:18px"><form method="post" action="/founder/user/${founderEscape(targetId)}/update"><input type="hidden" name="csrf" value="${founderEscape(founderCsrf)}"><div class="fd-form-grid">
@@ -1164,9 +1215,9 @@ app.get('/founder/user/:id',async(req,reply)=>{
       <div class="fd-field"><label>額外 processing units</label><input class="fd-input" type="number" name="bonus_minutes" min="0" max="100000" step="1" value="${Math.floor(founderNum(account.admin_bonus_seconds)/60)}"><small>直接加在原方案額度上，不會更動既有使用紀錄。</small></div>
       <div class="fd-field"><label>額外連結數</label><input class="fd-input" type="number" name="bonus_links" min="0" max="100000" step="1" value="${founderNum(account.admin_bonus_videos)}"><small>Legacy 欄位，目前 V2 不再以連結數限制方案；保留值只為相容舊資料。</small></div>
     </div><div class="fd-actions"><button class="btn purple" type="submit">儲存變更</button><a class="btn alt" href="/founder">返回</a></div></form></div></section>
-    <section class="fd-panel"><div class="fd-panel-head"><div><h2>使用入口</h2><div class="fd-note">同一個 LTA 帳號共用方案與餘額；這裡分開顯示實際 read 次數、cache reuse 與真正產生的 billed units。</div></div><span class="fd-label">account-wide</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>Client</th><th>Reads</th><th>Cache reuse</th><th>Billed units</th></tr></thead><tbody>${clientUsageRows}</tbody></table></div></section>
-    <section class="fd-panel"><div class="fd-panel-head"><h2>最近使用入口</h2><span class="fd-label">最近 30 次 read</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>Client</th><th>來源平台</th><th>處理方式</th><th>Job 狀態</th><th>工作 ID</th></tr></thead><tbody>${accessRows}</tbody></table></div></section>
-    <section class="fd-panel"><div class="fd-panel-head"><h2>最近工作</h2><span class="fd-label">最近 30 筆</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>Job origin</th><th>平台</th><th>狀態</th><th>長度</th><th>錯誤</th><th>工作 ID</th></tr></thead><tbody>${jobRows}</tbody></table></div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><div><h2>從哪裡使用 LTA</h2><div class="fd-note">看這個帳號從 Claude、API 或其他入口使用了幾次，以及實際扣了多少額度。</div></div><span class="fd-label">全部紀錄</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>使用入口</th><th>讀取次數</th><th>沿用已處理內容</th><th>實際扣除單位</th></tr></thead><tbody>${clientUsageRows}</tbody></table></div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><h2>最近使用紀錄</h2><span class="fd-label">最近 30 次讀取</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>從哪裡使用</th><th>來源平台</th><th>怎麼處理</th><th>結果</th><th>技術編號</th></tr></thead><tbody>${accessRows}</tbody></table></div></section>
+    <section class="fd-panel"><div class="fd-panel-head"><h2>最近處理結果</h2><span class="fd-label">最近 30 筆</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>從哪裡使用</th><th>來源平台</th><th>結果</th><th>內容長度</th><th>問題</th><th>技術編號</th></tr></thead><tbody>${jobRows}</tbody></table></div></section>
     <section class="fd-panel"><div class="fd-panel-head"><h2>Founder 調整紀錄</h2><span class="fd-label">最近 10 筆</span></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>時間</th><th>動作</th><th>新狀態</th></tr></thead><tbody>${auditRows}</tbody></table></div></section>
     <p class="fd-private">完整 Email 與帳號控制只會顯示給 FOUNDER_EMAIL。</p></main>`;
   return reply.type('text/html').send(founderShell(html,`${env().PUBLIC_BRAND_NAME} 帳號管理`));
