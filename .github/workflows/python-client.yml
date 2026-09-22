@@ -1,0 +1,32 @@
+name: Python client
+
+on:
+  pull_request:
+    paths:
+      - 'clients/python/**'
+      - '.github/workflows/python-client.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'clients/python/**'
+      - '.github/workflows/python-client.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: clients/python/pyproject.toml
+      - name: Install client
+        run: python -m pip install ./clients/python
+      - name: Run black-box client-shape tests
+        working-directory: clients/python
+        run: python -m unittest discover -s tests -v
