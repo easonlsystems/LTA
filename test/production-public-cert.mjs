@@ -61,7 +61,7 @@ await eventually('production revision availability',async()=>{
   const connect=await request('/connect');
   assert.equal(connect.response.status,200);
   assert.match(connect.text,/One click opens Claude/,'production connect page must lead with one-click setup');
-  assert.match(connect.text,/Need help connecting\?/,'production setup details should be collapsed behind help');
+  assert.match(connect.text,/Connected, but Claude does not use LTA\?/,'production setup details should be collapsed behind help');
   assert.doesNotMatch(connect.text,/Set up LTA in three steps/,'production connect page must not restore the long tutorial');
 
   const developers=await request('/developers');
