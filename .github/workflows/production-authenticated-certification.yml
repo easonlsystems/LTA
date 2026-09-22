@@ -1,6 +1,10 @@
 name: Production authenticated API certification
 
 on:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: '17 */6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -13,17 +17,36 @@ concurrency:
 jobs:
   api-lifecycle:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Check certification credentials
+        id: cert-config
+        env:
+          CERT_URL: ${{ secrets.LINK2AI_PRODUCTION_URL }}
+          CERT_EMAIL: ${{ secrets.LINK2AI_CERT_EMAIL }}
+          CERT_PASSWORD: ${{ secrets.LINK2AI_CERT_PASSWORD }}
+        shell: bash
+        run: |
+          if [[ -n "$CERT_URL" && -n "$CERT_EMAIL" && -n "$CERT_PASSWORD" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Authenticated production certification is not configured; live source canaries were skipped."
+          fi
       - uses: actions/setup-node@v4
+        if: steps.cert-config.outputs.configured == 'true'
         with:
           node-version: 22
-      - name: Certify account to revoked-key lifecycle
+      - name: Certify account lifecycle and live sources
+        if: steps.cert-config.outputs.configured == 'true'
         env:
           LINK2AI_PRODUCTION_URL: ${{ secrets.LINK2AI_PRODUCTION_URL }}
           LINK2AI_CERT_EMAIL: ${{ secrets.LINK2AI_CERT_EMAIL }}
           LINK2AI_CERT_PASSWORD: ${{ secrets.LINK2AI_CERT_PASSWORD }}
           LINK2AI_CERT_SOURCE_URL: ${{ secrets.LINK2AI_CERT_SOURCE_URL }}
+          LINK2AI_CERT_INSTAGRAM_URL: ${{ secrets.LINK2AI_CERT_INSTAGRAM_URL }}
+          LINK2AI_CERT_GITHUB_URL: ${{ secrets.LINK2AI_CERT_GITHUB_URL }}
+          LINK2AI_CERT_INSTAGRAM_IMAGE_URL: ${{ secrets.LINK2AI_CERT_INSTAGRAM_IMAGE_URL }}
           LINK2AI_EXPECTED_REVISION: ${{ github.sha }}
         run: node test/production-authenticated-cert.mjs
