@@ -281,6 +281,9 @@ class LTA:
                 continue
             payload = _json_payload(response)
             if response.status_code == 429 or response.status_code >= 500:
+                retryable = _response_retryable(response.status_code, payload)
+                if not retryable:
+                    return payload, response.status_code
                 if attempt >= self.max_retries:
                     raise LTARetryableError(
                         str(payload.get("message") or f"LTA returned HTTP {response.status_code}."),
@@ -290,7 +293,8 @@ class LTA:
                         retry_after_seconds=_retry_after(payload),
                         payload=payload,
                     )
-                self._sleep_sync(_retry_after(payload) or _backoff(attempt), deadline)
+                delay = _retry_after(payload)
+                self._sleep_sync(delay if delay is not None else _backoff(attempt), deadline)
                 continue
             return payload, response.status_code
         raise LTARetryableError("LTA request failed.", code="transport_error", retryable=True) from last_error
@@ -315,6 +319,9 @@ class LTA:
                 continue
             payload = _json_payload(response)
             if response.status_code == 429 or response.status_code >= 500:
+                retryable = _response_retryable(response.status_code, payload)
+                if not retryable:
+                    return payload, response.status_code
                 if attempt >= self.max_retries:
                     raise LTARetryableError(
                         str(payload.get("message") or f"LTA returned HTTP {response.status_code}."),
@@ -324,7 +331,8 @@ class LTA:
                         retry_after_seconds=_retry_after(payload),
                         payload=payload,
                     )
-                await self._sleep_async(_retry_after(payload) or _backoff(attempt), deadline)
+                delay = _retry_after(payload)
+                await self._sleep_async(delay if delay is not None else _backoff(attempt), deadline)
                 continue
             return payload, response.status_code
         raise LTARetryableError("LTA request failed.", code="transport_error", retryable=True) from last_error
@@ -373,6 +381,13 @@ def _retry_after(payload: Mapping[str, Any]) -> float | None:
     if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
         return min(float(value), 30.0)
     return None
+
+
+def _response_retryable(status_code: int, payload: Mapping[str, Any]) -> bool:
+    value = payload.get("retryable")
+    if isinstance(value, bool):
+        return value
+    return status_code == 429 or status_code >= 500
 
 
 def _json_payload(response: httpx.Response) -> Mapping[str, Any]:
