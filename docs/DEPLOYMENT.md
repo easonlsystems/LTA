@@ -53,6 +53,15 @@ The launch trial is 3 successful links or 10 minutes of processed content, which
 
 ## Runtime acceptance
 
+The `Production authenticated API certification` GitHub workflow runs after each
+main push and on its schedule. Set the repository secrets
+`LINK2AI_PRODUCTION_URL`, `LINK2AI_CERT_EMAIL`, and `LINK2AI_CERT_PASSWORD`
+to an authorized, quota-exempt reviewer account. Missing credentials now fail
+the workflow. A successful run requires a matching deployed commit, account
+and API-key lifecycle checks, and live Hacker News, GitHub, and Instagram Reel
+reads. `LINK2AI_CERT_INSTAGRAM_IMAGE_URL` enables an additional image check;
+an unset value leaves that specific check unverified.
+
 Before public launch, staging should verify at minimum:
 
 - YouTube caption path
