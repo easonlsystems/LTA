@@ -59,6 +59,23 @@ async function api(path,options={}){
   return {response,data};
 }
 
+async function readUntilDone(url,{refresh=false}={}){
+  let read=await api('/v1/read',{
+    method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url,refresh})
+  });
+  assert.ok([200,202].includes(read.response.status),`read returned ${read.response.status}: ${read.data.error_code||read.data.message||'unknown'}`);
+  assert.equal(read.data.id,read.data.job_id,'id and job_id aliases must agree');
+  const jobId=read.data.id;
+  for(let attempt=0;read.response.status===202&&attempt<pollLimit;attempt++){
+    await sleep(pollDelayMs);
+    read=await api(`/v1/jobs/${jobId}`);
+  }
+  assert.equal(read.response.status,200,`job did not complete: ${read.data.error_code||read.data.status}`);
+  assert.equal(read.data.status,'completed');
+  assert.equal(read.data.id,jobId);
+  return read;
+}
+
 async function revoke(){
   if(!apiKeyId||!cookieHeader())return;
   const account=await web('/account');
