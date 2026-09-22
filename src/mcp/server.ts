@@ -6,6 +6,7 @@ import { asLink2AIError, Link2AIError, publicErrorMessage } from '../util/errors
 import { env } from '../config/env.js';
 import { supportedSourcesForProfile, parseAllowedMediaUrl, type DistributionProfile } from '../source/policy.js';
 import { safeGetBuffer } from '../util/safeHttp.js';
+import { imageMimeFromBytes } from '../media/imageMime.js';
 
 const MAX_CHARS=50_000;
 const MAX_INLINE_VISUAL_ASSETS=3;
@@ -272,12 +273,7 @@ async function safeToolCall(action:()=>Promise<Record<string,unknown>>){
   }
 }
 
-function normalizedImageMime(contentType:string|null,hinted?:string):string|null{
-  const value=String(contentType??hinted??'').split(';',1)[0].trim().toLowerCase();
-  return ['image/jpeg','image/png','image/webp','image/gif'].includes(value)?value:null;
-}
-
-async function loadVisualImagePage(result:ToolJobResult,offset=0,limit=MAX_INLINE_VISUAL_ASSETS):Promise<{
+export async function loadVisualImagePage(result:ToolJobResult,offset=0,limit=MAX_INLINE_VISUAL_ASSETS,fetchImage:typeof safeGetBuffer=safeGetBuffer):Promise<{
   blocks:McpContentBlock[];available:number;delivered:number;failed:number;nextOffset:number|null;videoAvailable:number;
 }>{
   const images=(result.visual_assets??[]).filter(asset=>asset.kind==='image');
@@ -291,11 +287,13 @@ async function loadVisualImagePage(result:ToolJobResult,offset=0,limit=MAX_INLIN
     const remaining=MAX_VISUAL_TOTAL_BYTES-totalBytes;
     if(remaining<64_000){failed+=selected.length-blocks.length-failed;break;}
     try{
-      const response=await safeGetBuffer(asset.url,{
+      const response=await fetchImage(asset.url,{
         maxBytes:Math.min(MAX_VISUAL_IMAGE_BYTES,remaining),timeoutMs:12_000,maxRedirects:4,
         userAgent:'LTA/1.0 visual-passthrough',accept:'image/jpeg,image/png,image/webp,image/gif;q=0.9,*/*;q=0.1'
       });
-      const mimeType=normalizedImageMime(response.contentType,asset.mimeType);
+      // Signed URLs can expire into CDN HTML/error bodies while retaining an
+      // image Content-Type. Count delivery only when the bytes are an image.
+      const mimeType=imageMimeFromBytes(response.bytes);
       if(!mimeType){failed++;continue;}
       totalBytes+=response.bytes.length;
       blocks.push({type:'image',data:response.bytes.toString('base64'),mimeType});
