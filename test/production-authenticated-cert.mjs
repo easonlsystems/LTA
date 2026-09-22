@@ -143,19 +143,8 @@ try{
   assert.equal(sources.response.status,200);
   assert.ok(Array.isArray(sources.data.sources)&&sources.data.sources.length>0);
 
-  let read=await api('/v1/read',{
-    method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:sourceUrl})
-  });
-  assert.ok([200,202].includes(read.response.status),`read returned ${read.response.status}: ${read.data.error_code||read.data.message||'unknown'}`);
-  assert.equal(read.data.id,read.data.job_id,'id and job_id aliases must agree');
+  const read=await readUntilDone(sourceUrl);
   const jobId=read.data.id;
-  for(let attempt=0;read.response.status===202&&attempt<pollLimit;attempt++){
-    await sleep(pollDelayMs);
-    read=await api(`/v1/jobs/${jobId}`);
-  }
-  assert.equal(read.response.status,200,`job did not complete: ${read.data.error_code||read.data.status}`);
-  assert.equal(read.data.status,'completed');
-  assert.equal(read.data.id,jobId);
   assert.equal(typeof read.data.canonical_url,'string');
   assert.ok(typeof read.data.content==='string'&&read.data.content.trim().length>80,'completed result must contain useful source text');
   assert.ok(['complete','partial'].includes(read.data.source_completeness));
