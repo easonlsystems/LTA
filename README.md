@@ -132,6 +132,24 @@ Developer clients can use the same source engine through:
 
 API keys use the `l2ai_live_...` format. The full key is shown once; LTA stores only a hash plus a non-secret display prefix. Keys can be revoked from the account dashboard.
 
+### Thin Python client
+
+The project includes a deliberately small Python client under `clients/python/`:
+
+```python
+from lta import LTA
+
+lta = LTA(api_key="...")
+result = lta.read(url)
+print(result.content)
+```
+
+It hides the 200/202 job lifecycle, polling, retry/backoff and timeout handling, returns a normalized result, exposes typed errors for fallback-friendly integrations, and provides client-side `read_many(..., concurrency=4)` without adding a server-side batch API.
+
+### MCP clients
+
+Claude Code, Codex and generic Streamable HTTP MCP clients can use the existing production `/mcp` endpoint. Copy-paste setup lives in `docs/MCP_CLIENT_SETUP.md`. MCP uses OAuth; do not put a REST API key into MCP client configuration.
+
 ## Requirements
 
 - Node.js 22+
