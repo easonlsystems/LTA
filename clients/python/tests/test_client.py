@@ -80,6 +80,38 @@ class TestSyncRead(unittest.TestCase):
         with self.assertRaises(LTAUnsupportedSource):
             lta.read("https://unsupported.example/item")
 
+    def test_retryable_typed_error_retries_then_succeeds(self):
+        calls = 0
+        job_id = "99999999-9999-4999-8999-999999999999"
+        url = "https://example.com/retry"
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return httpx.Response(
+                    422,
+                    json={
+                        "status": "failed",
+                        "error_code": "EXTRACTION_FAILED",
+                        "message": "Temporary extractor failure",
+                        "retryable": True,
+                        "retry_after_seconds": 0,
+                    },
+                )
+            return httpx.Response(200, json=completed(job_id, url, content="recovered content"))
+
+        lta = LTA(
+            "test-key",
+            base_url="https://lta.test",
+            max_retries=1,
+            poll_interval=0.001,
+            _transport=httpx.MockTransport(handler),
+        )
+        result = lta.read(url)
+        self.assertEqual(result.content, "recovered content")
+        self.assertEqual(calls, 2)
+
 
 class TestAsyncShapes(unittest.IsolatedAsyncioTestCase):
     async def test_knowledge_base_shape_normalizes_multiple_source_types(self):
