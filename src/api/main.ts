@@ -17,6 +17,7 @@ import { recordActivationEvent } from '../analytics/product.js';
 import { logErrorEvent, logEvent } from '../util/log.js';
 import { registerPublicApiRoutes } from './publicApi.js';
 import { developerDocs } from './developerDocs.js';
+import { activationCss } from './activationCss.js';
 import { clientSourceLabel, inferMcpClientSource } from '../source/clientSource.js';
 
 const allowedPublicHosts=publicHostAllowlist(env().PUBLIC_BASE_URL,[process.env.RAILWAY_PUBLIC_DOMAIN??'']);
@@ -455,7 +456,7 @@ button:focus-visible,summary:focus-visible,a:focus-visible,input:focus-visible{o
 
 `;
 function claudeInstallUrl(){const u=new URL('https://claude.ai/customize/connectors');u.searchParams.set('modal','add-custom-connector');u.searchParams.set('connectorName',env().PUBLIC_BRAND_NAME);u.searchParams.set('connectorUrl',`${env().PUBLIC_BASE_URL}/mcp`);return u.toString();}
-function siteShell(body:string,title=env().PUBLIC_BRAND_NAME,path='/'){const supportEmail=env().SUPPORT_EMAIL?.trim();const description=`Make supported public links AI-readable. ${env().PUBLIC_BRAND_NAME} turns videos, social posts, discussions, webpages, developer threads and text-layer PDFs into usable source context for the AI you already use.`;const base=env().PUBLIC_BASE_URL.replace(/\/$/,'');const canonical=`${base}${path.startsWith('/')?path:`/${path}`}`;return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${title}</title><meta name="description" content="${description}"><meta name="robots" content="index,follow"><meta name="theme-color" content="#fbfaf8"><link rel="canonical" href="${canonical}"><meta property="og:type" content="website"><meta property="og:site_name" content="${env().PUBLIC_BRAND_NAME}"><meta property="og:title" content="${title}"><meta property="og:description" content="${description}"><meta property="og:url" content="${canonical}"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${description}"><link rel="icon" href="/logo.svg"><script type="application/ld+json">${JSON.stringify({"@context":"https://schema.org","@type":"SoftwareApplication",name:env().PUBLIC_BRAND_NAME,applicationCategory:"ProductivityApplication",operatingSystem:"Web",url:base,description})}</script><style>${siteCss}</style></head><body data-path="${path}"><a class="skip-link" href="#main-content">Skip to content</a><div class="wrap"><nav class="${path==='/'?'home-nav':''}" aria-label="Primary"><a class="brand" href="/" aria-label="${env().PUBLIC_BRAND_NAME} home"><img src="/logo.svg" alt=""><span>${env().PUBLIC_BRAND_NAME}</span></a><div class="navlinks"><a class="hide-sm" href="/examples">Examples</a><a class="hide-sm" href="/use-cases">Use cases</a><a class="hide-sm" href="/sources">Supported sources</a><a class="hide-sm" href="/pricing">Pricing</a><a class="hide-sm" href="/developers">Developers</a><a class="hide-sm" href="/support">Support</a><details class="mobile-menu"><summary aria-label="Open navigation">Menu</summary><div class="mobile-menu-panel"><a href="/examples">Examples</a><a href="/use-cases">Use cases</a><a href="/sources">Supported sources</a><a href="/pricing">Pricing</a><a href="/developers">Developers</a><a href="/support">Support</a><a href="/account">Account</a></div></details><a class="btn sm purple" href="/start?from=nav" target="_blank" rel="noopener">Add LTA to Claude</a></div></nav><script>(()=>{const n=document.querySelector('nav');if(!n)return;const sync=()=>n.classList.toggle('scrolled',window.scrollY>10);sync();window.addEventListener('scroll',sync,{passive:true});})();</script>${body}<footer><span>© 2026 ${env().PUBLIC_BRAND_NAME} · A product by Eason Systems</span><span class="legal-links"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/status">Status</a> · <a href="/support">Support</a> · <a href="/account">Account</a>${supportEmail?` · <a href="mailto:${supportEmail}">${supportEmail}</a>`:''}</span></footer></div></body></html>`;}
+function siteShell(body:string,title=env().PUBLIC_BRAND_NAME,path='/'){const supportEmail=env().SUPPORT_EMAIL?.trim();const description=`Make supported public links AI-readable. ${env().PUBLIC_BRAND_NAME} turns videos, social posts, discussions, webpages, developer threads and text-layer PDFs into usable source context for the AI you already use.`;const base=env().PUBLIC_BASE_URL.replace(/\/$/,'');const canonical=`${base}${path.startsWith('/')?path:`/${path}`}`;return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${title}</title><meta name="description" content="${description}"><meta name="robots" content="index,follow"><meta name="theme-color" content="${path==='/'||path==='/connect'?'#101a1c':'#fbfaf8'}"><link rel="canonical" href="${canonical}"><meta property="og:type" content="website"><meta property="og:site_name" content="${env().PUBLIC_BRAND_NAME}"><meta property="og:title" content="${title}"><meta property="og:description" content="${description}"><meta property="og:url" content="${canonical}"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${description}"><link rel="icon" href="/logo.svg"><script type="application/ld+json">${JSON.stringify({"@context":"https://schema.org","@type":"SoftwareApplication",name:env().PUBLIC_BRAND_NAME,applicationCategory:"ProductivityApplication",operatingSystem:"Web",url:base,description})}</script><style>${siteCss}${activationCss}</style></head><body data-path="${path}"><a class="skip-link" href="#main-content">Skip to content</a><div class="wrap"><nav class="${path==='/'?'home-nav':''}" aria-label="Primary"><a class="brand" href="/" aria-label="${env().PUBLIC_BRAND_NAME} home"><img src="/logo.svg" alt=""><span>${env().PUBLIC_BRAND_NAME}</span></a><div class="navlinks"><a class="hide-sm" href="/#how">How it works</a><a class="hide-sm" href="/sources">Sources</a><a class="hide-sm" href="/pricing">Pricing</a><a class="hide-sm" href="/developers">Developers</a><details class="mobile-menu"><summary aria-label="Open navigation">Menu</summary><div class="mobile-menu-panel"><a href="/#how">How it works</a><a href="/sources">Sources</a><a href="/pricing">Pricing</a><a href="/developers">Developers</a><a href="/support">Support</a><a href="/account">Account</a></div></details><a class="btn sm purple" data-install-handoff href="/start?from=nav" target="_blank" rel="noopener">Add LTA to Claude</a></div></nav><script>(()=>{document.addEventListener('click',e=>{const a=e.target?.closest?.('[data-install-handoff]');if(!a)return;try{sessionStorage.setItem('link2ai_connect_started',String(Date.now()))}catch{}setTimeout(()=>location.assign('/connect?started=1'),350)});const n=document.querySelector('nav');if(!n)return;const sync=()=>n.classList.toggle('scrolled',window.scrollY>10);sync();window.addEventListener('scroll',sync,{passive:true});})();</script>${body}<footer><span>© 2026 ${env().PUBLIC_BRAND_NAME} · A product by Eason Systems</span><span class="legal-links"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/status">Status</a> · <a href="/support">Support</a> · <a href="/account">Account</a>${supportEmail?` · <a href="mailto:${supportEmail}">${supportEmail}</a>`:''}</span></footer></div></body></html>`;}
 
 app.get('/start',async(req,reply)=>{
   const fromRaw=String((req.query as {from?:string})?.from??'unknown').toLowerCase();
@@ -473,26 +474,47 @@ app.get('/connect/start',async(req,reply)=>{
 
 app.get('/',async(req,reply)=>{
   await trackWebsiteVisit(req,reply,'/');
-  return reply.type('text/html').send(siteShell(`<main id="main-content" class="experience-home home-only">
-    <section class="experience-hero" id="simulation">
-      <div class="home-inner">
-        <div class="experience-copy reveal">
-          <span class="experience-kicker">Your AI got the link. Not the content.</span>
-          <h1><span class="hero-line hero-line-plain">Paste the link.</span><span class="hero-line hero-line-accent">Let your AI actually read it.</span></h1>
-          <p class="experience-lede">A link alone can leave your AI with metadata or nothing useful. LTA brings supported public source content into the conversation. Your AI makes sense of it.</p>
+  return reply.type('text/html').send(siteShell(`<main id="main-content" class="activation-site" data-activation-home>
+    <section class="a-hero" id="simulation">
+      <div class="a-container a-hero-grid">
+        <div class="a-hero-copy">
+          <p class="a-overline">Public links → AI-readable source</p>
+          <h1>Your AI got the link. <span>LTA brings the source.</span></h1>
+          <p class="a-lede">Paste a supported public link in Claude. LTA retrieves the actual source content, then Claude can answer from it.</p>
+          <div class="a-hero-actions">
+            <a class="a-primary" data-install-handoff href="/start?from=hero" target="_blank" rel="noopener">Add LTA to Claude <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
+            <a class="a-text-link" href="#proof">See a real read ↓</a>
+          </div>
+          <div class="a-assurance" aria-label="Setup facts"><span>About 30 seconds</span><span>Claude connector prefilled</span><span>No directory search</span><span>No API key</span><span>10 free units</span></div>
         </div>
-        <div class="experience-hero-cta reveal"><a class="btn purple" href="/start?from=hero" target="_blank" rel="noopener">Add LTA to Claude →</a><span class="micro">Public links → AI-readable source · About 30 seconds · Direct Custom Connector · No directory search · No API key · 10 free units<br><a href="/developers#mcp">Use MCP</a> with another compatible client</span></div>
-        <div class="sim-shell reveal" id="comparison-demo" aria-label="Interactive LTA comparison simulation">
+        <aside class="a-relay" aria-label="How one real public link reaches Claude">
+          <div class="a-relay-top"><span>One real source</span><strong>URL → SOURCE → CLAUDE</strong></div>
+          <div class="a-relay-row"><span class="a-relay-num">01</span><div><strong class="a-relay-label">A public Reel link</strong><p>A URL alone may leave Claude without the Reel's content.</p><code class="a-relay-code">instagram.com/reel/Ddx6Q_MJNyg/</code></div></div>
+          <div class="a-relay-row"><span class="a-relay-num">02</span><div><strong class="a-relay-label">LTA retrieves the source</strong><p>For this recorded test, LTA supplied spoken content and available context from the Reel.</p></div></div>
+          <div class="a-relay-row"><span class="a-relay-num">03</span><div><strong class="a-relay-label">Claude can answer from it</strong><p>The source discusses Marcus Lemonis on cash, employees, networking and success.</p></div></div>
+          <p class="a-relay-foot">Recorded public test · LTA transports source context; the connected AI interprets it.</p>
+        </aside>
+      </div>
+    </section>
+    <section class="a-how" id="how" aria-label="The short setup path"><div class="a-container a-how-grid">
+      <div class="a-how-item"><b>01</b><div><strong>Open Claude directly</strong><p>LTA's name and MCP URL are prefilled in Add Custom Connector.</p></div></div>
+      <div class="a-how-item"><b>02</b><div><strong>Sign in only if asked</strong><p>Complete authorization, then return to your Claude chat.</p></div></div>
+      <div class="a-how-item"><b>03</b><div><strong>Enable, paste, ask</strong><p>Choose + → Connectors → LTA, then paste a supported public link.</p></div></div>
+    </div></section>
+    <section class="a-section" id="proof"><div class="a-container">
+      <div class="a-section-head"><h2>The difference is the source.</h2><p>See the same public Reel with and without LTA. This recorded test uses an actual Instagram Reel, not placeholder demo content.</p></div>
+      <div class="a-proof-source"><span><strong>Real LTA test case</strong> · Summarize this Instagram Reel.</span><a href="https://www.instagram.com/reel/Ddx6Q_MJNyg/" target="_blank" rel="noopener noreferrer">Open the public Reel ↗</a></div>
+        <div class="sim-shell" id="comparison-demo" aria-label="Interactive LTA comparison simulation">
           <div class="sim-tabs" role="tablist" aria-label="Choose a source for the comparison">
-            <button class="sim-tab" type="button" data-sim-source="reddit"${redditOAuthReady?'':' hidden'}>${redditOAuthReady?'Reddit':'Reddit · paused'}</button>
-            <button class="sim-tab" type="button" data-sim-source="youtube">YouTube / Shorts</button>
-            <button class="sim-tab" type="button" data-sim-source="tiktok">TikTok</button>
-            <button class="sim-tab active" type="button" data-sim-source="instagram">Instagram</button>
-            <button class="sim-tab" type="button" data-sim-source="x">X</button>
-            <button class="sim-tab" type="button" data-sim-source="bluesky">Bluesky</button>
-            <button class="sim-tab" type="button" data-sim-source="hn">Hacker News</button>
-            <button class="sim-tab" type="button" data-sim-source="pdf">PDF</button>
-            <button class="sim-tab" type="button" data-sim-source="web">Web</button>
+            <button class="sim-tab" type="button" role="tab" aria-selected="false" data-sim-source="reddit"${redditOAuthReady?'':' hidden'}>${redditOAuthReady?'Reddit':'Reddit · paused'}</button>
+            <button class="sim-tab" type="button" role="tab" aria-selected="false" data-sim-source="youtube">YouTube / Shorts</button>
+            <button class="sim-tab" type="button" role="tab" aria-selected="false" data-sim-source="tiktok">TikTok</button>
+            <button class="sim-tab active" type="button" role="tab" aria-selected="true" data-sim-source="instagram">Instagram</button>
+            <button class="sim-tab" type="button" role="tab" aria-selected="false" data-sim-source="x">X</button>
+            <button class="sim-tab" type="button" role="tab" aria-selected="false" data-sim-source="bluesky">Bluesky</button>
+            <button class="sim-tab" type="button" role="tab" aria-selected="false" data-sim-source="hn">Hacker News</button>
+            <button class="sim-tab" type="button" role="tab" aria-selected="false" data-sim-source="pdf">PDF</button>
+            <button class="sim-tab" type="button" role="tab" aria-selected="false" data-sim-source="web">Web</button>
           </div>
           <div class="sim-meta sim-meta-simple">
             <div class="sim-prompt-card">
@@ -514,18 +536,24 @@ app.get('/',async(req,reply)=>{
           </div>
           <div class="sim-conclusion" id="sim-conclusion" hidden>Same AI. Same link. <strong>Missing context fixed.</strong></div>
         </div>
-        <div class="clarity-strip reveal" aria-label="How to start using LTA">
-          <div class="clarity-item"><b>1</b><div><strong>Open the prefilled connector</strong><span>One click opens Claude's Add custom connector screen with LTA's name and MCP URL already filled in. No Directory search.</span></div></div>
-          <div class="clarity-item"><b>2</b><div><strong>Sign in only if asked</strong><span>Claude sends you to LTA only when OAuth authorization is needed. No API key or client secret.</span></div></div>
-          <div class="clarity-item"><b>3</b><div><strong>Turn it on, then paste</strong><span>Back in the chat: + → Connectors → LTA. Then paste the public link and ask normally.</span></div></div>
-        </div>
+
+    </div></section>
+    <section class="a-section" id="supported"><div class="a-container">
+      <div class="a-section-head"><h2>Made for the links that lose their context.</h2><p>Bring supported public source content into Claude without copying transcripts, threads or documents by hand.</p></div>
+      <div class="a-source-list">
+        <div><strong>YouTube / Shorts</strong><span>Available speech and captions.</span></div><div><strong>TikTok & Instagram</strong><span>Supported public posts and Reels.</span></div><div><strong>X & Bluesky</strong><span>Supported public post content.</span></div><div><strong>GitHub Issues / PRs</strong><span>Developer discussion and review context.</span></div><div><strong>Hacker News</strong><span>Public discussion threads.</span></div><div><strong>Web & PDFs</strong><span>Readable pages and public text-layer PDFs.</span></div>
       </div>
-    </section>
-
-    <script src="/home.js?v=20260920-reel-proof3" defer></script>
-  </main>`, `${env().PUBLIC_BRAND_NAME} — Public links to AI-ready source context`, `/`));
+      <p class="a-source-note">Availability depends on the source. Private, paywalled, DRM and blocked links may fail. Video reads rely on speech, captions and audio-derived text; LTA does not analyze visual-only frames. For supported image posts, original images can reach the connected AI when available.</p>
+      <div class="a-unit-links"><a class="a-text-link" href="/sources">See source details →</a><a class="a-text-link" href="/support">What if a link fails? →</a></div>
+    </div></section>
+    <section class="a-section" id="units"><div class="a-container a-units">
+      <div><h2>Try it before choosing a plan.</h2><p class="a-source-note">Your first 10 processing units are free. No card is needed to add LTA to Claude.</p></div>
+      <div><div class="a-unit-lines"><div class="a-unit-line"><strong>Video</strong><span>1 unit per started processed minute.</span></div><div class="a-unit-line"><strong>Text</strong><span>About 1 unit per 2,500 estimated tokens, at least 1 on a successful read.</span></div><div class="a-unit-line"><strong>Failed reads</strong><span>Unsupported, private or extraction-failed reads cost 0. If your balance is too low, processing stops first.</span></div></div><div class="a-unit-links"><a class="a-text-link" href="/pricing">See plans and units →</a><a href="/developers#mcp">Use MCP</a><a class="a-text-link" href="/account">API key</a></div></div>
+    </div></section>
+    <section class="a-final"><div class="a-container a-final-inner"><div><h2>Give Claude the source, not just the link.</h2><p>Open the prefilled connector, sign in if asked, then paste your first public link.</p></div><div class="a-final-actions"><a class="a-primary" data-install-handoff href="/start?from=footer" target="_blank" rel="noopener">Add LTA to Claude <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a><small>About 30 seconds · 10 free units</small></div></div></section>
+    <script src="/home.js?v=activation-v2" defer></script>
+  </main>`, `${env().PUBLIC_BRAND_NAME} — Bring public source content into Claude`, `/`));
 });
-
 
 app.get('/examples',async(req,reply)=>{
   await trackWebsiteVisit(req,reply,'/examples');
@@ -578,7 +606,7 @@ const homeExperienceJs=`(()=>{
       const clearTimers=()=>{for(const id of state.timers)clearTimeout(id);state.timers.clear();};
       const setTimer=(fn,ms,runId=state.runId)=>{const id=setTimeout(()=>{state.timers.delete(id);if(runId!==state.runId)return;fn();},ms);state.timers.add(id);return id;};
       const resetDemo=(markInteraction=false,showPreview=false)=>{if(markInteraction)state.interacted=true;state.runId++;clearTimers();const d=demos[state.source];q('#sim-left-state').textContent=showPreview?'Link only':'Ready';q('#sim-right-state').textContent=showPreview?'Source ready':'Ready';q('#sim-left-state').className=showPreview?'sim-state failed':'sim-state';q('#sim-right-state').className=showPreview?'sim-state loaded':'sim-state';q('#sim-left-answer').classList.toggle('show',showPreview);q('#sim-right-answer').classList.toggle('show',showPreview);q('#sim-left-answer').innerHTML=showPreview?'<span class="sim-chat-speaker">AI assistant</span><p>'+d.fail+'</p>':'';if(showPreview)renderAnswer(q('#sim-right-answer'),d.lead,d.points);else q('#sim-right-answer').innerHTML='';q('#sim-tool').classList.toggle('show',showPreview);q('#sim-tool').innerHTML=showPreview?'LTA · Source loaded <i>shared source engine</i>':'LTA · Reading source…';q('#sim-run').textContent='See the difference →';q('#sim-run').disabled=false;q('#sim-conclusion').classList.remove('show');q('#sim-conclusion').hidden=true;qa('#sim-left-thinking .sim-line,#sim-right-thinking .sim-line').forEach(el=>el.classList.remove('live'));};
-      const renderDemoSource=(key)=>{const d=demos[key];if(!d)return;state.source=key;q('#sim-source-name').textContent=d.name;q('#sim-url').textContent=d.url;qa('.sim-user-link').forEach(el=>{el.textContent=d.url;});qa('.sim-user-question').forEach(el=>{el.textContent=d.question;});qa('.sim-tab').forEach(b=>b.classList.toggle('active',b.dataset.simSource===key));resetDemo(false,state.opened);};
+      const renderDemoSource=(key)=>{const d=demos[key];if(!d)return;state.source=key;q('#sim-source-name').textContent=d.name;q('#sim-url').textContent=d.url;qa('.sim-user-link').forEach(el=>{el.textContent=d.url;});qa('.sim-user-question').forEach(el=>{el.textContent=d.question;});qa('.sim-tab').forEach(b=>{const active=b.dataset.simSource===key;b.classList.toggle('active',active);b.setAttribute('aria-selected',String(active));});resetDemo(false,state.opened);};
       const renderAnswer=(el,lead,points)=>{el.innerHTML='<span class=\"sim-chat-speaker\">AI assistant</span><strong>'+lead+'</strong><ul>'+points.slice(0,3).map(point=>'<li>'+point+'</li>').join('')+'</ul>';};
       const renderRedditPaused=()=>{state.opened=true;const panels=q('#sim-comparison-panels');if(panels)panels.hidden=false;const runButton=q('#sim-run');if(runButton)runButton.setAttribute('aria-expanded','true');q('#sim-left-state').textContent='Ready';q('#sim-left-state').className='sim-state';q('#sim-right-state').textContent='Temporarily paused';q('#sim-right-state').className='sim-state failed';qa('#sim-left-thinking .sim-line,#sim-right-thinking .sim-line').forEach(el=>el.classList.remove('live'));q('#sim-tool').classList.add('show');q('#sim-tool').innerHTML='Reddit · Approved OAuth access required <i>0 units</i>';q('#sim-right-answer').innerHTML='<span class="sim-chat-speaker">AI assistant</span><p>Reddit reads are paused on this deployment rather than bypassing Reddit’s hosted-service access controls.</p>';q('#sim-right-answer').classList.add('show');q('#sim-conclusion').classList.remove('show');q('#sim-conclusion').hidden=true;};
       const runDemo=(markInteraction=false)=>{if(markInteraction)state.interacted=true;state.opened=true;const panels=q('#sim-comparison-panels');if(panels)panels.hidden=false;const runButton=q('#sim-run');if(runButton)runButton.setAttribute('aria-expanded','true');resetDemo();if(state.source==='reddit'&&!redditAvailable){renderRedditPaused();return;}const runId=state.runId;const d=demos[state.source];const reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;const t=reduced?0:1;q('#sim-run').textContent='Comparing…';q('#sim-run').disabled=true;q('#sim-left-state').textContent='Trying source';q('#sim-right-state').textContent='Starting';q('#sim-left-state').className='sim-state reading';q('#sim-right-state').className='sim-state reading';qa('#sim-left-thinking .sim-line,#sim-right-thinking .sim-line').forEach(el=>el.classList.add('live'));setTimer(()=>{q('#sim-tool').classList.add('show');q('#sim-right-state').textContent='Reading';},350*t,runId);setTimer(()=>{q('#sim-left-state').textContent='Blocked';q('#sim-left-state').className='sim-state failed';qa('#sim-left-thinking .sim-line').forEach(el=>el.classList.remove('live'));q('#sim-left-answer').innerHTML='<span class="sim-chat-speaker">AI assistant</span><p>'+d.fail+'</p>';q('#sim-left-answer').classList.add('show');},900*t,runId);setTimer(()=>{q('#sim-tool').innerHTML='LTA · Source loaded';q('#sim-right-state').textContent='Source loaded';q('#sim-right-state').className='sim-state loaded';},1300*t,runId);setTimer(()=>{qa('#sim-right-thinking .sim-line').forEach(el=>el.classList.remove('live'));renderAnswer(q('#sim-right-answer'),d.lead,d.points);q('#sim-right-answer').classList.add('show');},1750*t,runId);setTimer(()=>{q('#sim-conclusion').hidden=false;q('#sim-conclusion').classList.add('show');q('#sim-run').textContent='Run again ↻';q('#sim-run').disabled=false;},2150*t,runId);};
@@ -595,86 +623,43 @@ app.get('/home.js',async(_req,reply)=>reply.header('Cache-Control','no-cache, ma
 app.get('/connect',async(req,reply)=>{
   await trackWebsiteVisit(req,reply,'/connect');
   const mcpUrl=env().PUBLIC_BASE_URL.replace(/\/$/,'')+'/mcp';
-  return reply.type('text/html').send(siteShell(`<main id="main-content">
-    <section class="connect-hero connect-fast">
-      <span class="badge"><span class="badge-dot"></span>Claude connector</span>
-      <h1>Add LTA to Claude. Start using it in about 30 seconds.</h1>
-      <p>No Connector Directory search. No MCP URL to copy. No API key. One click opens Claude's Add custom connector screen with LTA already filled in.</p>
-      <div class="guide-status"><span>About 30 seconds</span><span>10 units free</span><span>No card</span><span>No API key</span></div>
-      <div class="setup-cta" style="justify-content:center;margin-top:26px">
-        <a class="btn purple" id="claude-install" href="/connect/start" target="_blank" rel="noopener">Add LTA to Claude →</a>
+  return reply.type('text/html').send(siteShell(`<main id="main-content" class="activation-connect">
+    <div class="a-connect-shell">
+      <span class="a-connect-label">Claude setup · about 30 seconds</span>
+      <div class="a-connect-head"><h1>Connect once. Then paste a link.</h1><p>Three steps. No hunting through a directory. One click opens Claude's Add Custom Connector with LTA already filled in. Sign in only if Claude asks.</p></div>
+      <div class="a-progress" aria-label="Connection progress"><span class="active" id="connect-progress-1"></span><span id="connect-progress-2"></span><span id="connect-progress-3"></span></div>
+      <section class="a-connect-panel" id="setup-phase" aria-labelledby="setup-title">
+        <h2 id="setup-title">Open LTA in Claude.</h2>
+        <p>Confirm the prefilled connector. Do not search Claude's Connectors Directory. There is no MCP URL to type and no API key.</p>
+        <a class="a-primary" id="claude-install" href="/connect/start" target="_blank" rel="noopener">Add LTA to Claude <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
+        <div class="a-connect-facts"><span>Custom Connector, not Directory</span><span>Sign in only if asked</span><span>10 free units</span></div>
+      </section>
+      <section class="a-connect-panel" id="opening-phase" aria-labelledby="opening-title" hidden>
+        <h2 id="opening-title">Finish in Claude.</h2>
+        <p>Claude opened in a new tab. Confirm LTA, authorize if asked, then come back here. This page will check the connection.</p>
+        <div class="a-live-state" id="connect-state" role="status" aria-live="polite">Waiting for Claude to finish connecting…</div>
+        <p><a class="a-text-link" href="/connect/start" target="_blank" rel="noopener">Open the prefilled connector again ↗</a></p>
+      </section>
+      <section class="a-connect-panel a-connected" id="connected-next" aria-labelledby="connected-title" hidden>
+        <span class="a-connected-mark" aria-hidden="true">✓</span>
+        <div><h2 id="connected-title">Connected ✓ Authorization is finished.</h2><p>Connected means authorization is finished. Make LTA available in this Claude conversation, then run one real test.</p></div>
+        <div class="a-next"><strong>Now in Claude</strong><span class="a-command">+ → Connectors → LTA</span></div>
+        <div class="a-test" id="first-test"><h3>Paste this test link and question</h3><p>Use a known real public Reel. LTA will bring its available source content into Claude.</p>
+          <div class="a-test-row"><code id="test-url">https://www.instagram.com/reel/Ddx6Q_MJNyg/</code><button type="button" data-copy="test-url" aria-label="Copy Instagram Reel URL">Copy link</button></div>
+          <div class="a-test-row"><span id="test-prompt">Summarize this Instagram Reel and list the main claims.</span><button type="button" data-copy="test-prompt" aria-label="Copy first question">Copy question</button></div>
+          <p class="a-success-hint"><strong>What success looks like:</strong> Claude answers from the Reel's spoken or captioned content. If it says it cannot access the Reel, check + → Connectors → LTA and try again.</p>
+        </div>
+      </section>
+      <noscript><p class="a-live-state">After connecting, return to Claude, choose + → Connectors → LTA, then paste a supported public link. First test: https://www.instagram.com/reel/Ddx6Q_MJNyg/ — “Summarize this Instagram Reel and list the main claims.”</p><style>.a-test-row button{display:none}</style></noscript>
+      <div class="a-fallback">
+        <details><summary>Connected, but Claude does not use LTA?</summary><p>In Claude choose + → Connectors → LTA. If needed, open Tool access and select Tools already loaded so LTA is available from the start of the chat.</p><img loading="lazy" decoding="async" src="/guide/claude-tool-access.png" alt="Claude Tool access menu showing the Tools already loaded option" style="display:block;max-width:100%;border-radius:9px"></details>
+        <details><summary>Using Grok or another Remote MCP client?</summary><p>Use this MCP URL with OAuth in a compatible client. Claude's direct button already prefills it.</p><code>${mcpUrl}</code></details>
+        <details><summary>Which links and units work?</summary><p>Public supported links include YouTube, TikTok, Instagram, X, Bluesky, GitHub Issues and PRs, Hacker News, readable webpages and text-layer PDFs. Video uses 1 unit per started processed minute, so a 19-minute video needs 19 units; text is about 1 unit per 2,500 estimated tokens. LTA does not yet analyze visual-only frames. Failed or unsupported reads use 0 units.</p><p><a href="/sources">See source limits →</a> · <a href="/pricing">See plans →</a> · <a href="/support">Get help →</a></p></details>
       </div>
-      <p class="micro" id="connect-state">After Claude opens: confirm LTA → sign in if asked → return to your chat → + → Connectors → LTA.</p>
-      <div class="connected-next" id="connected-next" hidden role="status"><strong>Connected. Now use LTA in Claude.</strong><span>Return to your chat, choose <b>+ → Connectors → LTA</b>, then paste the first test below.</span><a href="#first-test">Get the first test ↓</a></div>
-    </section>
-
-    <section class="setup-shell connect-guide-shell">
-      <div class="setup-main">
-        <h2>Three steps. No hunting through a directory.</h2>
-        <p>The install button handles the part that confused early users: it opens Claude's custom-connector screen directly, with the LTA name and MCP URL prefilled.</p>
-        <div class="connect-step-grid">
-          <div class="connect-step"><span class="connect-step-num">1</span><h3>Confirm the prefilled connector.</h3><p>Do not search Claude's Connectors Directory. The LTA name and MCP URL are already there; press <strong>Add</strong> or <strong>Connect</strong>.</p></div>
-          <div class="connect-step"><span class="connect-step-num">2</span><h3>Sign in only when Claude asks.</h3><p>Finish LTA OAuth and choose <strong>Connect and return</strong>. Your trial, usage and plan stay with the same LTA account.</p></div>
-          <div class="connect-step"><span class="connect-step-num">3</span><h3>Make LTA available in this chat.</h3><p>Return to Claude, open <strong>+ → Connectors → LTA</strong>, then paste a supported public link into the normal message box. <strong>Connected means authorization is finished</strong>; this step makes sure LTA is actually available in the conversation. <strong>Connected ✓ Authorization is finished.</strong> One Claude-side step remains.</p></div>
-        </div>
-
-        <div class="connect-test" id="first-test">
-          <div><span class="connect-eyebrow">First test</span><h3>Your first 30-second test.</h3><p>Paste this real Reel into Claude and ask: <strong>“Summarize this Instagram Reel and list the main claims.”</strong></p><code>https://www.instagram.com/reel/Ddx6Q_MJNyg/</code></div>
-          <a class="btn alt sm" href="/examples">See more examples</a>
-        </div>
-
-        <div class="connect-explain-grid">
-          <div class="connect-fact"><span class="connect-eyebrow">What LTA reads</span><h3>Video understanding today</h3><p>LTA reads spoken or captioned content and available metadata. It does not yet analyze visual-only frames, diagrams or slides that are never described in speech or captions.</p></div>
-          <div class="connect-fact"><span class="connect-eyebrow">How units work</span><h3>10 units is a processing budget, not 10 links.</h3><p>Video uses 1 unit per started processed minute. A 19-minute video needs 19 units. If you only have 9, LTA stops before processing and charges 0. Text uses roughly 1 unit per 2,500 estimated tokens; failed or unsupported reads also cost 0.</p></div>
-        </div>
-
-        <div class="connect-help-title"><strong>Need help connecting?</strong><span>The fixes below stay out of the main three-step path.</span></div><div class="setup-main connect-help">
-          <details>
-            <summary><strong>LTA is connected, but Claude still is not using it?</strong><span>Show the fix</span></summary>
-            <div class="connect-help-body">
-              <p>Open <strong>+ → Connectors → Tool access</strong> and choose <strong>Tools already loaded</strong>. This makes LTA available from the start of the conversation instead of waiting for Claude to load it later.</p>
-              <img loading="lazy" decoding="async" src="/guide/claude-tool-access.png" alt="Claude Connectors Tool access menu showing where to load LTA in a conversation">
-              <p><a href="/support"><strong>Open support →</strong></a></p>
-            </div>
-          </details>
-          <details>
-            <summary><strong>Using Grok or another Remote MCP client?</strong><span>Show MCP URL</span></summary>
-            <div class="connect-help-body">
-              <code class="connect-mcp-url">${mcpUrl}</code>
-              <p>Remote MCP · OAuth. No LTA API key goes in the connector.</p>
-            </div>
-          </details>
-        </div>
-      </div>
-    </section>
-
-    <script>(()=>{const button=document.getElementById('claude-install');const state=document.getElementById('connect-state');const next=document.getElementById('connected-next');let since=Number(sessionStorage.getItem('link2ai_connect_started')||0);let timer=null;const check=async()=>{if(!since)return;try{const response=await fetch('/api/connect/status?since='+encodeURIComponent(String(since)),{cache:'no-store',credentials:'same-origin'});if(!response.ok)return;const data=await response.json();if(data.connected){if(state)state.textContent='Connected ✓ Return to Claude. Choose + → Connectors → LTA, then paste the first test below.';if(next)next.hidden=false;clearInterval(timer);return;}if(data.authenticated&&state)state.textContent='Signed in. Finish Claude authorization, choose Connect and return, then enable LTA under + → Connectors.';}catch{}};button?.addEventListener('click',()=>{since=Date.now();sessionStorage.setItem('link2ai_connect_started',String(since));if(state)state.textContent='Claude opened. Confirm the prefilled LTA connector; sign in only if Claude asks.';clearInterval(timer);timer=setInterval(check,1500);setTimeout(check,500);});if(since){timer=setInterval(check,1500);check();}})();</script>
-
-    <style>
-      .connect-fast{padding-bottom:24px}.connect-fast .setup-cta{display:flex}.connect-fast .btn{min-width:230px}
-      .connect-guide-shell{margin-top:10px}.connect-guide-shell>.setup-main{background:rgba(255,255,255,.84)}
-      .connect-step-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:22px}
-      .connect-step{border:1px solid var(--line);border-radius:20px;background:#fff;padding:20px;min-width:0}
-      .connect-step-num{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:#1c1922;color:#fff;font-size:12px;font-weight:900;margin-bottom:15px}
-      .connect-step h3,.connect-fact h3,.connect-test h3{margin:0 0 8px;font-size:18px}.connect-step p,.connect-fact p,.connect-test p{margin:0;color:var(--muted);font-size:14px;line-height:1.6}
-      .connect-test{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-top:16px;padding:20px;border:1px solid rgba(111,84,232,.18);border-radius:20px;background:linear-gradient(180deg,#fff,#faf8ff)}
-      .connect-test>div{min-width:0}.connect-test code{display:block;margin-top:12px;padding:10px 12px;border-radius:10px;background:#f3f0f8;overflow-wrap:anywhere;font-size:12px}
-      .connect-eyebrow{display:block;margin-bottom:8px;font-size:10px;text-transform:uppercase;letter-spacing:.12em;font-weight:900;color:#7a7086}
-      .connect-explain-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}
-      .connect-fact{border:1px solid var(--line);border-radius:20px;background:#fff;padding:20px}
-      .connect-help-title{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-top:18px;padding:0 4px 8px;font-size:13px}.connect-help-title span{color:var(--muted);font-size:11px}.connect-help{margin-top:0;padding:0;overflow:hidden;border:1px solid var(--line);border-radius:20px;background:rgba(255,255,255,.86)}
-      .connect-help details{border-bottom:1px solid var(--line)}.connect-help details:last-child{border-bottom:0}
-      .connect-help summary{list-style:none;display:flex;justify-content:space-between;gap:18px;align-items:center;padding:18px 20px;cursor:pointer}
-      .connect-help summary::-webkit-details-marker{display:none}.connect-help summary span{font-size:11px;color:var(--muted)}
-      .connect-help-body{padding:0 20px 20px;color:var(--muted);font-size:13px;line-height:1.6}.connect-help-body img{display:block;width:100%;max-width:760px;margin:14px auto 0;border:1px solid var(--line);border-radius:16px}
-      .connect-mcp-url{display:block;padding:13px 14px;border-radius:12px;background:#17151f;color:#fff;overflow-wrap:anywhere}
-      .connected-next:not([hidden]){display:grid;gap:8px;text-align:left;margin:18px auto 0;padding:18px 20px;max-width:650px;border-radius:16px;background:#e8f7f1;color:#123d31}.connected-next strong{font-size:18px}.connected-next span{font-size:14px;line-height:1.5}.connected-next a{font-size:13px;font-weight:800;text-underline-offset:3px}
-      @media(max-width:820px){.connect-step-grid,.connect-explain-grid{grid-template-columns:1fr}.connect-test{align-items:flex-start;flex-direction:column}}
-      @media(max-width:620px){.connect-fast{padding-top:48px}.connect-fast .setup-cta{display:block}.connect-fast .btn{width:100%;min-width:0}.connect-help summary{align-items:flex-start}.connect-test .btn{width:100%}}
-    </style>
+    </div>
+    <script>(()=>{const setup=document.getElementById('setup-phase');const opening=document.getElementById('opening-phase');const connected=document.getElementById('connected-next');const status=document.getElementById('connect-state');const progress=[1,2,3].map(n=>document.getElementById('connect-progress-'+n));const button=document.getElementById('claude-install');let since=0;try{since=Number(sessionStorage.getItem('link2ai_connect_started')||0);if(since&&Date.now()-since>600000){sessionStorage.removeItem('link2ai_connect_started');since=0}}catch{}const began=Date.now();let timer;function stage(n){setup.hidden=n!==1;opening.hidden=n!==2;connected.hidden=n!==3;progress.forEach((el,i)=>el?.classList.toggle('active',i<n));}function schedule(){clearTimeout(timer);if(Date.now()-began<600000)timer=setTimeout(check,3000);else if(status)status.textContent='Still in Claude? Finish authorization there, then refresh this page. The first test is ready below.';}async function check(){if(!since||document.hidden){schedule();return}try{const response=await fetch('/api/connect/status?since='+encodeURIComponent(String(since)),{cache:'no-store',credentials:'same-origin'});if(!response.ok)throw new Error('status');const data=await response.json();if(data.connected){stage(3);if(status)status.textContent='Connected ✓ Return to Claude. Choose + → Connectors → LTA, then paste the test link.';return}if(status)status.textContent=data.authenticated?'Signed in. Complete authorization in Claude, then return here.':'Waiting for Claude to finish connecting…';}catch{if(status)status.textContent='We could not check the connection right now. Finish in Claude, then refresh this page.'}schedule()}button?.addEventListener('click',()=>{since=Date.now();try{sessionStorage.setItem('link2ai_connect_started',String(since))}catch{}stage(2);check()});document.querySelectorAll('[data-copy]').forEach(btn=>btn.addEventListener('click',async()=>{const target=document.getElementById(btn.getAttribute('data-copy'));try{await navigator.clipboard.writeText(target?.textContent?.trim()||'');const old=btn.textContent;btn.textContent='Copied ✓';setTimeout(()=>btn.textContent=old,1800)}catch{btn.textContent='Select text'}}));document.addEventListener('visibilitychange',()=>{if(!document.hidden&&since)check()});if(since||new URLSearchParams(location.search).has('started')){if(!since){since=Date.now();try{sessionStorage.setItem('link2ai_connect_started',String(since))}catch{}}stage(2);check()}else stage(1)})();</script>
   </main>`, `Connect ${env().PUBLIC_BRAND_NAME} to Claude`, '/connect'));
 });
-
 app.get('/api/connect/status',async(req,reply)=>{
   const user=await userFromSessionCookie(req.headers.cookie);
   if(!user)return reply.send({authenticated:false,connected:false});
