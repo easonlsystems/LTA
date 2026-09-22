@@ -7,8 +7,10 @@ import httpx
 
 from lta import (
     LTA,
+    LTAError,
     LTAExtractionFailed,
     LTAQuotaExceeded,
+    LTARetryableError,
     LTAUnsupportedSource,
 )
 
@@ -100,6 +102,65 @@ class TestSyncRead(unittest.TestCase):
             lta.read("https://example.com/large-source")
         self.assertEqual(raised.exception.payload["remaining_usage_units"], 2)
         self.assertEqual(raised.exception.payload["required_usage_units"], 5)
+
+    def test_non_retryable_500_is_not_retried_or_reclassified(self):
+        calls = 0
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            return httpx.Response(
+                500,
+                json={
+                    "error": "INTERNAL_ERROR",
+                    "error_code": "INTERNAL_ERROR",
+                    "message": "Internal failure",
+                    "retryable": False,
+                },
+            )
+
+        lta = LTA(
+            "test-key",
+            base_url="https://lta.test",
+            max_retries=3,
+            _transport=httpx.MockTransport(handler),
+        )
+        with self.assertRaises(LTAError) as raised:
+            lta.read("https://example.com/non-retryable")
+        self.assertNotIsInstance(raised.exception, LTARetryableError)
+        self.assertEqual(raised.exception.code, "INTERNAL_ERROR")
+        self.assertFalse(raised.exception.retryable)
+        self.assertEqual(calls, 1)
+
+    def test_zero_retry_after_is_honored(self):
+        calls = 0
+        job_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        url = "https://example.com/rate-limit"
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return httpx.Response(
+                    503,
+                    json={
+                        "error_code": "RATE_LIMITED",
+                        "message": "Retry now",
+                        "retryable": True,
+                        "retry_after_seconds": 0,
+                    },
+                )
+            return httpx.Response(200, json=completed(job_id, url, content="recovered immediately"))
+
+        lta = LTA(
+            "test-key",
+            base_url="https://lta.test",
+            max_retries=1,
+            _transport=httpx.MockTransport(handler),
+        )
+        result = lta.read(url)
+        self.assertEqual(result.content, "recovered immediately")
+        self.assertEqual(calls, 2)
 
     def test_retryable_typed_error_retries_then_succeeds(self):
         calls = 0
