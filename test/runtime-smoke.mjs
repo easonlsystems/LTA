@@ -50,23 +50,21 @@ try{
     assert.match(body,/LaunchBrand/);
     if(route==='/'){
       assert.match(body,/<nav class="home-nav" aria-label="Primary">/);
-      assert.match(body,/class="experience-home home-only"/);
-      assert.match(body,/Paste the link\./);
-      assert.match(body,/Let your AI actually read it\./);
+      assert.match(body,/class="activation-site"/);
+      assert.match(body,/Your AI got the link\. <span>LTA brings the source\.<\/span>/);
       assert.match(body,/Public links → AI-readable source/);
       assert.match(body,/Add LTA to Claude/);
       assert.match(body,/Real LTA test case/);
       assert.match(body,/Ddx6Q_MJNyg/);
       assert.match(body,/See the difference/);
       for(const source of ['youtube','tiktok','instagram','x','bluesky','hn','pdf','web'])assert.match(body,new RegExp(`data-sim-source=\"${source}\"`),`homepage should expose ${source} simulation`);
-      assert.match(body,/href="\/examples"/);
-      assert.match(body,/href="\/use-cases"/);
+      assert.match(body,/href="#proof"/);
       assert.match(body,/href="\/sources"/);
       assert.match(body,/href="\/pricing"/);
       assert.match(body,/href="\/developers"/);
       assert.match(body,/Use MCP/);
       assert.match(body,/API key/);
-      assert.match(body,/src="\/home\.js\?v=20260920-reel-proof3" defer/);
+      assert.match(body,/src="\/home\.js\?v=activation-v2" defer/);
       assert.doesNotMatch(body,/One missing layer/i);
       assert.doesNotMatch(body,/What do you want Claude to read\?/);
       assert.doesNotMatch(body,/Try the link Claude just failed to read\./);
@@ -76,7 +74,7 @@ try{
     if(route==='/use-cases'){assert.match(body,/Use the link normally/);assert.match(body,/Summaries grounded in the source/);}
     if(route==='/sources'){assert.match(body,/Supported sources/);assert.match(body,/Video & social/);assert.match(body,/Reddit/);assert.match(body,/Paused until approved Reddit OAuth Data API credentials are configured/);}
     if(route==='/pricing'){assert.match(body,/Founding offer/);assert.match(body,/First 50 paid users get 50% more usage/);assert.match(body,/500 paid units \+ 250 founding bonus/);assert.match(body,/2,000 paid units \+ 1,000 founding bonus/);assert.match(body,/Unused paid units roll over while subscribed/);assert.match(body,/founding bonus resets each billing cycle and does not roll over/);assert.match(body,/No plan-specific video length limit/);assert.match(body,/What does 1 processing unit mean/);assert.match(body,/Units depend on content size, not platform/);}
-    if(route==='/connect'){assert.match(body,/Add LTA to Claude/);assert.match(body,/One click opens Claude/);assert.match(body,/prefilled/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Need help connecting\?/);assert.match(body,/Tools already loaded/);assert.match(body,/Using Grok or another Remote MCP client\?/);assert.doesNotMatch(body,/Set up LTA in three steps|available in Claude's Connectors Directory|Open Claude Connectors Directory|Use the published connector|Search “LTA”|Choose the published LTA connector/);}
+    if(route==='/connect'){assert.match(body,/Add LTA to Claude/);assert.match(body,/One click opens Claude/);assert.match(body,/prefilled/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Connected, but Claude does not use LTA\?/);assert.match(body,/Tools already loaded/);assert.match(body,/Using Grok or another Remote MCP client\?/);assert.doesNotMatch(body,/Set up LTA in three steps|available in Claude's Connectors Directory|Open Claude Connectors Directory|Use the published connector|Search “LTA”|Choose the published LTA connector/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render|google-client-secret-must-not-render/);
   }
 
@@ -155,6 +153,8 @@ try{
   assert.match(ids['sim-right-answer'].innerHTML,/paused on this deployment/);
   assert.equal(ids['sim-conclusion'].hidden,true,'paused Reddit must not show the success conclusion');
   simTab('youtube').listeners.click();
+  assert.equal(simTab('youtube').getAttribute('aria-selected'),'true','selected source tab must be announced');
+  assert.equal(simTab('instagram').getAttribute('aria-selected'),'false','previous source tab must no longer be announced as selected');
   assert.equal(ids['sim-left-state'].textContent,'Link only','selecting a supported source must show its static limitation preview');
   assert.equal(ids['sim-right-state'].textContent,'Source ready','selecting a supported source must show its static loaded preview');
   assert.equal(timers.size,0,'source tabs must not enqueue an automatic run');
@@ -228,7 +228,7 @@ try{
   assert.equal(connectPage.status,200);
   const connectPageText=await connectPage.text();
   assert.match(connectPageText,/One click opens Claude/,'connect page must lead with the one-click setup');
-  assert.match(connectPageText,/Need help connecting\?/,'detailed setup instructions should be collapsed behind help');
+  assert.match(connectPageText,/Connected, but Claude does not use LTA\?/,'detailed setup instructions should be collapsed behind help');
   assert.match(connectPageText,/\+ → Connectors/,'help must still show where to confirm LTA availability');
   assert.match(connectPageText,/paste a supported public link/,'connect page must say what to do after authorization');
   assert.doesNotMatch(connectPageText,/Connected = authorization finished/,'first-run surface should not front-load internal connector-state explanation');
