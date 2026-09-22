@@ -32,6 +32,9 @@ assert.doesNotMatch(docs,/From zero to source text in three steps\.|Windows Powe
 assert.match(docs,/Remote MCP/,'developer surface must expose MCP as a first-class integration path');
 assert.match(docs,/Use LTA inside an AI client\./,'developer surface must explain what MCP is for');
 assert.match(docs,/\/mcp/,'developer surface must publish the production MCP endpoint');
+assert.match(docs,/claude mcp add --transport http lta/,'developer surface must give Claude Code a copy-paste Remote MCP command');
+assert.match(docs,/codex mcp add lta --url/,'developer surface must give Codex a copy-paste Remote MCP command');
+assert.match(docs,/codex mcp login lta/,'developer surface must include Codex OAuth login');
 assert.match(docs,/Claude[^]*Custom Connector/,'MCP surface must name Claude as a place to use Remote MCP');
 assert.match(docs,/Grok[^]*Custom MCP/,'MCP surface must name Grok custom MCP without claiming catalog publication');
 assert.match(docs,/LTA handles sign-in through OAuth/,'MCP surface must explain OAuth authentication');
