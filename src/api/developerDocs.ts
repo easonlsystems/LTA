@@ -29,7 +29,7 @@ export function developerDocs(baseUrl:string):string{
         <div><span>Claude Code</span><code>claude mcp add --transport http lta ${esc(mcp)}</code></div>
         <div><span>Codex</span><code>codex mcp add lta --url ${esc(mcp)}</code><code>codex mcp login lta</code></div>
       </div>
-      <p class="fine">MCP uses LTA OAuth. It does not use an <code>l2ai_live_…</code> REST API key.</p>
+      <p class="fine">MCP does not use an <code>l2ai_live_…</code> API key. LTA handles MCP sign-in through OAuth.</p>
     </article>
 
     <article class="dev-card api-card" id="api">
