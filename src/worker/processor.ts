@@ -26,6 +26,15 @@ export function videoCompleteness(text:string,durationSeconds:number,segments?:A
   const truncated=durationSeconds>0&&coverage>0&&coverage<durationSeconds-30&&coverage/durationSeconds<0.9;
   return {truncated,extractedTokenEstimate:estimateTokens(text),usageUnits:videoUsageUnits(durationSeconds),...(truncated?{truncationReason:'caption_timeline_incomplete',contentSectionsTruncated:['caption_timeline']}: {})};
 }
+
+export function videoTranscriptQuality(text:string,durationSeconds:number):{ok:boolean;signalChars:number;minimumSignalChars:number}{
+  const signalChars=(text.match(/[\p{L}\p{N}]/gu)??[]).length;
+  // This is intentionally very lenient. Normal speech is hundreds of characters
+  // per minute; this only catches obviously empty/broken transcripts that happen
+  // to span the full timeline.
+  const minimumSignalChars=Math.min(200,Math.max(8,Math.ceil(Math.max(1,durationSeconds)/60*8)));
+  return {ok:signalChars>=minimumSignalChars,signalChars,minimumSignalChars};
+}
 function cachedUsageUnits(cache:{usage_units:number;source:string;transcript:string;duration_seconds:number}):number{
   return cache.usage_units>0?cache.usage_units:(cache.source==='post'||cache.source==='page'?textUsageUnits(estimateTokens(cache.transcript)):videoUsageUnits(cache.duration_seconds));
 }
@@ -235,7 +244,8 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     if(caption?.transcript&&metadata.durationSeconds>0){
       if(!reserved){await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);reserved=true;}
       const completeness=videoCompleteness(caption.transcript,metadata.durationSeconds,caption.segments);
-      if(!completeness.truncated){
+      const quality=videoTranscriptQuality(caption.transcript,metadata.durationSeconds);
+      if(!completeness.truncated&&quality.ok){
         const cache=await saveCache({
           platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
           title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
@@ -246,7 +256,11 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
         logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'caption',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,extracted_token_estimate:estimateTokens(caption.transcript),usage_units:videoUsageUnits(metadata.durationSeconds),truncated:false,processing_ms:Date.now()-startedAt});
         return;
       }
-      logEvent('caption_incomplete_fallback_asr',{job_id:job.id,platform:job.platform,duration_seconds:metadata.durationSeconds,truncation_reason:completeness.truncationReason??'caption_timeline_incomplete'});
+      logEvent(completeness.truncated?'caption_incomplete_fallback_asr':'caption_sparse_fallback_asr',{
+        job_id:job.id,platform:job.platform,duration_seconds:metadata.durationSeconds,
+        truncation_reason:completeness.truncationReason??null,
+        signal_chars:quality.signalChars,minimum_signal_chars:quality.minimumSignalChars
+      });
     }
 
     const tmpDir=await fs.mkdtemp(path.join(os.tmpdir(),'link2ai-'));
@@ -267,7 +281,8 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     // duration. Prefer those captions now instead of spending an ASR request.
     if(caption?.transcript){
       const completeness=videoCompleteness(caption.transcript,metadata.durationSeconds,caption.segments);
-      if(!completeness.truncated){
+      const quality=videoTranscriptQuality(caption.transcript,metadata.durationSeconds);
+      if(!completeness.truncated&&quality.ok){
         const cache=await saveCache({
           platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
           title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
@@ -278,15 +293,25 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
         logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'caption_after_duration_probe',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,truncated:false,processing_ms:Date.now()-startedAt});
         return;
       }
-      logEvent('caption_incomplete_fallback_asr',{job_id:job.id,platform:job.platform,duration_seconds:metadata.durationSeconds,truncation_reason:completeness.truncationReason??'caption_timeline_incomplete'});
+      logEvent(completeness.truncated?'caption_incomplete_fallback_asr':'caption_sparse_fallback_asr',{
+        job_id:job.id,platform:job.platform,duration_seconds:metadata.durationSeconds,
+        truncation_reason:completeness.truncationReason??null,
+        signal_chars:quality.signalChars,minimum_signal_chars:quality.minimumSignalChars
+      });
     }
 
     const preparedAudio=await normalizeAudioForAsr(audio,tmpDir);
     const asr=await transcribeAudio(preparedAudio,job.language);
     const asrCompleteness=videoCompleteness(asr.transcript,metadata.durationSeconds,asr.segments);
+    const asrQuality=videoTranscriptQuality(asr.transcript,metadata.durationSeconds);
     if(asrCompleteness.truncated){
       throw new Link2AIError('EXTRACTION_FAILED','The full video timeline could not be transcribed reliably. No processing units were charged.',502,true,{
         cause_code:'asr_timeline_incomplete',truncation_reason:asrCompleteness.truncationReason
+      });
+    }
+    if(!asrQuality.ok){
+      throw new Link2AIError('EXTRACTION_FAILED','The extracted transcript was too sparse to treat as a reliable read. No processing units were charged.',502,true,{
+        cause_code:'transcript_too_sparse',signal_chars:asrQuality.signalChars,minimum_signal_chars:asrQuality.minimumSignalChars
       });
     }
     const cache=await saveCache({
