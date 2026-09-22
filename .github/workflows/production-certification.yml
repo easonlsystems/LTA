@@ -15,7 +15,7 @@ concurrency:
 jobs:
   public-e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,7 +28,7 @@ jobs:
       - name: Wait for production and certify public surface
         env:
           LINK2AI_PRODUCTION_URL: https://api-production-0383e.up.railway.app
-          LINK2AI_PROD_CERT_ATTEMPTS: 20
+          LINK2AI_PROD_CERT_ATTEMPTS: 40
           LINK2AI_PROD_CERT_DELAY_MS: 15000
           LINK2AI_EXPECTED_REVISION: ${{ github.sha }}
         run: node test/production-public-cert.mjs
