@@ -158,6 +158,32 @@ try{
   assert.equal(recent.response.status,200);
   assert.match(recent.text,new RegExp(jobId.slice(0,8)),'recent jobs must expose the API job');
 
+  if(before.data.quota_exempt===true){
+    const canaries=[
+      {name:'hackernews',url:sourceUrl,sourceType:'hackernews',minChars:80},
+      {name:'github',url:githubCanaryUrl,sourceType:'github',minChars:180},
+      {name:'instagram-reel',url:instagramCanaryUrl,sourceType:'instagram',minChars:40}
+    ];
+    for(const canary of canaries){
+      const result=await readUntilDone(canary.url,{refresh:true});
+      assert.equal(result.data.source_type,canary.sourceType,`${canary.name} canary returned the wrong source type`);
+      assert.ok(typeof result.data.content==='string'&&result.data.content.trim().length>=canary.minChars,`${canary.name} canary returned too little useful source content`);
+      assert.notEqual(result.data.truncation_reason,'social_page_metadata_only',`${canary.name} must never pass as metadata-only content`);
+      if(canary.name==='instagram-reel'){
+        assert.ok(['caption','asr'].includes(result.data.metadata?.transcript_source),`instagram reel canary must reach caption or ASR, got ${result.data.metadata?.transcript_source||'none'}`);
+      }
+      console.log(`production source canary PASS: ${canary.name}`);
+    }
+    if(instagramImageCanaryUrl){
+      const image=await readUntilDone(instagramImageCanaryUrl,{refresh:true});
+      assert.equal(image.data.source_type,'instagram');
+      assert.ok(Number(image.data.metadata?.visual_assets_available??0)>=1,'Instagram image canary must expose at least one original image to the delivery layer');
+      console.log('production source canary PASS: instagram-image');
+    }
+  }else{
+    console.log('production live-source canaries skipped: certification account is not quota_exempt');
+  }
+
   await revoke();
   const accountAfterDelete=await web('/account');
   assert.equal(accountAfterDelete.response.status,200);
