@@ -7,6 +7,28 @@ Object.assign(process.env,{
 });
 
 const {extractGalleryVisualAssets}=await import('../dist/src/content/linkText.js');
+const {imageMimeFromBytes}=await import('../dist/src/media/imageMime.js');
+const {loadVisualImagePage}=await import('../dist/src/mcp/server.js');
+
+assert.equal(imageMimeFromBytes(Buffer.from('<html>expired signed URL</html>')),
+  null,'an expired CDN URL must not count as a delivered image');
+assert.equal(imageMimeFromBytes(Buffer.from([0xff,0xd8,0xff,0xe0,0,0])),'image/jpeg');
+assert.equal(imageMimeFromBytes(Buffer.from([137,80,78,71,13,10,26,10,0])),'image/png');
+assert.equal(imageMimeFromBytes(Buffer.from('GIF89a0000')),'image/gif');
+assert.equal(imageMimeFromBytes(Buffer.concat([Buffer.from('RIFF'),Buffer.alloc(4),Buffer.from('WEBPVP8 ')])),'image/webp');
+assert.equal(imageMimeFromBytes(Buffer.from([0xff,0xd8])),null,'truncated image header must not count');
+
+const visualJob={visual_assets:[{kind:'image',url:'https://cdn.example.com/signed.jpg',mimeType:'image/jpeg'}]};
+const expired=await loadVisualImagePage(visualJob,0,1,async()=>({
+  bytes:Buffer.from('<html>expired</html>'),contentType:'image/jpeg',finalUrl:'https://cdn.example.com/signed.jpg'
+}));
+assert.equal(expired.delivered,0,'mislabeled CDN error body must not count as a delivered image');
+assert.equal(expired.failed,1);
+const delivered=await loadVisualImagePage(visualJob,0,1,async()=>({
+  bytes:Buffer.from([137,80,78,71,13,10,26,10,0]),contentType:'text/html',finalUrl:'https://cdn.example.com/signed.jpg'
+}));
+assert.equal(delivered.delivered,1,'valid image bytes should be delivered even if the CDN header is wrong');
+assert.equal(delivered.blocks[0].mimeType,'image/png','MCP image block must use the detected bytes, not the stale hint');
 
 const dump=[
   [2,{description:'A visual post',username:'creator'}],
