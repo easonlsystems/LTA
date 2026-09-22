@@ -92,16 +92,6 @@ export async function saveCache(payload: TranscriptPayload): Promise<CacheRow> {
   const r = await pool.query<CacheRow>(
     `INSERT INTO transcript_cache(platform,canonical_media_id,language,title,creator,caption,duration_seconds,transcript,segments,source,expires_at,truncated,truncation_reason,extracted_token_estimate,usage_units,items_available,items_extracted,pages_available,pages_extracted,content_sections_truncated,visual_assets)
      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,now() + ($11 || ' hours')::interval,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21::jsonb)
-     ON CONFLICT(platform,canonical_media_id,language) DO UPDATE SET
-       title=EXCLUDED.title, creator=EXCLUDED.creator, caption=EXCLUDED.caption,
-       duration_seconds=EXCLUDED.duration_seconds, transcript=EXCLUDED.transcript, segments=EXCLUDED.segments,
-       source=EXCLUDED.source, created_at=now(), expires_at=EXCLUDED.expires_at,
-       truncated=EXCLUDED.truncated,truncation_reason=EXCLUDED.truncation_reason,
-       extracted_token_estimate=EXCLUDED.extracted_token_estimate,usage_units=EXCLUDED.usage_units,
-       items_available=EXCLUDED.items_available,items_extracted=EXCLUDED.items_extracted,
-       pages_available=EXCLUDED.pages_available,pages_extracted=EXCLUDED.pages_extracted,
-       content_sections_truncated=EXCLUDED.content_sections_truncated,
-       visual_assets=EXCLUDED.visual_assets
      RETURNING *`,
     [payload.platform,payload.canonicalMediaId,payload.language,payload.title ?? null,payload.creator ?? null,
      payload.caption ?? null,payload.durationSeconds,payload.transcript,JSON.stringify(payload.segments),payload.source,cacheHours,
