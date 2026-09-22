@@ -191,6 +191,56 @@ async function fetchPage(input:ParsedMediaUrl,budget?:TextExtractionBudget):Prom
   return complete({platform:input.platform,canonicalMediaId:input.canonicalMediaId,sourceUrl:response.finalUrl,title:doc.title,creator:doc.creator,caption:doc.description,language:doc.language,text:doc.text,source:input.kind==='post'?'post':'page'},input.kind==='post'?'social':'web',{},budget);
 }
 
+function alnumCount(value:string):number{
+  return (value.match(/[\p{L}\p{N}]/gu)??[]).length;
+}
+
+export function socialFallbackCaptionBody(value:string|undefined):string{
+  const text=cleanText(value??'');
+  if(!text)return '';
+  const quoted=text.match(/:\s*["“]([\s\S]{2,})["”]\s*$/u);
+  if(quoted)return cleanText(quoted[1]);
+  const engagement=/\b\d[\d.,]*\s*[kmb]?\s+likes?\b[\s\S]*\b\d[\d.,]*\s*[kmb]?\s+comments?\b/i;
+  return engagement.test(text)?'':text;
+}
+
+export function socialFallbackHasUsefulText(payload:Pick<LinkTextPayload,'caption'|'text'>):boolean{
+  const caption=socialFallbackCaptionBody(payload.caption);
+  if(alnumCount(caption)>=8)return true;
+  const generic=/^(?:account|posted|published|engagement|likes?|comments?|followers?|following|log in|sign up|instagram|tiktok|meta)\b/i;
+  const signal=cleanText(payload.text)
+    .split(/\n+/)
+    .map(line=>cleanText(line))
+    .filter(line=>line&&!generic.test(line))
+    .filter(line=>!/^[@#]?[\p{P}\p{S}\s]+$/u.test(line))
+    .join(' ');
+  return alnumCount(signal)>=32;
+}
+
+async function fetchSocialPageFallback(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
+  const page=await fetchPage(input,budget);
+  if(!socialFallbackHasUsefulText(page)){
+    throw new Link2AIError(
+      'EXTRACTION_FAILED',
+      'The fallback page exposed only social metadata, not enough of the actual post content.',
+      422,false,{cause_code:'social_page_metadata_only'}
+    );
+  }
+  const body=socialFallbackCaptionBody(page.caption);
+  const sections=new Set(page.completeness.contentSectionsTruncated??[]);
+  sections.add('attached_media');
+  return {
+    ...page,
+    ...(body?{caption:body}:{}),
+    completeness:{
+      ...page.completeness,
+      truncated:true,
+      truncationReason:'attached_media_unavailable',
+      contentSectionsTruncated:[...sections]
+    }
+  };
+}
+
 type XOEmbedData={html:string;author_name?:string};
 
 async function fetchXOEmbedData(input:ParsedMediaUrl):Promise<XOEmbedData>{
@@ -756,7 +806,7 @@ export async function extractTextLink(input:ParsedMediaUrl,budget?:TextExtractio
       platform:input.platform,operation:'text',
       attempts:[
         {name:'gallery_dl',run:()=>fetchGalleryPost(input,budget)},
-        {name:'public_page',run:()=>fetchPage(input,budget)}
+        {name:'public_page',run:()=>fetchSocialPageFallback(input,budget)}
       ]
     });
   }
