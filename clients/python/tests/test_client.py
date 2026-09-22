@@ -8,6 +8,7 @@ import httpx
 from lta import (
     LTA,
     LTAExtractionFailed,
+    LTAQuotaExceeded,
     LTAUnsupportedSource,
 )
 
@@ -79,6 +80,26 @@ class TestSyncRead(unittest.TestCase):
         lta = LTA("test-key", base_url="https://lta.test", _transport=httpx.MockTransport(handler))
         with self.assertRaises(LTAUnsupportedSource):
             lta.read("https://unsupported.example/item")
+
+    def test_payment_required_is_typed(self):
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                402,
+                json={
+                    "status": "payment_required",
+                    "error_code": "QUOTA_EXCEEDED",
+                    "message": "Not enough processing units",
+                    "retryable": False,
+                    "remaining_usage_units": 2,
+                    "required_usage_units": 5,
+                },
+            )
+
+        lta = LTA("test-key", base_url="https://lta.test", _transport=httpx.MockTransport(handler))
+        with self.assertRaises(LTAQuotaExceeded) as raised:
+            lta.read("https://example.com/large-source")
+        self.assertEqual(raised.exception.payload["remaining_usage_units"], 2)
+        self.assertEqual(raised.exception.payload["required_usage_units"], 5)
 
     def test_retryable_typed_error_retries_then_succeeds(self):
         calls = 0
