@@ -20,26 +20,21 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Check certification credentials
-        id: cert-config
+      - name: Require certification credentials
         env:
           CERT_URL: ${{ secrets.LINK2AI_PRODUCTION_URL }}
           CERT_EMAIL: ${{ secrets.LINK2AI_CERT_EMAIL }}
           CERT_PASSWORD: ${{ secrets.LINK2AI_CERT_PASSWORD }}
         shell: bash
         run: |
-          if [[ -n "$CERT_URL" && -n "$CERT_EMAIL" && -n "$CERT_PASSWORD" ]]; then
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Authenticated production certification is not configured; live source canaries were skipped."
+          if [[ -z "$CERT_URL" || -z "$CERT_EMAIL" || -z "$CERT_PASSWORD" ]]; then
+            echo "::error::Authenticated production certification requires LINK2AI_PRODUCTION_URL, LINK2AI_CERT_EMAIL, and LINK2AI_CERT_PASSWORD secrets. No live checks ran."
+            exit 1
           fi
       - uses: actions/setup-node@v4
-        if: steps.cert-config.outputs.configured == 'true'
         with:
           node-version: 22
       - name: Certify account lifecycle and live sources
-        if: steps.cert-config.outputs.configured == 'true'
         env:
           LINK2AI_PRODUCTION_URL: ${{ secrets.LINK2AI_PRODUCTION_URL }}
           LINK2AI_CERT_EMAIL: ${{ secrets.LINK2AI_CERT_EMAIL }}

@@ -72,7 +72,11 @@ assert.match(workflow,/workflow_dispatch/);
 assert.match(workflow,/secrets\.LINK2AI_CERT_EMAIL/);
 assert.match(workflow,/secrets\.LINK2AI_CERT_PASSWORD/);
 assert.match(workflow,/LINK2AI_EXPECTED_REVISION:\s*\$\{\{\s*github\.sha\s*\}\}/,'authenticated production workflow must certify the dispatched revision');
+assert.match(workflow,/exit 1/,'missing certification secrets must fail the workflow');
+assert.doesNotMatch(workflow,/configured=false|steps\.cert-config\.outputs\.configured/,'missing secrets must never produce a green skipped run');
 assert.match(cert,/data\?\.revision===expectedRevision/,'authenticated API lifecycle must wait for the exact production revision');
+assert.match(cert,/assert\.equal\(before\.data\.quota_exempt,true/,'live source canaries must require a quota-exempt account');
+assert.doesNotMatch(cert,/live-source canaries skipped/,'authenticated certification must not skip live source canaries');
 
 console.log('developer onboarding and authenticated certification contract tests PASS');
 

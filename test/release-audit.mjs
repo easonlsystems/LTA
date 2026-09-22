@@ -179,6 +179,6 @@ assert.match(authenticatedWorkflowSource,/schedule:[\s\S]*cron:/,'Authenticated 
 assert.match(authenticatedWorkflowSource,/push:[\s\S]*branches: \["main"\]/,'Authenticated production source certification must run after main deployments when configured');
 assert.match(authenticatedCertSource,/refresh:true/,'Live production canaries must bypass cache and exercise the current source providers');
 assert.match(authenticatedCertSource,/instagram-reel/,'Authenticated certification must include a real Instagram media canary');
-assert.match(authenticatedCertSource,/quota_exempt===true/,'Fresh canaries must only run automatically on a no-charge internal certification account');
+assert.match(authenticatedCertSource,/assert\.equal\(before\.data\.quota_exempt,true/,'Fresh canaries must require a no-charge internal certification account');
 
 console.log('release audit tests PASS');

@@ -143,6 +143,7 @@ try{
   assert.equal(sources.response.status,200);
   assert.ok(Array.isArray(sources.data.sources)&&sources.data.sources.length>0);
 
+  assert.equal(before.data.quota_exempt,true,'production live-source certification requires a quota-exempt reviewer account; canaries cannot be skipped');
   const read=await readUntilDone(sourceUrl);
   const jobId=read.data.id;
   assert.equal(typeof read.data.canonical_url,'string');
@@ -158,7 +159,7 @@ try{
   assert.equal(recent.response.status,200);
   assert.match(recent.text,new RegExp(jobId.slice(0,8)),'recent jobs must expose the API job');
 
-  if(before.data.quota_exempt===true){
+  {
     const canaries=[
       {name:'hackernews',url:sourceUrl,sourceType:'hackernews',minChars:80},
       {name:'github',url:githubCanaryUrl,sourceType:'github',minChars:180},
@@ -180,8 +181,6 @@ try{
       assert.ok(Number(image.data.metadata?.visual_assets_available??0)>=1,'Instagram image canary must expose at least one original image to the delivery layer');
       console.log('production source canary PASS: instagram-image');
     }
-  }else{
-    console.log('production live-source canaries skipped: certification account is not quota_exempt');
   }
 
   await revoke();
