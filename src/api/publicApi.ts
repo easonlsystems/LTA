@@ -27,7 +27,9 @@ function publicPayload(result:ToolJobResult){
       items_available:result.items_available??null,
       items_extracted:result.items_extracted??null,
       pages_available:result.pages_available??null,
-      pages_extracted:result.pages_extracted??null
+      pages_extracted:result.pages_extracted??null,
+      visual_assets_available:(result.visual_assets??[]).filter(asset=>asset.kind==='image').length,
+      visual_video_assets_available:(result.visual_assets??[]).filter(asset=>asset.kind==='video').length
     }:undefined,
     evidence:result.status==='completed'?(result.segments??[]):undefined,
     source_completeness:result.status==='completed'?(result.truncated?'partial':'complete'):undefined,
