@@ -26,6 +26,8 @@ assert.match(api,/app\.get\('\/v1\/sources'/);
 assert.match(api,/startTranscriptJob\(auth\.userId,url,\{refresh:body\.refresh===true,profile:'default',clientSource:'rest_api'\}\)/);
 assert.match(api,/getJobResult\(auth\.userId,jobId,'default'\)/);
 assert.match(api,/source_completeness/);
+assert.match(api,/visual_assets_available/,'REST metadata must expose how many original images reached the delivery layer');
+assert.match(api,/visual_video_assets_available/,'REST metadata must expose attached video-media availability separately');
 assert.match(api,/canonical_url/);
 assert.match(api,/job_id:result\.job_id/,'job_id must remain an alias of the canonical id field');
 assert.match(api,/return \{error,error_code:error,message,retryable\}/,'all API errors must expose compatible error aliases');

@@ -85,6 +85,10 @@ export async function findUserCompletedCache(userId:string,platform:string,canon
 }
 
 export async function saveCache(payload: TranscriptPayload): Promise<CacheRow> {
+  // Social image URLs are often signed CDN URLs and can expire well before the
+  // normal transcript cache. Keep their cache short so a later read refreshes
+  // the media references instead of handing the AI a stale image URL.
+  const cacheHours=payload.visualAssets?.length?Math.min(env().TRANSCRIPT_CACHE_HOURS,1):env().TRANSCRIPT_CACHE_HOURS;
   const r = await pool.query<CacheRow>(
     `INSERT INTO transcript_cache(platform,canonical_media_id,language,title,creator,caption,duration_seconds,transcript,segments,source,expires_at,truncated,truncation_reason,extracted_token_estimate,usage_units,items_available,items_extracted,pages_available,pages_extracted,content_sections_truncated,visual_assets)
      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,now() + ($11 || ' hours')::interval,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21::jsonb)
@@ -100,7 +104,7 @@ export async function saveCache(payload: TranscriptPayload): Promise<CacheRow> {
        visual_assets=EXCLUDED.visual_assets
      RETURNING *`,
     [payload.platform,payload.canonicalMediaId,payload.language,payload.title ?? null,payload.creator ?? null,
-     payload.caption ?? null,payload.durationSeconds,payload.transcript,JSON.stringify(payload.segments),payload.source,env().TRANSCRIPT_CACHE_HOURS,
+     payload.caption ?? null,payload.durationSeconds,payload.transcript,JSON.stringify(payload.segments),payload.source,cacheHours,
      payload.completeness.truncated,payload.completeness.truncationReason??null,payload.completeness.extractedTokenEstimate,payload.completeness.usageUnits,
      payload.completeness.itemsAvailable??null,payload.completeness.itemsExtracted??null,payload.completeness.pagesAvailable??null,payload.completeness.pagesExtracted??null,
      JSON.stringify(payload.completeness.contentSectionsTruncated??[]),JSON.stringify(payload.visualAssets??[])]

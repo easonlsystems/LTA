@@ -4,6 +4,9 @@ const base=(process.env.LINK2AI_PRODUCTION_URL||'').replace(/\/$/,'');
 const email=process.env.LINK2AI_CERT_EMAIL||'';
 const password=process.env.LINK2AI_CERT_PASSWORD||'';
 const sourceUrl=process.env.LINK2AI_CERT_SOURCE_URL||'https://news.ycombinator.com/item?id=8863';
+const instagramCanaryUrl=process.env.LINK2AI_CERT_INSTAGRAM_URL||'https://www.instagram.com/reel/Ddx6Q_MJNyg/';
+const githubCanaryUrl=process.env.LINK2AI_CERT_GITHUB_URL||'https://github.com/nodejs/node/pull/57343';
+const instagramImageCanaryUrl=(process.env.LINK2AI_CERT_INSTAGRAM_IMAGE_URL||'').trim();
 const pollLimit=Number(process.env.LINK2AI_CERT_POLL_LIMIT||60);
 const pollDelayMs=Number(process.env.LINK2AI_CERT_POLL_DELAY_MS||2000);
 const expectedRevision=(process.env.LINK2AI_EXPECTED_REVISION||'').trim();
@@ -54,6 +57,23 @@ async function api(path,options={}){
   let data;
   try{data=JSON.parse(text);}catch{throw new Error(`${path} returned non-JSON (${response.status})`);}
   return {response,data};
+}
+
+async function readUntilDone(url,{refresh=false}={}){
+  let read=await api('/v1/read',{
+    method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url,refresh})
+  });
+  assert.ok([200,202].includes(read.response.status),`read returned ${read.response.status}: ${read.data.error_code||read.data.message||'unknown'}`);
+  assert.equal(read.data.id,read.data.job_id,'id and job_id aliases must agree');
+  const jobId=read.data.id;
+  for(let attempt=0;read.response.status===202&&attempt<pollLimit;attempt++){
+    await sleep(pollDelayMs);
+    read=await api(`/v1/jobs/${jobId}`);
+  }
+  assert.equal(read.response.status,200,`job did not complete: ${read.data.error_code||read.data.status}`);
+  assert.equal(read.data.status,'completed');
+  assert.equal(read.data.id,jobId);
+  return read;
 }
 
 async function revoke(){
@@ -123,19 +143,8 @@ try{
   assert.equal(sources.response.status,200);
   assert.ok(Array.isArray(sources.data.sources)&&sources.data.sources.length>0);
 
-  let read=await api('/v1/read',{
-    method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:sourceUrl})
-  });
-  assert.ok([200,202].includes(read.response.status),`read returned ${read.response.status}: ${read.data.error_code||read.data.message||'unknown'}`);
-  assert.equal(read.data.id,read.data.job_id,'id and job_id aliases must agree');
+  const read=await readUntilDone(sourceUrl);
   const jobId=read.data.id;
-  for(let attempt=0;read.response.status===202&&attempt<pollLimit;attempt++){
-    await sleep(pollDelayMs);
-    read=await api(`/v1/jobs/${jobId}`);
-  }
-  assert.equal(read.response.status,200,`job did not complete: ${read.data.error_code||read.data.status}`);
-  assert.equal(read.data.status,'completed');
-  assert.equal(read.data.id,jobId);
   assert.equal(typeof read.data.canonical_url,'string');
   assert.ok(typeof read.data.content==='string'&&read.data.content.trim().length>80,'completed result must contain useful source text');
   assert.ok(['complete','partial'].includes(read.data.source_completeness));
@@ -148,6 +157,32 @@ try{
   const recent=await web('/account');
   assert.equal(recent.response.status,200);
   assert.match(recent.text,new RegExp(jobId.slice(0,8)),'recent jobs must expose the API job');
+
+  if(before.data.quota_exempt===true){
+    const canaries=[
+      {name:'hackernews',url:sourceUrl,sourceType:'hackernews',minChars:80},
+      {name:'github',url:githubCanaryUrl,sourceType:'github',minChars:180},
+      {name:'instagram-reel',url:instagramCanaryUrl,sourceType:'instagram',minChars:40}
+    ];
+    for(const canary of canaries){
+      const result=await readUntilDone(canary.url,{refresh:true});
+      assert.equal(result.data.source_type,canary.sourceType,`${canary.name} canary returned the wrong source type`);
+      assert.ok(typeof result.data.content==='string'&&result.data.content.trim().length>=canary.minChars,`${canary.name} canary returned too little useful source content`);
+      assert.notEqual(result.data.truncation_reason,'social_page_metadata_only',`${canary.name} must never pass as metadata-only content`);
+      if(canary.name==='instagram-reel'){
+        assert.ok(['caption','asr'].includes(result.data.metadata?.transcript_source),`instagram reel canary must reach caption or ASR, got ${result.data.metadata?.transcript_source||'none'}`);
+      }
+      console.log(`production source canary PASS: ${canary.name}`);
+    }
+    if(instagramImageCanaryUrl){
+      const image=await readUntilDone(instagramImageCanaryUrl,{refresh:true});
+      assert.equal(image.data.source_type,'instagram');
+      assert.ok(Number(image.data.metadata?.visual_assets_available??0)>=1,'Instagram image canary must expose at least one original image to the delivery layer');
+      console.log('production source canary PASS: instagram-image');
+    }
+  }else{
+    console.log('production live-source canaries skipped: certification account is not quota_exempt');
+  }
 
   await revoke();
   const accountAfterDelete=await web('/account');
