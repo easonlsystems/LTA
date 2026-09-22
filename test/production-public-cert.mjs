@@ -47,7 +47,7 @@ await eventually('production revision availability',async()=>{
   assert.doesNotMatch(home.text,/sim-answer sim-fail show/,'homepage must not preload the completed comparison');
   assert.match(home.text,/Summarize this Instagram Reel\./,'production homepage must lead with the recorded Instagram proof');
   const reelLinks=home.text.match(/https:\/\/www\.instagram\.com\/reel\/Ddx6Q_MJNyg\//g)??[];
-  assert.equal(reelLinks.length,2,'production homepage must show the recorded Reel URL in both comparison chat messages');
+  assert.equal(reelLinks.length,3,'production homepage must link the real Reel in the proof header and both comparison chat messages');
   assert.match(home.text,/Real LTA test case/,'production homepage must label the default Instagram proof as a real test case');
   assert.match(home.text,/instagram\.com\/reel\/Ddx6Q_MJNyg\//,'production homepage must expose the recorded Reel identity before the comparison');
   assert.match(home.text,/Same AI assistant · same public link/,'production comparison must be AI-client neutral');
