@@ -61,6 +61,7 @@ try{
       const text=String(sql);queries.push({sql:text,params});
       if(text.includes('SELECT user_id,plan,status,provider_event_at'))return existingOwner?{rowCount:1,rows:[{user_id:existingOwner,plan:'basic',status:'active',provider_event_at:new Date('2026-02-01T00:00:00Z')}]}:{rowCount:0,rows:[]};
       if(text.includes('SELECT 1 FROM subscriptions WHERE user_id'))return {rowCount:1,rows:[{}]};
+      if(text.includes('FROM topup_refund_observations WHERE order_id'))return {rowCount:0,rows:[]};
       if(text.includes('SELECT founding_plan,founding_claimed_at'))return {rowCount:1,rows:[{founding_plan:null,founding_claimed_at:null,founding_cycles_used:0,founding_period_start:null,founding_ended_at:null,founding_slot_released_at:null}]};
       if(text.includes('SELECT plan,status FROM subscriptions'))return {rowCount:1,rows:[{plan:'basic',status:'past_due'}]};
       return {rowCount:1,rows:[]};

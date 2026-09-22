@@ -272,33 +272,49 @@ async function resumePendingJobs(client:PoolClient,userId:string,plan:PaidPlan,e
 async function processTopupOrderEvent(eventName:string,event:any,obj:any):Promise<boolean>{
   if(obj?.type!=='orders')return false;
   const custom=event?.meta?.custom_data??{};
-  if(String(custom.purpose??'')!=='topup')return false;
   const attrs=obj.attributes??{};
-  if(typeof attrs.test_mode==='boolean'&&attrs.test_mode!==env().LEMONSQUEEZY_TEST_MODE)return true;
-  const requestedPack=custom.topup_pack==='1500'?'1500':custom.topup_pack==='500'?'500':null;
   const variantPack=topupPackFromVariant(attrs?.first_order_item?.variant_id);
-  if(!requestedPack||variantPack!==requestedPack)return true;
+  // The signed order's variant is authoritative. Refund webhooks can omit
+  // checkout custom data; they must never fall through to founding refunds.
+  if(!variantPack&&String(custom.purpose??'')!=='topup')return false;
+  if(typeof attrs.test_mode==='boolean'&&attrs.test_mode!==env().LEMONSQUEEZY_TEST_MODE)return true;
+  const requestedPack=custom.topup_pack==='1500'?'1500':custom.topup_pack==='500'?'500':variantPack;
+  if(!requestedPack||(variantPack&&variantPack!==requestedPack)||(eventName==='order_created'&&!variantPack))return true;
   const userId=String(custom.user_id??'');
   const orderId=String(obj.id??'');
-  if(!userId||!orderId)return true;
+  if(!orderId)return true;
   const units=TOPUP_UNITS[requestedPack];
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
     await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 510215))`,[`topup:${orderId}`]);
     if(eventName==='order_created'){
+      if(!userId){await client.query('COMMIT');return true;}
       if(String(attrs.status??'')!=='paid'){await client.query('COMMIT');return true;}
       const exists=await client.query('SELECT 1 FROM users WHERE id=$1',[userId]);
       if(!exists.rowCount){await client.query('COMMIT');return true;}
       const totalCents=Math.max(0,Number(attrs.total??0)||0);
+      if(!totalCents)throw new Error('Paid top-up order has no total; refusing to credit units.');
+      const observed=await client.query<{pack:string;user_id:string|null;refunded_cents:number}>(
+        'SELECT pack,user_id,refunded_cents FROM topup_refund_observations WHERE order_id=$1 FOR UPDATE',[orderId]
+      );
+      if(observed.rowCount&&(observed.rows[0].pack!==requestedPack||(observed.rows[0].user_id&&observed.rows[0].user_id!==userId)))
+        throw new Error('Top-up order identity changed between provider events.');
+      const refundedCents=Math.min(totalCents,Math.max(0,Number(observed.rows[0]?.refunded_cents??0)||0));
+      const refundedUnits=totalCents>0?Math.min(units,Math.round(units*refundedCents/totalCents)):0;
       const inserted=await client.query<{id:string}>(
-        `INSERT INTO paid_unit_transactions(user_id,kind,units_delta,source_key,provider,provider_reference_id,provider_total_cents,details)
-         VALUES($1,'topup_purchase',$2,$3,'lemonsqueezy',$4,$5,$6::jsonb)
+        `INSERT INTO paid_unit_transactions(user_id,kind,units_delta,source_key,provider,provider_reference_id,provider_total_cents,provider_refunded_cents,details)
+         VALUES($1,'topup_purchase',$2,$3,'lemonsqueezy',$4,$5,$6,$7::jsonb)
          ON CONFLICT(source_key) DO NOTHING RETURNING id`,
-        [userId,units,`lemonsqueezy:order:${orderId}`,orderId,totalCents,JSON.stringify({pack:requestedPack,variant_id:String(attrs?.first_order_item?.variant_id??'')})]
+        [userId,units,`lemonsqueezy:order:${orderId}`,orderId,totalCents,refundedCents,JSON.stringify({pack:requestedPack,variant_id:String(attrs?.first_order_item?.variant_id??'')})]
       );
       if(inserted.rowCount){
-        await client.query(`UPDATE users SET paid_rollover_seconds=paid_rollover_seconds+$2,updated_at=now() WHERE id=$1`,[userId,units*60]);
+        if(refundedUnits>0)await client.query(
+          `INSERT INTO paid_unit_transactions(user_id,kind,units_delta,source_key,provider,provider_reference_id,provider_total_cents,provider_refunded_cents,details)
+           VALUES($1,'topup_refund',$2,$3,'lemonsqueezy',$4,$5,$6,$7::jsonb)`,
+          [userId,-refundedUnits,`lemonsqueezy:order:${orderId}:refund:${refundedCents}`,orderId,totalCents,refundedCents,JSON.stringify({pack:requestedPack,cumulative_refunded_cents:refundedCents})]
+        );
+        await client.query(`UPDATE users SET paid_rollover_seconds=paid_rollover_seconds+$2,updated_at=now() WHERE id=$1`,[userId,(units-refundedUnits)*60]);
         await client.query(
           `UPDATE transcript_jobs j SET status='queued',
              priority=CASE u.plan WHEN 'pro' THEN 20 WHEN 'basic' THEN 10 ELSE 0 END,
@@ -312,25 +328,39 @@ async function processTopupOrderEvent(eventName:string,event:any,obj:any):Promis
       return true;
     }
     if(eventName==='order_refunded'){
-      const purchase=await client.query<{id:string;units_delta:number;provider_total_cents:number;provider_refunded_cents:number}>(
-        `SELECT id,units_delta,provider_total_cents,provider_refunded_cents FROM paid_unit_transactions
+      const purchase=await client.query<{id:string;user_id:string;units_delta:number;provider_total_cents:number;provider_refunded_cents:number}>(
+        `SELECT id,user_id,units_delta,provider_total_cents,provider_refunded_cents FROM paid_unit_transactions
          WHERE source_key=$1 AND kind='topup_purchase' FOR UPDATE`,[`lemonsqueezy:order:${orderId}`]
       );
+      if(purchase.rowCount&&userId&&purchase.rows[0].user_id!==userId)
+        throw new Error('Top-up refund owner does not match the paid order.');
+      const refundUserId=purchase.rows[0]?.user_id??userId;
+      const reportedRefund=Math.max(0,Number(attrs.refunded_amount??0)||0);
+      const observation=await client.query(
+        `INSERT INTO topup_refund_observations(order_id,pack,user_id,refunded_cents)
+         VALUES($1,$2,$3,$4)
+         ON CONFLICT(order_id) DO UPDATE SET
+           refunded_cents=GREATEST(topup_refund_observations.refunded_cents,EXCLUDED.refunded_cents),updated_at=now()
+         WHERE topup_refund_observations.pack=EXCLUDED.pack
+           AND (topup_refund_observations.user_id IS NULL OR EXCLUDED.user_id IS NULL OR topup_refund_observations.user_id=EXCLUDED.user_id)`,
+        [orderId,requestedPack,refundUserId||null,reportedRefund]
+      );
+      if(!observation.rowCount)throw new Error('Top-up refund identity changed between provider events.');
       if(!purchase.rowCount){await client.query('COMMIT');return true;}
       const row=purchase.rows[0];
       const total=Math.max(1,Number(row.provider_total_cents??0)||Number(attrs.total??0)||1);
       const previousRefund=Math.max(0,Number(row.provider_refunded_cents??0)||0);
-      const currentRefund=Math.max(previousRefund,Math.min(total,Math.max(0,Number(attrs.refunded_amount??0)||0)));
+      const currentRefund=Math.max(previousRefund,Math.min(total,reportedRefund));
       const purchasedUnits=Math.max(0,Number(row.units_delta??units)||units);
       const previousUnits=Math.min(purchasedUnits,Math.round(purchasedUnits*previousRefund/total));
       const targetUnits=Math.min(purchasedUnits,Math.round(purchasedUnits*currentRefund/total));
       const deltaUnits=Math.max(0,targetUnits-previousUnits);
       if(deltaUnits>0){
-        await client.query(`UPDATE users SET paid_rollover_seconds=GREATEST(0,paid_rollover_seconds-$2),updated_at=now() WHERE id=$1`,[userId,deltaUnits*60]);
+        await client.query(`UPDATE users SET paid_rollover_seconds=GREATEST(0,paid_rollover_seconds-$2),updated_at=now() WHERE id=$1`,[row.user_id,deltaUnits*60]);
         await client.query(
           `INSERT INTO paid_unit_transactions(user_id,kind,units_delta,source_key,provider,provider_reference_id,provider_total_cents,provider_refunded_cents,details)
            VALUES($1,'topup_refund',$2,$3,'lemonsqueezy',$4,$5,$6,$7::jsonb) ON CONFLICT(source_key) DO NOTHING`,
-          [userId,-deltaUnits,`lemonsqueezy:order:${orderId}:refund:${currentRefund}`,orderId,total,currentRefund,JSON.stringify({pack:requestedPack,cumulative_refunded_cents:currentRefund})]
+          [row.user_id,-deltaUnits,`lemonsqueezy:order:${orderId}:refund:${currentRefund}`,orderId,total,currentRefund,JSON.stringify({pack:requestedPack,cumulative_refunded_cents:currentRefund})]
         );
       }
       await client.query(`UPDATE paid_unit_transactions SET provider_refunded_cents=$2 WHERE id=$1`,[row.id,currentRefund]);
@@ -349,7 +379,10 @@ export async function processLemonEvent(event:any):Promise<void>{
   if(await processTopupOrderEvent(eventName,event,obj))return;
   if(eventName==='order_refunded'&&obj?.type==='orders'){
     const refundedUserId=String(event?.meta?.custom_data?.user_id??'');
-    if(refundedUserId)await releaseFoundingSlotForInitialRefund(refundedUserId);
+    const orderVariant=String(obj.attributes?.first_order_item?.variant_id??'');
+    const subscriptionOrder=[env().LEMONSQUEEZY_BASIC_VARIANT_ID,env().LEMONSQUEEZY_PRO_VARIANT_ID]
+      .some(id=>Boolean(id)&&String(id)===orderVariant);
+    if(refundedUserId&&subscriptionOrder)await releaseFoundingSlotForInitialRefund(refundedUserId);
     return;
   }
   if(obj?.type!=='subscriptions')return;
