@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import os
+import re
 import time
+from contextlib import contextmanager
+
+import httpx
 
 from lta import (
     LTA,
@@ -13,15 +18,12 @@ from lta import (
 )
 
 
-def required(name: str) -> str:
-    value = os.environ.get(name, "").strip()
-    if not value:
-        raise RuntimeError(f"{name} is required for live black-box verification")
-    return value
-
-
-API_KEY = required("LTA_API_KEY")
-BASE_URL = os.environ.get("LTA_BASE_URL", "https://api-production-0383e.up.railway.app").rstrip("/")
+BASE_URL = os.environ.get(
+    "LINK2AI_PRODUCTION_URL",
+    os.environ.get("LTA_BASE_URL", "https://api-production-0383e.up.railway.app"),
+).rstrip("/")
+REVIEWER_EMAIL = os.environ.get("LINK2AI_CERT_EMAIL", "").strip()
+REVIEWER_PASSWORD = os.environ.get("LINK2AI_CERT_PASSWORD", "")
 
 TELEGRAM_URL = os.environ.get("LTA_TELEGRAM_SHAPE_URL", "https://example.com/")
 YOUTUBE_URL = os.environ.get("LTA_KB_YOUTUBE_URL", "https://www.youtube.com/watch?v=jNQXAC9IVRw")
@@ -38,18 +40,96 @@ UNSUPPORTED_URL = os.environ.get(
 FAILED_URL = os.environ.get("LTA_FAILED_URL", "https://x.com/githubstatus/status/1")
 
 
-def downstream_summarizer_shape(content: str) -> str:
-    # The point of this probe is that downstream code receives source text directly.
-    # A real workflow can replace this with its own LLM call.
+def _hidden(page: str, name: str) -> str:
+    match = re.search(
+        rf'name=["\']{re.escape(name)}["\'][^>]*value=["\']([^"\']+)["\']',
+        page,
+        re.I,
+    )
+    if not match:
+        raise RuntimeError(f"Expected hidden field {name}")
+    return html.unescape(match.group(1))
+
+
+def _downstream_summarizer_shape(content: str) -> str:
+    # A real target replaces this with its own LLM call. This probe only verifies
+    # that caller code receives source text directly, with no polling loop.
     return " ".join(content.split())[:240]
 
 
-async def main() -> None:
-    lta = LTA(api_key=API_KEY, base_url=BASE_URL, timeout=180, max_retries=2)
+@contextmanager
+def temporary_reviewer_api_key():
+    if not REVIEWER_EMAIL or not REVIEWER_PASSWORD:
+        raise RuntimeError(
+            "Live Python black-box BLOCKED: configure LINK2AI_CERT_EMAIL and "
+            "LINK2AI_CERT_PASSWORD for the quota-exempt reviewer account."
+        )
+
+    key = ""
+    key_id = ""
+    with httpx.Client(base_url=BASE_URL, follow_redirects=False, timeout=20) as web:
+        origin = {"origin": BASE_URL}
+        login = web.post(
+            "/auth/reviewer",
+            data={"email": REVIEWER_EMAIL, "password": REVIEWER_PASSWORD, "return_to": "/account"},
+            headers=origin,
+        )
+        if login.status_code != 302:
+            raise RuntimeError(f"Reviewer sign-in failed with HTTP {login.status_code}")
+
+        account = web.get("/account")
+        if account.status_code != 200:
+            raise RuntimeError(f"Account page failed with HTTP {account.status_code}")
+        csrf = _hidden(account.text, "csrf")
+
+        created = web.post(
+            "/account/api-keys",
+            data={"csrf": csrf, "name": f"Python live certification {int(time.time())}"},
+            headers=origin,
+        )
+        if created.status_code != 200:
+            raise RuntimeError(f"Temporary API key creation failed with HTTP {created.status_code}")
+
+        key_match = re.search(r"l2ai_live_[A-Za-z0-9_-]+", created.text)
+        id_match = re.search(r'data-api-key-id="([0-9a-f-]+)"', created.text, re.I)
+        if not key_match or not id_match:
+            raise RuntimeError("Temporary API key response did not contain key + key id")
+        key = key_match.group(0)
+        key_id = id_match.group(1)
+
+        try:
+            usage = httpx.get(
+                BASE_URL + "/v1/usage",
+                headers={"authorization": f"Bearer {key}", "accept": "application/json"},
+                timeout=20,
+            )
+            data = usage.json() if usage.headers.get("content-type", "").startswith("application/json") else {}
+            if usage.status_code != 200 or data.get("quota_exempt") is not True:
+                raise RuntimeError(
+                    "Live Python black-box requires a quota-exempt reviewer; refusing to spend real user units."
+                )
+            yield key
+        finally:
+            if key_id:
+                try:
+                    account = web.get("/account")
+                    if account.status_code == 200:
+                        csrf = _hidden(account.text, "csrf")
+                        web.post(
+                            "/account/api-keys/revoke",
+                            data={"csrf": csrf, "key_id": key_id},
+                            headers=origin,
+                        )
+                finally:
+                    key = ""
+
+
+async def run_shapes(api_key: str) -> None:
+    lta = LTA(api_key=api_key, base_url=BASE_URL, timeout=180, max_retries=2)
 
     # 1. Telegram summarizer shape: caller never implements polling.
     telegram = await lta.read_async(TELEGRAM_URL, refresh=True)
-    summary_input = downstream_summarizer_shape(telegram.content)
+    summary_input = _downstream_summarizer_shape(telegram.content)
     assert summary_input, "Telegram-shape source content was empty"
     print(f"telegram-shape: {telegram.source_type} -> downstream content ready")
 
@@ -70,15 +150,13 @@ async def main() -> None:
     try:
         await lta.read_async(UNSUPPORTED_URL)
     except LTAUnsupportedSource:
-        fallback = "existing_fetcher_would_run"
-        assert fallback
         print("knowledge-base-shape: unsupported source cleanly falls back")
     else:
         raise AssertionError("Unsupported source unexpectedly succeeded")
 
     # 3. Multi-source shape.
-    # Prewarm one unique URL so read_many sees a cache-hit sibling. Another unique URL
-    # is left cold so the server can take its normal async processing path.
+    # Prewarm one unique URL so read_many has a cache-hit sibling. A second unique
+    # URL remains cold so it follows the server's normal queued/async path.
     stamp = int(time.time())
     cache_url = f"https://example.com/?lta_cache_probe={stamp}"
     cold_url = f"https://example.com/?lta_async_probe={stamp}"
@@ -100,5 +178,10 @@ async def main() -> None:
     print("multi-source-shape: sibling successes survived unsupported + failed URLs")
 
 
+def main() -> None:
+    with temporary_reviewer_api_key() as api_key:
+        asyncio.run(run_shapes(api_key))
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
