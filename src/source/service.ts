@@ -2,10 +2,10 @@ import { env } from '../config/env.js';
 import { pool } from '../db/pool.js';
 import { assertPlatformAllowedForProfile, parseAllowedMediaUrl, type DistributionProfile } from './policy.js';
 import { asLink2AIError, Link2AIError, publicErrorMessage } from '../util/errors.js';
-import { availableUsageUnits, reserveQuota, finalizeQuota, getUsageSnapshot } from '../quota/service.js';
+import { availableUsageUnits, getUsageSnapshot } from '../quota/service.js';
 import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limits.js';
-import { cacheProvenanceEpoch, findCache } from '../worker/cache.js';
-import { planForUser, priorityForPlan, markAwaitingPayment, markCompleted, setJobMetadata } from '../worker/jobs.js';
+import { cacheProvenanceEpoch } from '../worker/cache.js';
+import { planForUser, priorityForPlan } from '../worker/jobs.js';
 import { recordActivationEvent } from '../analytics/product.js';
 import { normalizeClientSource, type ClientSource } from './clientSource.js';
 import type { VisualAssetRef } from '../media/types.js';
@@ -145,29 +145,8 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
   const jobId=job.rows[0].id;
   await recordSourceAccessEvent(userId,jobId,parsed.platform,clientSource,false);
 
-  // Fast path: avoid queue/extraction when this canonical media is already cached. Explicit refresh bypasses it.
-  const cached=options.refresh||parsed.platform==='x'?null:await findCache(parsed.platform,parsed.canonicalMediaId,'auto');
-  if(cached){
-    // Persist duration before quota evaluation so a payment-blocked cached job can be
-    // resumed correctly after entitlement changes.
-    await setJobMetadata(jobId,parsed.canonicalMediaId,cached.duration_seconds);
-    try{
-      const units=cached.usage_units>0?cached.usage_units:(cached.source==='post'||cached.source==='page'?textUsageUnits(estimateTokens(cached.transcript)):videoUsageUnits(cached.duration_seconds));
-      await reserveQuota(userId,jobId,units,(cached.source==='post'||cached.source==='page')?undefined:cached.duration_seconds);
-      await finalizeQuota(userId,jobId);
-      await markCompleted(jobId,cached.id,cached.duration_seconds);
-      return await getJobResult(userId,jobId,profile);
-    }catch(e){
-      const err=asLink2AIError(e);
-      if(err.code==='QUOTA_EXCEEDED'){
-        const requiredUnitsRaw=err.details?.required_usage_units??err.details?.required_usage_units_at_least;
-        const requiredUnits=typeof requiredUnitsRaw==='number'&&Number.isFinite(requiredUnitsRaw)?requiredUnitsRaw:undefined;
-        await markAwaitingPayment(jobId,err.code,err.message,null,requiredUnits);
-        return await getJobResult(userId,jobId,profile);
-      }
-      throw e;
-    }
-  }
+  // The worker owns every queued job, including a shared-cache hit. Completing it
+  // here would race a worker that claims the row immediately after the insert.
   return await waitForJob(userId,jobId,env().MCP_INLINE_WAIT_MS,profile);
 }
 

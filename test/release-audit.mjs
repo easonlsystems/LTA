@@ -159,7 +159,8 @@ assert.match(apiSource,/試用累積用量/,'Founder trial usage must be labeled
 assert.match(billingRoutesSource,/trial units used \(lifetime\)/,'Account UI must not describe trial usage as a billing-cycle counter');
 assert.doesNotMatch(apiSource,/supports videos up to 30 minutes|supports videos up to 120 minutes|very large sources may return partial context/i,'Published copy must match the unit-bounded full-source policy');
 assert.match(mcpServiceSource,/if\(!options\.refresh(?:&&parsed\.platform!=='x')?\)[\s\S]*j\.status='completed'[\s\S]*c\.expires_at>now\(\)/,'Normal non-X same-source reads must reuse a still-valid completed user result');
-assert.match(mcpServiceSource,/options\.refresh\|\|parsed\.platform==='x'\?null:await findCache/,'Explicit refresh and the X media-routing rollout must bypass the shared successful cache');
+assert.match(mcpServiceSource,/if\(!options\.refresh&&parsed\.platform!=='x'\)/,'Explicit refresh and X must bypass same-user completed-result reuse');
+assert.doesNotMatch(mcpServiceSource,/await findCache/,'API must leave shared-cache completion to the worker that claims the queued job');
 assert.match(mcpSource,/read_public_links/,'V3 must expose a first-class multi-link reader');
 assert.doesNotMatch(mcpSource,/turn count alone is never a reason to refresh/i,'Directory-facing metadata must not encode host conversation-routing policy');
 assert.match(mcpSource,/get_video_time_range/,'V3 must expose timed lookup for processed video jobs');
