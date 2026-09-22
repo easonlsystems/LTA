@@ -29,6 +29,9 @@ const orchestratorSource=await readFile(new URL('../src/resolvers/orchestrator.t
 const providerHealthMigration=await readFile(new URL('../sql/007_provider_health.sql',import.meta.url),'utf8');
 const logSource=await readFile(new URL('../src/util/log.ts',import.meta.url),'utf8');
 const billingRoutesSource=await readFile(new URL('../src/billing/routes.ts',import.meta.url),'utf8');
+const cacheSource=await readFile(new URL('../src/worker/cache.ts',import.meta.url),'utf8');
+const authenticatedCertSource=await readFile(new URL('../test/production-authenticated-cert.mjs',import.meta.url),'utf8');
+const authenticatedWorkflowSource=await readFile(new URL('../.github/workflows/production-authenticated-certification.yml',import.meta.url),'utf8');
 assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News must use the official Firebase API path');
 assert.doesNotMatch(linkSource,/hn\.algolia\.com/,'OpenAI-ready core must not depend on the community Algolia HN adapter');
 assert.doesNotMatch(policySource,/OPENAI_ALLOWED_PLATFORMS/,'ChatGPT must not maintain a narrower source allowlist than the default/Claude distribution');
@@ -111,6 +114,8 @@ assert.doesNotMatch(limitsSource,/EXTRACTION_LIMITS/,'V3 must not impose product
 assert.doesNotMatch(plansSource,/MAX_PROCESSABLE_VIDEO_SECONDS|30\s*\*\s*60|120\s*\*\s*60/,'Plans must not impose product-defined per-video duration caps');
 assert.match(processorSource,/availableUsageUnits/,'Text extraction must derive its source budget from the user unit wallet');
 assert.match(processorSource,/caption_incomplete_fallback_asr/,'Known incomplete video captions must fall back to ASR instead of becoming a successful partial result');
+assert.match(processorSource,/caption_sparse_fallback_asr/,'Obviously sparse captions must fall back to ASR instead of becoming false successful reads');
+assert.match(processorSource,/transcript_too_sparse/,'Obviously sparse ASR output must fail with zero charge instead of becoming a false successful read');
 assert.match(processorSource,/probeXVideoMetadata/,'X posts must probe structured video metadata before the text-only completion path');
 assert.match(processorSource,/x_attached_media_detected/,'X attached media must enter the media pipeline and emit an explicit routing event');
 assert.match(processorSource,/prefetchedMetadata\?\?await resolver\.metadata\(parsed\)/,'X media metadata probe must feed the normal caption\/audio\/ASR pipeline');
@@ -125,6 +130,9 @@ assert.match(providerChainSource,/source_provider_failover/,'Provider transition
 assert.match(orchestratorSource,/name:'x_syndication'[\s\S]*name:'ytdlp'/,'X audio must preserve structured-X then yt-dlp failover order');
 assert.match(orchestratorSource,/MEDIA_PROVIDER_URL/,'Managed external provider must remain an optional route, not a required recurring dependency');
 assert.match(linkSource,/name:'gallery_dl'[\s\S]*name:'public_page'/,'Instagram and TikTok text posts must use an explicit primary-to-page fallback chain');
+assert.match(linkSource,/social_page_metadata_only/,'Social fallback must reject engagement/UI metadata when the actual post content is unavailable');
+assert.match(linkSource,/attached_media_unavailable/,'A text-only social fallback must be marked partial when attached media could not be delivered');
+assert.match(cacheSource,/visualAssets\?\.length\?Math\.min\(env\(\)\.TRANSCRIPT_CACHE_HOURS,1\)/,'Signed visual media references must use a short cache lifetime');
 assert.match(linkSource,/extractGalleryVisualAssets/,'Social post extraction must preserve attached media references for AI passthrough');
 assert.match(mcpSource,/type:'image'/,'MCP tool results must be able to deliver attached images as image content blocks');
 assert.match(mcpSource,/get_visual_assets/,'MCP must expose visual continuation for social carousels');
@@ -164,5 +172,10 @@ assert.match(mcpSource,/compatibility identifiers containing "link2ai" are inter
 assert.doesNotMatch(billingRoutesSource,/e instanceof Error\?e\.message:'Could not start top-up checkout\.'/,'Billing UI must not echo raw provider error messages to users');
 assert.doesNotMatch(mcpServiceSource,/createCheckoutSession|createTopupCheckoutSession|checkout_url:row\.checkout_url/,'MCP service must not create or return purchase flows');
 assert.doesNotMatch(processorSource,/createCheckoutSession|createTopupCheckoutSession|paymentUrl\(/,'Worker must not create purchase sessions when quota is exceeded');
+assert.match(authenticatedWorkflowSource,/schedule:[\s\S]*cron:/,'Authenticated production source certification must run on a recurring schedule');
+assert.match(authenticatedWorkflowSource,/push:[\s\S]*branches: \["main"\]/,'Authenticated production source certification must run after main deployments when configured');
+assert.match(authenticatedCertSource,/refresh:true/,'Live production canaries must bypass cache and exercise the current source providers');
+assert.match(authenticatedCertSource,/instagram-reel/,'Authenticated certification must include a real Instagram media canary');
+assert.match(authenticatedCertSource,/quota_exempt===true/,'Fresh canaries must only run automatically on a no-charge internal certification account');
 
 console.log('release audit tests PASS');
