@@ -23,7 +23,7 @@ export function developerDocs(baseUrl:string):string{
         <a href="/connect"><strong>Claude</strong><span>Custom Connector →</span></a>
         <div><strong>Claude Code</strong><span>Remote MCP + OAuth</span></div>
         <div><strong>Codex</strong><span>Remote MCP + OAuth</span></div>
-        <div><strong>Grok / other</strong><span>Remote MCP + OAuth</span></div>
+        <div><strong>Grok / other</strong><span>Custom MCP / OAuth</span></div>
       </div>
       <div class="cli-setup">
         <div><span>Claude Code</span><code>claude mcp add --transport http lta ${esc(mcp)}</code></div>
