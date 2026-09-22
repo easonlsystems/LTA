@@ -162,8 +162,8 @@ class LTA:
                         client, "POST", "/v1/read", deadline, json={"url": url, "refresh": refresh}
                     )
                     return self._resolve_sync(client, payload, status_code, deadline)
-                except LTARetryableError as exc:
-                    if source_attempt >= self.max_retries:
+                except LTAError as exc:
+                    if not exc.retryable or source_attempt >= self.max_retries:
                         raise
                     self._sleep_sync(self._retry_delay(exc, source_attempt), deadline)
         raise AssertionError("unreachable")
@@ -185,8 +185,8 @@ class LTA:
                         client, "POST", "/v1/read", deadline, json={"url": url, "refresh": refresh}
                     )
                     return await self._resolve_async(client, payload, status_code, deadline)
-                except LTARetryableError as exc:
-                    if source_attempt >= self.max_retries:
+                except LTAError as exc:
+                    if not exc.retryable or source_attempt >= self.max_retries:
                         raise
                     await self._sleep_async(self._retry_delay(exc, source_attempt), deadline)
         raise AssertionError("unreachable")
@@ -339,7 +339,7 @@ class LTA:
         await asyncio.sleep(min(max(0.0, seconds), remaining))
         _remaining(deadline)
 
-    def _retry_delay(self, exc: LTARetryableError, attempt: int) -> float:
+    def _retry_delay(self, exc: LTAError, attempt: int) -> float:
         return exc.retry_after_seconds if exc.retry_after_seconds is not None else _backoff(attempt)
 
 
