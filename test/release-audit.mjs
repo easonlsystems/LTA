@@ -151,7 +151,10 @@ assert.match(billingRoutesSource,/internal test account/,'Account UI must show t
 assert.match(mcpServiceSource,/quota_exempt:usage\.quota_exempt/,'Usage tools must expose internal quota exemption explicitly');
 assert.match(apiSource,/點 Add LTA[\s\S]*已連接 AI[\s\S]*首次成功 read[\s\S]*付費使用者/,'Founder primary KPIs must focus on the actionable conversion path');
 assert.doesNotMatch(apiSource,/各頁面被打開的情況|頁面被打開次數/,'Founder primary dashboard must not surface low-value aggregate pageview metrics');
-assert.match(apiSource,/流量來源[\s\S]*external only/,'Founder dashboard should retain acquisition-source attribution for launch decisions');
+assert.match(apiSource,/人從哪裡來[\s\S]*看哪個宣傳來源真的有帶人進來/,'Founder dashboard should explain acquisition sources in plain language');
+assert.match(apiSource,/現在最該注意/,'Founder dashboard should surface one plain-language conversion insight');
+assert.match(apiSource,/進階診斷（平常不用看）/,'Technical diagnostics must stay available without cluttering the default Founder view');
+assert.doesNotMatch(apiSource,/產品轉換漏斗 · external only/,'Founder default view must not duplicate the primary conversion funnel');
 assert.match(apiSource,/試用累積用量/,'Founder trial usage must be labeled as lifetime cumulative usage');
 assert.match(billingRoutesSource,/trial units used \(lifetime\)/,'Account UI must not describe trial usage as a billing-cycle counter');
 assert.doesNotMatch(apiSource,/supports videos up to 30 minutes|supports videos up to 120 minutes|very large sources may return partial context/i,'Published copy must match the unit-bounded full-source policy');
