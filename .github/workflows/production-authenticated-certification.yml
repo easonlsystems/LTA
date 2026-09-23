@@ -16,6 +16,11 @@ concurrency:
 
 jobs:
   api-lifecycle:
+    # Automatic runs stay visibly skipped until certification credentials have
+    # actually been configured and the repository variable is enabled.
+    # Manual runs always execute so missing credentials still fail loudly rather
+    # than producing a fake successful certification.
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.LINK2AI_AUTH_CERT_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
