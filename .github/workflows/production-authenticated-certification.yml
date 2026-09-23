@@ -1,10 +1,10 @@
 name: Production authenticated API certification
 
+# Temporarily manual-only while the repository does not have the required
+# certification secrets. This avoids guaranteed scheduled/push failures without
+# pretending the authenticated live-source checks passed. Once the three required
+# secrets are configured, restore push/schedule triggers.
 on:
-  push:
-    branches: ["main"]
-  schedule:
-    - cron: '17 */6 * * *'
   workflow_dispatch:
 
 permissions:
