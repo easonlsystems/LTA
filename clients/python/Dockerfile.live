@@ -1,9 +1,9 @@
 FROM python:3.12-slim
 WORKDIR /app
 
-COPY clients/python/pyproject.toml clients/python/README.md ./
-COPY clients/python/lta ./lta
-COPY clients/python/tests ./tests
+COPY pyproject.toml README.md ./
+COPY lta ./lta
+COPY tests ./tests
 
 RUN python -m pip install --no-cache-dir .
 
