@@ -50,21 +50,21 @@ try{
     assert.match(body,/LaunchBrand/);
     if(route==='/'){
       assert.match(body,/<nav class="home-nav" aria-label="Primary">/);
-      assert.match(body,/class="activation-site"/);
-      assert.match(body,/Your AI got the link\. <span>LTA brings the source\.<\/span>/);
-      assert.match(body,/Public links → AI-readable source/);
+      assert.match(body,/class="activation-site signal-home"/);
+      assert.match(body,/A link is not <em>the source\.<\/em>/);
+      assert.match(body,/LIVE SOURCE RELAY/);
       assert.match(body,/Add LTA to Claude/);
-      assert.match(body,/Real LTA test case/);
+      assert.match(body,/RECORDED PUBLIC TEST/);
       assert.match(body,/Ddx6Q_MJNyg/);
-      assert.match(body,/See the difference/);
+      assert.match(body,/Run comparison/);
       for(const source of ['youtube','tiktok','instagram','x','bluesky','hn','pdf','web'])assert.match(body,new RegExp(`data-sim-source=\"${source}\"`),`homepage should expose ${source} simulation`);
-      assert.match(body,/href="#proof"/);
+      assert.match(body,/class="signal-console" id="proof"/);
       assert.match(body,/href="\/sources"/);
       assert.match(body,/href="\/pricing"/);
-      assert.match(body,/href="\/developers"/);
+      assert.match(body,/href="\/developers#mcp"/);
       assert.match(body,/Use MCP/);
       assert.match(body,/API key/);
-      assert.match(body,/src="\/home\.js\?v=activation-v2" defer/);
+      assert.match(body,/src="\/home\.js\?v=signal-relay-v1" defer/);
       assert.doesNotMatch(body,/One missing layer/i);
       assert.doesNotMatch(body,/What do you want Claude to read\?/);
       assert.doesNotMatch(body,/Try the link Claude just failed to read\./);
@@ -204,7 +204,7 @@ try{
   assert.equal(ids['sim-left-state'].textContent,'Link only','final Reset must restore left preview');
   assert.equal(ids['sim-right-state'].textContent,'Source ready','final Reset must restore right preview');
   assert.match(ids['sim-tool'].innerHTML,/Source loaded/,'Reset must restore the meaningful tool preview');
-  assert.equal(ids['sim-run'].textContent,'See the difference →','Reset should restore the initial comparison CTA');
+  assert.equal(ids['sim-run'].textContent,'Run comparison →','Reset should restore the initial comparison CTA');
   // Every advertised supported source must have a runnable comparison, not a dead tab.
   for(const source of ['tiktok','instagram','x','bluesky','hn','pdf','web']){
     simTab(source).listeners.click();
