@@ -1,0 +1,11 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile.live"
+  },
+  "deploy": {
+    "startCommand": "python tests/live_basic.py",
+    "restartPolicyType": "NEVER"
+  }
+}
