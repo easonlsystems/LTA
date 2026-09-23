@@ -22,6 +22,11 @@ assert.match(source,/data-sim-source="instagram"[^>]*class="[^"]*active|class="[
 assert.match(source,/Same AI assistant · same public link/);
 assert.match(source,/https:\/\/www\.instagram\.com\/reel\/Ddx6Q_MJNyg\//);
 assert.match(source,/RECORDED PUBLIC TEST/);
+assert.match(source,/SWIPE FOR MORE SOURCES/);
+assert.match(source,/interactive-widget=resizes-content/);
+assert.match(source,/scroll-snap-type:x proximity/);
+assert.match(source,/min-height:100svh/);
+assert.match(source,/-webkit-tap-highlight-color:transparent/);
 assert.match(source,/Marcus Lemonis/);
 assert.match(source,/qa\('\.sim-user-link'\)\.forEach/);
 assert.match(source,/state\.opened=true;const panels=q\('#sim-comparison-panels'\);if\(panels\)panels\.hidden=false/);
