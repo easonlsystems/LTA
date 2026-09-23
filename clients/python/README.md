@@ -2,11 +2,21 @@
 
 A deliberately thin client over the existing LTA REST API. It does not add a second source engine or a new server-side batch contract.
 
-## Install from this repo
+## Install
+
+The package is prepared for public distribution as `lta-client`. After the
+first PyPI release is published, the external install command is:
 
 ```bash
-pip install "git+https://github.com/easonlsystems/link2ai.git#subdirectory=clients/python"
+pip install lta-client
 ```
+
+Until that first release exists, do not advertise the command as live. The
+monorepo is private, so external users must not be pointed at a
+`git+https://github.com/easonlsystems/link2ai...` install URL.
+
+Release builds are standard wheel + sdist artifacts and are published through
+the dedicated PyPI Trusted Publishing workflow.
 
 ## Read one link
 

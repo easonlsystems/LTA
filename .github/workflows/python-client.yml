@@ -5,11 +5,13 @@ on:
     paths:
       - 'clients/python/**'
       - '.github/workflows/python-client.yml'
+      - '.github/workflows/python-client-release.yml'
   push:
     branches: [main]
     paths:
       - 'clients/python/**'
       - '.github/workflows/python-client.yml'
+      - '.github/workflows/python-client-release.yml'
   workflow_dispatch:
 
 jobs:
@@ -30,3 +32,25 @@ jobs:
       - name: Run black-box client-shape tests
         working-directory: clients/python
         run: python -m unittest discover -s tests -v
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build clients/python --outdir dist
+          python -m twine check dist/*
+      - name: Install built wheel
+        run: |
+          python -m pip install dist/*.whl
+          python -c "from lta import LTA, LTAUnsupportedSource; print(LTA.__name__, LTAUnsupportedSource.__name__)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lta-client-dist
+          path: dist/*
+          if-no-files-found: error
