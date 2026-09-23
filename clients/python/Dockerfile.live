@@ -1,0 +1,10 @@
+FROM python:3.12-slim
+WORKDIR /app
+
+COPY clients/python/pyproject.toml clients/python/README.md ./
+COPY clients/python/lta ./lta
+COPY clients/python/tests ./tests
+
+RUN python -m pip install --no-cache-dir .
+
+CMD ["python", "tests/live_basic.py"]
