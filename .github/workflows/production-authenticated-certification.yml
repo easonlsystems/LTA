@@ -1,10 +1,10 @@
 name: Production authenticated API certification
 
-# Temporarily manual-only while the repository does not have the required
-# certification secrets. This avoids guaranteed scheduled/push failures without
-# pretending the authenticated live-source checks passed. Once the three required
-# secrets are configured, restore push/schedule triggers.
 on:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: '17 */6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -16,6 +16,11 @@ concurrency:
 
 jobs:
   api-lifecycle:
+    # Automatic runs stay visibly skipped until certification credentials have
+    # actually been configured and the repository variable is enabled.
+    # Manual runs always execute so missing credentials still fail loudly rather
+    # than producing a fake successful certification.
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.LINK2AI_AUTH_CERT_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
