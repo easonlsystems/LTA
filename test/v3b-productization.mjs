@@ -15,7 +15,7 @@ assert.match(billing,/full key is shown once and cannot be viewed again/i);
 assert.match(billing,/\/account\/api-keys\/revoke/);
 assert.match(billing,/>Delete<\/button>/);
 assert.doesNotMatch(billing,/>Revoke<\/button>/);
-assert.match(billing,/Recent jobs/);
+assert.match(billing,/Recent reads/);
 assert.match(billing,/\/account\/jobs\/:jobId/);
 assert.match(billing,/j\.id=\$1 AND j\.user_id=\$2/,'job detail must stay scoped to the authenticated user');
 assert.match(billing,/usage\.remaining_usage_units/,'dashboard must use authoritative processing-unit accounting');

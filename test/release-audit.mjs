@@ -148,7 +148,7 @@ assert.match(mcpServiceSource,/reviveAffordableAwaitingQuotaJob/,'A reused quota
 assert.match(mcpServiceSource,/remaining_usage_units<required/,'Quota self-healing must only requeue a blocked job when the current wallet can cover the known requirement');
 assert.match(apiSource,/accounts_total[\s\S]*analytics_excluded=false[\s\S]*connected_total[\s\S]*analytics_excluded=false[\s\S]*activated_total[\s\S]*analytics_excluded=false/,'Founder product conversion totals must exclude internal/test accounts consistently');
 assert.match(apiSource,/成功 read 也不扣 processing units/,'Founder UI must state that internal-test reads are quota-exempt');
-assert.match(billingRoutesSource,/internal test account/,'Account UI must show the no-charge state for internal test accounts');
+assert.match(billingRoutesSource,/test account — billing disabled/,'Account UI must show the no-charge state for test accounts without exposing implementation terminology');
 assert.match(mcpServiceSource,/quota_exempt:usage\.quota_exempt/,'Usage tools must expose internal quota exemption explicitly');
 assert.match(apiSource,/點 Add LTA[\s\S]*已連接 AI[\s\S]*首次成功 read[\s\S]*付費使用者/,'Founder primary KPIs must focus on the actionable conversion path');
 assert.doesNotMatch(apiSource,/各頁面被打開的情況|頁面被打開次數/,'Founder primary dashboard must not surface low-value aggregate pageview metrics');
