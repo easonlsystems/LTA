@@ -84,7 +84,8 @@ assert.match(apiSource,/https:\/\/claude\.ai\/customize\/connectors/,'Claude onb
 assert.match(apiSource,/connectorName/,'Claude install URL must prefill the connector name');
 assert.match(apiSource,/connectorUrl/,'Claude install URL must prefill the MCP endpoint');
 assert.doesNotMatch(apiSource,/function claudeInstallUrl\(\)\{return 'https:\/\/claude\.ai\/directory'/,'Claude onboarding must not regress to the generic directory homepage');
-assert.match(apiSource,/Three steps\. No hunting through a directory\./,'Claude onboarding must keep the short install path while visibly explaining the three necessary steps');
+assert.match(apiSource,/Connect LTA\. Finish with one real read\./,'Claude onboarding must make first source success the activation goal');
+assert.match(apiSource,/Choose \+ → Connectors → LTA/,'Claude onboarding must explain how to enable LTA after connecting');
 assert.match(apiSource,/Do not search Claude's Connectors Directory/,'Claude onboarding must explicitly prevent the directory-search dead end found in real first-use testing');
 assert.match(apiSource,/Tools already loaded/,'Troubleshooting must preserve the Claude preloaded-tool recovery path');
 assert.match(apiSource,/\+ → Connectors/,'Onboarding must show the Claude-side connector availability step');
@@ -147,7 +148,7 @@ assert.match(mcpServiceSource,/reviveAffordableAwaitingQuotaJob/,'A reused quota
 assert.match(mcpServiceSource,/remaining_usage_units<required/,'Quota self-healing must only requeue a blocked job when the current wallet can cover the known requirement');
 assert.match(apiSource,/accounts_total[\s\S]*analytics_excluded=false[\s\S]*connected_total[\s\S]*analytics_excluded=false[\s\S]*activated_total[\s\S]*analytics_excluded=false/,'Founder product conversion totals must exclude internal/test accounts consistently');
 assert.match(apiSource,/成功 read 也不扣 processing units/,'Founder UI must state that internal-test reads are quota-exempt');
-assert.match(billingRoutesSource,/internal test account/,'Account UI must show the no-charge state for internal test accounts');
+assert.match(billingRoutesSource,/test account — billing disabled/,'Account UI must show the no-charge state for test accounts without exposing implementation terminology');
 assert.match(mcpServiceSource,/quota_exempt:usage\.quota_exempt/,'Usage tools must expose internal quota exemption explicitly');
 assert.match(apiSource,/點 Add LTA[\s\S]*已連接 AI[\s\S]*首次成功 read[\s\S]*付費使用者/,'Founder primary KPIs must focus on the actionable conversion path');
 assert.doesNotMatch(apiSource,/各頁面被打開的情況|頁面被打開次數/,'Founder primary dashboard must not surface low-value aggregate pageview metrics');

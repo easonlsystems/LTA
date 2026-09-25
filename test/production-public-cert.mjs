@@ -41,8 +41,8 @@ await eventually('production revision availability',async()=>{
   assert.equal(home.response.status,200);
   assert.match(home.text,/data-activation-home/,'homepage must expose the activation surface');
   assert.match(home.text,/data-install-handoff[^>]+href="\/start\?from=hero"/,'homepage must expose the primary Claude install handoff');
-  assert.match(home.text,/Use MCP/,'homepage must expose MCP directly');
-  assert.match(home.text,/API key/,'homepage must keep REST API key access separate');
+  assert.match(home.text,/href="\/developers">Developers<\/a>/,'homepage must expose the developer entry point to MCP');
+  assert.match(home.text,/href="\/developers">Developers<\/a>/,'homepage must route REST and MCP users to the dedicated developer surface');
   assert.match(home.text,/id="sim-run"[^>]*aria-expanded="false"[^>]*aria-controls="sim-comparison-panels"/,'homepage comparison CTA must start collapsed');
   assert.match(home.text,/id="sim-comparison-panels"[^>]*hidden/,'homepage comparison panels must be hidden on first paint');
   assert.doesNotMatch(home.text,/sim-answer sim-fail show/,'homepage must not preload the completed comparison');
@@ -61,13 +61,13 @@ await eventually('production revision availability',async()=>{
 
   const connect=await request('/connect');
   assert.equal(connect.response.status,200);
-  assert.match(connect.text,/One click opens Claude/,'production connect page must lead with one-click setup');
+  assert.match(connect.text,/Finish with one real read/,'production connect page must lead toward first source success');
   assert.match(connect.text,/Connected, but Claude does not use LTA\?/,'production setup details should be collapsed behind help');
   assert.doesNotMatch(connect.text,/Set up LTA in three steps/,'production connect page must not restore the long tutorial');
 
   const developers=await request('/developers');
   assert.equal(developers.response.status,200);
-  assert.match(developers.text,/Connect LTA your way\./,'production Developers page must expose the two integration paths');
+  assert.match(developers.text,/Use LTA through MCP or REST\./,'production Developers page must expose the two integration paths');
   assert.match(developers.text,/REST API/);
   assert.match(developers.text,/Generate API key/,'production Developers page must link directly to key generation');
   assert.match(developers.text,/POST \/v1\/read/,'production Developers page must expose the read endpoint');
@@ -75,7 +75,7 @@ await eventually('production revision availability',async()=>{
   assert.match(developers.text,/Remote MCP/,'production developer surface must expose MCP');
   assert.ok(developers.text.includes(base+'/mcp'),'production developer surface must display the exact MCP endpoint');
   assert.match(developers.text,/Claude/,'production MCP surface must identify Claude usage');
-  assert.match(developers.text,/Grok/,'production MCP surface must identify Grok custom MCP usage');
+  assert.match(developers.text,/Other compatible clients/,'production MCP surface must preserve a generic compatible-client MCP path');
   return true;
 });
 
@@ -107,7 +107,7 @@ await eventually('production revision availability',async()=>{
 }
 
 for(const [path,pattern] of [
-  ['/developers',/Connect LTA your way\./],
+  ['/developers',/Use LTA through MCP or REST\./],
   ['/connect',/Using Grok or another Remote MCP client\?/],
   ['/sources',/Supported sources/],
   ['/privacy',/API-key hashes and non-secret key prefixes/]
