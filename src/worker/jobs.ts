@@ -191,11 +191,12 @@ export async function markAwaitingPayment(jobId: string, errorCode: string, mess
   );
 }
 
-export async function markCompleted(jobId: string, cacheId: string, durationSeconds: number): Promise<void> {
+export async function markCompleted(jobId: string, cacheId: string, durationSeconds: number, cacheHit=false): Promise<void> {
   await pool.query(
     `UPDATE transcript_jobs SET status='completed', transcript_cache_id=$2, duration_seconds=$3,
       error_code=NULL, error_message=NULL, retryable=false, locked_at=NULL, locked_by=NULL,
-      completed_at=now(), updated_at=now() WHERE id=$1`, [jobId, cacheId, durationSeconds]
+      analytics_cache_hit=$4, completed_at=now(), updated_at=now() WHERE id=$1`,
+    [jobId, cacheId, durationSeconds, cacheHit]
   );
 }
 
