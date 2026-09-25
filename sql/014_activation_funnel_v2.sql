@@ -52,3 +52,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS product_activation_events_user_activation_v2_o
     'first_read_success',
     'second_read_success'
   );
+
+CREATE UNIQUE INDEX IF NOT EXISTS website_events_visitor_activation_v2_once_idx
+  ON website_events(visitor_id,event_name)
+  WHERE event_name IN ('oauth_success','connector_connected');
