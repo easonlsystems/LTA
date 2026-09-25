@@ -330,42 +330,83 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/oauth/authorize', async (req, reply) => {
+    let analyticsUserId:string|null=null;
+    let analyticsProfile='default';
     try{
       const request=parseAuthorizeRequest(req.query as any);
+      analyticsProfile=request.resource===mcpResource('openai')?'openai':'default';
       // Never let an unauthenticated authorize request turn CIMD into an outbound
       // fetch primitive. Validate/fetch the client only after LTA sign-in exists.
       const user = await userFromSessionCookie(req.headers.cookie);
       if (!user) return reply.redirect(`/signup?return_to=${encodeURIComponent(authorizeQuery(request))}`);
       if (!user.email) return reply.redirect(`/signup?return_to=${encodeURIComponent(authorizeQuery(request))}`);
+      analyticsUserId=user.id;
+      await linkWebsiteVisitorToUser(req.headers.cookie,user.id,false);
       const csrf=csrfTokenFromSessionCookie(req.headers.cookie);
-      if(!csrf)return reply.code(401).send('Sign in to connect this service.');
+      if(!csrf){
+        await trackWebsiteEvent(req,'oauth_fail','/oauth/authorize',{reason:'missing_csrf'});
+        await recordActivationEvent(user.id,'oauth_fail',{distributionProfile:analyticsProfile,metadata:{reason:'missing_csrf'}});
+        return reply.code(401).send('Sign in to connect this service.');
+      }
       const client=await getOAuthClient(request.clientId,request.redirectUri);
-      if(!client)return reply.code(400).send('Unknown OAuth client or redirect URI.');
+      if(!client){
+        await trackWebsiteEvent(req,'oauth_fail','/oauth/authorize',{reason:'unknown_client'});
+        await recordActivationEvent(user.id,'oauth_fail',{distributionProfile:analyticsProfile,metadata:{reason:'unknown_client'}});
+        return reply.code(400).send('Unknown OAuth client or redirect URI.');
+      }
+      await trackWebsiteEvent(req,'oauth_start','/oauth/authorize',{client_name:client.client_name});
       await recordActivationEvent(user.id,'connection_started',{
-        distributionProfile:request.resource===mcpResource('openai')?'openai':'default',
+        distributionProfile:analyticsProfile,
+        metadata:{client_name:client.client_name}
+      });
+      await recordActivationEvent(user.id,'oauth_start',{
+        distributionProfile:analyticsProfile,
         metadata:{client_name:client.client_name}
       });
       return reply.type('text/html').send(html(`<span class="step">Permission</span><h1>Connect ${escapeHtml(client.client_name)}</h1><p>Allow <strong style="color:#17151f">${escapeHtml(client.client_name)}</strong> to ask ${escapeHtml(env().PUBLIC_BRAND_NAME)} for AI-readable content behind supported public links and to check your ${escapeHtml(env().PUBLIC_BRAND_NAME)} usage.</p><p class="muted">This does not give the AI client access to your email or payment details, and it does not let ${escapeHtml(env().PUBLIC_BRAND_NAME)} post, like, follow, edit or delete anything on the source platform.</p><form method="post" action="/oauth/authorize">${authorizeHidden(request,csrf)}<button>Connect and return</button></form>`));
-    }catch(e){return oauthError(reply,e);}
+    }catch(e){
+      const reason=e instanceof Link2AIError?e.code:'INTERNAL_ERROR';
+      await trackWebsiteEvent(req,'oauth_fail','/oauth/authorize',{reason});
+      if(analyticsUserId)await recordActivationEvent(analyticsUserId,'oauth_fail',{distributionProfile:analyticsProfile,metadata:{reason}});
+      return oauthError(reply,e);
+    }
   });
 
   app.post('/oauth/authorize',async(req,reply)=>{
+    let analyticsUserId:string|null=null;
+    let analyticsProfile='default';
     try{
       const b=req.body as any;
       const request=parseAuthorizeRequest(b);
+      analyticsProfile=request.resource===mcpResource('openai')?'openai':'default';
       const user=await userFromSessionCookie(req.headers.cookie);
       if(!user)return reply.redirect(`/signup?return_to=${encodeURIComponent(authorizeQuery(request))}`);
       if(!user.email)return reply.redirect(`/signup?return_to=${encodeURIComponent(authorizeQuery(request))}`);
-      if(!verifyCsrfToken(req.headers.cookie,String(b?.csrf??'')))return reply.code(403).send('Authorization confirmation expired. Please try connecting again.');
+      analyticsUserId=user.id;
+      await linkWebsiteVisitorToUser(req.headers.cookie,user.id,false);
+      if(!verifyCsrfToken(req.headers.cookie,String(b?.csrf??''))){
+        await trackWebsiteEvent(req,'oauth_fail','/oauth/authorize',{reason:'invalid_csrf'});
+        await recordActivationEvent(user.id,'oauth_fail',{distributionProfile:analyticsProfile,metadata:{reason:'invalid_csrf'}});
+        return reply.code(403).send('Authorization confirmation expired. Please try connecting again.');
+      }
       const client=await getOAuthClient(request.clientId,request.redirectUri);
-      if(!client)return reply.code(400).send('Unknown OAuth client or redirect URI.');
+      if(!client){
+        await trackWebsiteEvent(req,'oauth_fail','/oauth/authorize',{reason:'unknown_client'});
+        await recordActivationEvent(user.id,'oauth_fail',{distributionProfile:analyticsProfile,metadata:{reason:'unknown_client'}});
+        return reply.code(400).send('Unknown OAuth client or redirect URI.');
+      }
       const code=await createAuthorizationCode({userId:user.id,clientId:request.clientId,redirectUri:request.redirectUri,codeChallenge:request.challenge,scope:request.scope,resource:request.resource});
       const target=new URL(request.redirectUri);
       target.searchParams.set('code',code);
       target.searchParams.set('iss',env().PUBLIC_BASE_URL);
       if(request.state)target.searchParams.set('state',request.state);
       return reply.redirect(target.toString());
-    }catch(e){return oauthError(reply,e);}
+    }catch(e){
+      const reason=e instanceof Link2AIError?e.code:'INTERNAL_ERROR';
+      await trackWebsiteEvent(req,'oauth_fail','/oauth/authorize',{reason});
+      if(analyticsUserId)await recordActivationEvent(analyticsUserId,'oauth_fail',{distributionProfile:analyticsProfile,metadata:{reason}});
+      return oauthError(reply,e);
+    }
   });
 
   app.post('/oauth/revoke',async(req,reply)=>{
