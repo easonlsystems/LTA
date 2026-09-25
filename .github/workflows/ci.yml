@@ -25,6 +25,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate production certification script
+        run: node --check test/production-public-cert.mjs
+
       - name: Build and test
         run: npm test
 
