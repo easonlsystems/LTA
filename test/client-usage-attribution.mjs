@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {inferMcpClientSource,clientSourceLabel,normalizeClientSource} from '../dist/src/source/clientSource.js';
 
-const [migration,service,api,mcp,main]=await Promise.all([
+const [migration,funnelMigration,service,api,mcp,main]=await Promise.all([
   readFile(new URL('../sql/010_client_usage_attribution.sql',import.meta.url),'utf8'),
+  readFile(new URL('../sql/014_activation_funnel_v2.sql',import.meta.url),'utf8'),
   readFile(new URL('../src/source/service.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/api/publicApi.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/mcp/server.ts',import.meta.url),'utf8'),
@@ -30,9 +31,14 @@ assert.match(main,/openaiAuth\.extra\.clientSource='chatgpt'/);
 assert.match(main,/auth\.extra\.clientSource='chatgpt'/);
 
 assert.match(service,/INSERT INTO source_access_events/);
-assert.match(service,/client_source\)\s*VALUES/);
-assert.match(service,/recordSourceAccessEvent\([^)]*true\)/);
-assert.match(service,/recordSourceAccessEvent\([^)]*false\)/);
+assert.match(service,/beginSourceAccessEvent/);
+assert.match(service,/attachSourceAccessEvent/);
+assert.match(service,/reused:true/);
+assert.match(service,/source_domain/);
+assert.match(funnelMigration,/source_access_events[\s\S]*outcome/);
+assert.match(funnelMigration,/source_access_events[\s\S]*cache_hit/);
+assert.match(funnelMigration,/units_charged/);
+assert.match(funnelMigration,/units_refunded/);
 
 assert.match(main,/>從哪裡使用 LTA</);
 assert.match(main,/>最近使用紀錄</);
