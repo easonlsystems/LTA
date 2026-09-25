@@ -43,6 +43,7 @@ export interface ToolJobResult {
   visual_assets?:VisualAssetRef[];
   remaining_usage_units?:number;
   required_usage_units?:number;
+  topup_url?:string;
 }
 
 function sourceDomain(url:string):string|null{
@@ -315,28 +316,51 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
     const sourceFetchedAt=row.source_fetched_at?new Date(row.source_fetched_at).getTime():NaN;
     const requiredAfter=new Date(provenanceEpoch).getTime();
     if(!Number.isFinite(sourceFetchedAt)||sourceFetchedAt<requiredAfter){
+      await finalizeSourceAccessEvents(userId,{...row,error_code:'TRANSCRIPT_EXPIRED'},'failed');
       return {
         status:'failed',
         job_id:row.id,
         platform:row.platform,
         error_code:'TRANSCRIPT_EXPIRED',
-        message:'This Hacker News result predates the ChatGPT-approved retrieval path. Read the original Hacker News link again to refresh it.'
+        message:'This Hacker News result predates the ChatGPT-approved retrieval path. Read the original Hacker News link again to refresh it.',
+        usage_units:0
       };
     }
   }
   if(row.status==='completed'&&!row.transcript){
-    return {status:'failed',job_id:row.id,error_code:'TRANSCRIPT_EXPIRED',message:'This temporary result has expired. Call Read link content with the original link to read it again.'};
+    await finalizeSourceAccessEvents(userId,{...row,error_code:'TRANSCRIPT_EXPIRED'},'failed');
+    return {status:'failed',job_id:row.id,error_code:'TRANSCRIPT_EXPIRED',message:'This temporary result has expired. Call Read link content with the original link to read it again.',usage_units:0};
   }
   if(row.status==='completed'){
     await recordActivationEvent(userId,'connector_enabled',{
       platform:row.platform,distributionProfile:profile,
       metadata:{inferred_from:'authenticated_result_tool_call'}
     });
-    await recordActivationEvent(userId,'first_successful_read',{
-      platform:row.platform,distributionProfile:profile,
-      metadata:{source:row.transcript_source??'unknown'}
-    });
     const returnedUsageUnits=Number(row.usage_units??0)>0?Number(row.usage_units):(row.transcript_source==='post'||row.transcript_source==='page'?textUsageUnits(estimateTokens(row.transcript)):videoUsageUnits(Number(row.cache_duration??row.duration_seconds??0)));
+    const accounting=await finalizeSourceAccessEvents(userId,row,'completed');
+    let distinctDelivered=0;
+    if(accounting.finished>0){
+      await recordActivationEvent(userId,'first_successful_read',{
+        platform:row.platform,distributionProfile:profile,
+        metadata:{source:row.transcript_source??'unknown'}
+      });
+      distinctDelivered=await recordReadSuccessMilestones(userId,row,profile,accounting);
+      const usage=await getUsageSnapshot(userId).catch(()=>null);
+      if(usage&&!usage.quota_exempt&&usage.limit_usage_units>0&&usage.remaining_usage_units>0){
+        const lowThreshold=Math.max(2,Math.ceil(usage.limit_usage_units*0.10));
+        if(usage.remaining_usage_units<=lowThreshold){
+          await recordActivationEvent(userId,'quota_low',{
+            platform:row.platform,distributionProfile:profile,
+            metadata:{
+              job_id:String(row.id),
+              remaining_usage_units:usage.remaining_usage_units,
+              limit_usage_units:usage.limit_usage_units,
+              threshold_usage_units:lowThreshold
+            }
+          });
+        }
+      }
+    }
     return {
       status:'completed',job_id:row.id,platform:row.platform,source_url:row.source_url,canonical_url:row.normalized_url,source_key:`${row.platform}:${row.canonical_media_id}`,
       source_fetched_at:row.source_fetched_at?new Date(row.source_fetched_at).toISOString():null,cache_expires_at:row.cache_expires_at?new Date(row.cache_expires_at).toISOString():null,
@@ -345,36 +369,57 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
       transcript:row.transcript,segments:row.segments??[],transcript_source:row.transcript_source,
       truncated:Boolean(row.truncated),truncation_reason:row.truncation_reason,extracted_token_estimate:Number(row.extracted_token_estimate??0)||estimateTokens(row.transcript),usage_units:returnedUsageUnits,
       items_available:row.items_available,items_extracted:row.items_extracted,pages_available:row.pages_available,pages_extracted:row.pages_extracted,content_sections_truncated:row.content_sections_truncated??[],
-      visual_assets:Array.isArray(row.visual_assets)?row.visual_assets:[]
+      visual_assets:Array.isArray(row.visual_assets)?row.visual_assets:[],
+      ...(accounting.finished>0&&distinctDelivered===1?{message:'Source ready. Try another link.'}:{})
     };
   }
   if(row.status==='awaiting_payment'){
     const usage=await getUsageSnapshot(userId).catch(()=>null);
     const remaining=usage?.remaining_usage_units;
     const required=Number(row.required_usage_units??0)>0?Number(row.required_usage_units):undefined;
+    const accountUrl=`${env().PUBLIC_BASE_URL.replace(/\/$/,'')}/account`;
+    const accounting=await finalizeSourceAccessEvents(userId,row,'quota_exceeded');
+    if(accounting.finished>0){
+      await recordActivationEvent(userId,'quota_exceeded',{
+        platform:row.platform,distributionProfile:profile,
+        metadata:{
+          job_id:String(row.id),
+          source_key:row.platform&&row.canonical_media_id?`${row.platform}:${row.canonical_media_id}`:null,
+          source_domain:sourceDomain(String(row.normalized_url??row.source_url??'')),
+          remaining_usage_units:remaining??null,
+          required_usage_units:required??null,
+          units_charged:0,
+          units_refunded:accounting.unitsRefunded
+        }
+      });
+    }
     return {
       status:'payment_required',
       job_id:row.id,
       duration_seconds:row.duration_seconds??undefined,
       error_code:row.error_code??'QUOTA_EXCEEDED',
       message:required!==undefined&&remaining!==undefined
-        ? `LTA needs ${required} processing units to read this source, but your connected account has ${remaining}. This attempt used 0 units. Open LTA → Account to add units or review your plan, then retry the same link.`
+        ? `LTA needs ${required} processing units to read this source, but your connected account has ${remaining}. This attempt used 0 units. Add units or review your plan at ${accountUrl}, then retry the same link.`
         : remaining!==undefined
-          ? `LTA needs more processing units than the ${remaining} available on your connected account. This attempt used 0 units. Open LTA → Account to add units or review your plan, then retry the same link.`
-          : `LTA does not have enough processing units on the connected account to read this source. This attempt used 0 units. Open LTA → Account to add units or review your plan, then retry the same link.`,
+          ? `LTA needs more processing units than the ${remaining} available on your connected account. This attempt used 0 units. Add units or review your plan at ${accountUrl}, then retry the same link.`
+          : `LTA does not have enough processing units on the connected account to read this source. This attempt used 0 units. Add units or review your plan at ${accountUrl}, then retry the same link.`,
       usage_units:0,
+      topup_url:accountUrl,
       ...(remaining===undefined?{}:{remaining_usage_units:remaining}),
       ...(required===undefined?{}:{required_usage_units:required})
     };
   }
-  if(row.status==='failed')return {
-    status:'failed',
-    job_id:row.id,
-    error_code:row.error_code,
-    message:publicErrorMessage(String(row.error_code??'INTERNAL_ERROR')),
-    retryable:Boolean(row.retryable),
-    usage_units:0
-  };
+  if(row.status==='failed'){
+    await finalizeSourceAccessEvents(userId,row,'failed');
+    return {
+      status:'failed',
+      job_id:row.id,
+      error_code:row.error_code,
+      message:publicErrorMessage(String(row.error_code??'INTERNAL_ERROR')),
+      retryable:Boolean(row.retryable),
+      usage_units:0
+    };
+  }
   return {status:'processing',job_id:row.id,message:`${env().PUBLIC_BRAND_NAME} is reading this link.`,retry_after_seconds:3};
 }
 
