@@ -250,6 +250,7 @@ export function chunkResult(result:ToolJobResult,offset=0,maxChars=MAX_CHARS):Re
         ? `LTA received transcript text, but this source did not provide timestamps that can prove timeline coverage.${visualNotice?` ${visualNotice}`:''}`
         : continuationNotice??visualNotice,
     transcript_offset:chunk.start,next_offset:next,total_characters:result.transcript.length,
+    ...(result.message?{message:result.message}:{}),
     ...(safeOffset===0&&result.transcript.length<=size?{segments:result.segments}: {})
   };
 }
