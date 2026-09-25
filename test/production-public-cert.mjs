@@ -39,7 +39,8 @@ await eventually('production revision availability',async()=>{
 
   const home=await request('/');
   assert.equal(home.response.status,200);
-  assert.match(home.text,/data-activation-home/,'homepage must expose the activation surface');\n  assert.match(home.text,/data-install-handoff[^>]+href=\"\\/start\\?from=hero\"/,'homepage must expose the primary Claude install handoff');
+  assert.match(home.text,/data-activation-home/,'homepage must expose the activation surface');
+  assert.match(home.text,/data-install-handoff[^>]+href="\/start\?from=hero"/,'homepage must expose the primary Claude install handoff');
   assert.match(home.text,/Use MCP/,'homepage must expose MCP directly');
   assert.match(home.text,/API key/,'homepage must keep REST API key access separate');
   assert.match(home.text,/id="sim-run"[^>]*aria-expanded="false"[^>]*aria-controls="sim-comparison-panels"/,'homepage comparison CTA must start collapsed');
