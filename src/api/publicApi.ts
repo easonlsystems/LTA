@@ -38,7 +38,7 @@ function publicPayload(result:ToolJobResult){
     units_used:result.status==='completed'?result.usage_units??0:0,
     remaining_usage_units:result.remaining_usage_units,
     required_usage_units:result.required_usage_units,
-    topup_url:result.topup_url,
+    topup_path:result.topup_path,
     error_code:result.error_code??undefined,
     error:result.error_code??undefined,
     message:result.message,
