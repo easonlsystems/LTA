@@ -18,9 +18,11 @@ LTA retrieves supported public source content and transports it into the host AI
 
 LTA is the source transport layer between a public link and the AI the user already chose. The host AI interprets the returned text or images; LTA is not a separate chatbot and does not claim full visual understanding of video.
 
+Primary tagline: **“Your AI got the link. LTA brings the source.”**
+
 ## Operating Context
 
-The primary path is homepage → Claude's prefilled Add Custom Connector flow → OAuth/sign-in only when required → return to Claude → load LTA from Connectors → paste a public link → receive source-grounded context. Users must not be sent to Claude's generic Connector Directory or through a signup-first wall.
+The primary path is homepage → Claude's prefilled Add Custom Connector flow → OAuth/sign-in only when required → return to Claude → load LTA from Connectors → paste a public link → receive source-grounded context. The activation goal is the first successful source read, not connection alone. Users must not be sent to Claude's generic Connector Directory or through a signup-first wall.
 
 ## Capabilities and Constraints
 

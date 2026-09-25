@@ -33,6 +33,7 @@ LTA feels like a live source relay inside its established black visual identity.
 
 - Homepage: immediate interactive proof and direct activation.
 - Connect: guided Claude setup and troubleshooting.
+- Connect ends at the first successful source read. “Connected” is an intermediate state.
 - Sources: supported routes and limitations.
 - Use cases: outcome-oriented scenarios.
 - Pricing: units and plans.

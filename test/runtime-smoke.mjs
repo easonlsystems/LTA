@@ -51,7 +51,7 @@ try{
     if(route==='/'){
       assert.match(body,/<nav class="home-nav" aria-label="Primary">/);
       assert.match(body,/class="activation-site signal-home"/);
-      assert.match(body,/A link is not <em>the source\.<\/em>/);
+      assert.match(body,/Your AI got the link\. <em>LTA brings the source\.<\/em>/);
       assert.match(body,/LIVE SOURCE RELAY/);
       assert.match(body,/Add LTA to Claude/);
       assert.match(body,/RECORDED PUBLIC TEST/);
@@ -72,9 +72,9 @@ try{
     }
     if(route==='/examples'){assert.match(body,/YouTube \/ Shorts/);assert.match(body,/GitHub Issues \/ PRs/);assert.match(body,/Try the interactive comparison/);}
     if(route==='/use-cases'){assert.match(body,/Use the link normally/);assert.match(body,/Summaries grounded in the source/);}
-    if(route==='/sources'){assert.match(body,/Supported sources/);assert.match(body,/Video & social/);assert.match(body,/Reddit/);assert.match(body,/Paused until approved Reddit OAuth Data API credentials are configured/);}
+    if(route==='/sources'){assert.match(body,/Supported sources/);assert.match(body,/Video & social/);assert.doesNotMatch(body,/Paused until approved Reddit OAuth Data API credentials are configured/);}
     if(route==='/pricing'){assert.match(body,/Founding offer/);assert.match(body,/First 50 paid users get 50% more usage/);assert.match(body,/500 paid units \+ 250 founding bonus/);assert.match(body,/2,000 paid units \+ 1,000 founding bonus/);assert.match(body,/Unused paid units roll over while subscribed/);assert.match(body,/founding bonus resets each billing cycle and does not roll over/);assert.match(body,/No plan-specific video length limit/);assert.match(body,/What does 1 processing unit mean/);assert.match(body,/Units depend on content size, not platform/);}
-    if(route==='/connect'){assert.match(body,/Add LTA to Claude/);assert.match(body,/One click opens Claude/);assert.match(body,/prefilled/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Connected, but Claude does not use LTA\?/);assert.match(body,/Tools already loaded/);assert.match(body,/Using Grok or another Remote MCP client\?/);assert.doesNotMatch(body,/Set up LTA in three steps|available in Claude's Connectors Directory|Open Claude Connectors Directory|Use the published connector|Search “LTA”|Choose the published LTA connector/);}
+    if(route==='/connect'){assert.match(body,/Add LTA to Claude/);assert.match(body,/Finish with one real read/);assert.match(body,/prefilled|already filled in/);assert.match(body,/href="\/connect\/start"/);assert.match(body,/target="_blank"/);assert.match(body,/Connected, but Claude does not use LTA\?/);assert.match(body,/Tools already loaded/);assert.match(body,/Using Grok or another Remote MCP client\?/);assert.doesNotMatch(body,/Set up LTA in three steps|available in Claude's Connectors Directory|Open Claude Connectors Directory|Use the published connector|Search “LTA”|Choose the published LTA connector/);}
     assert.doesNotMatch(body,/lemon-secret-must-not-render|resend-secret-must-not-render|google-client-secret-must-not-render/);
   }
 
@@ -227,7 +227,7 @@ try{
   const connectPage=await fetch(`http://127.0.0.1:${port}/connect`,{headers:{host:'link2ai.example'}});
   assert.equal(connectPage.status,200);
   const connectPageText=await connectPage.text();
-  assert.match(connectPageText,/One click opens Claude/,'connect page must lead with the one-click setup');
+  assert.match(connectPageText,/Finish with one real read/,'connect page must lead toward first source success');
   assert.match(connectPageText,/Connected, but Claude does not use LTA\?/,'detailed setup instructions should be collapsed behind help');
   assert.match(connectPageText,/\+ → Connectors/,'help must still show where to confirm LTA availability');
   assert.match(connectPageText,/paste a supported public link/,'connect page must say what to do after authorization');

@@ -84,7 +84,8 @@ assert.match(apiSource,/https:\/\/claude\.ai\/customize\/connectors/,'Claude onb
 assert.match(apiSource,/connectorName/,'Claude install URL must prefill the connector name');
 assert.match(apiSource,/connectorUrl/,'Claude install URL must prefill the MCP endpoint');
 assert.doesNotMatch(apiSource,/function claudeInstallUrl\(\)\{return 'https:\/\/claude\.ai\/directory'/,'Claude onboarding must not regress to the generic directory homepage');
-assert.match(apiSource,/Three steps\. No hunting through a directory\./,'Claude onboarding must keep the short install path while visibly explaining the three necessary steps');
+assert.match(apiSource,/Connect LTA\. Finish with one real read\./,'Claude onboarding must make first source success the activation goal');
+assert.match(apiSource,/Choose \+ → Connectors → LTA/,'Claude onboarding must explain how to enable LTA after connecting');
 assert.match(apiSource,/Do not search Claude's Connectors Directory/,'Claude onboarding must explicitly prevent the directory-search dead end found in real first-use testing');
 assert.match(apiSource,/Tools already loaded/,'Troubleshooting must preserve the Claude preloaded-tool recovery path');
 assert.match(apiSource,/\+ → Connectors/,'Onboarding must show the Claude-side connector availability step');
