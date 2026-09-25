@@ -121,6 +121,10 @@ export async function linkWebsiteVisitorToUser(cookieHeader:string|undefined,use
       `UPDATE website_visitors SET user_id=$2,last_seen_at=now(),signed_up_at=CASE WHEN $3::boolean THEN COALESCE(signed_up_at,now()) ELSE signed_up_at END WHERE visitor_id=$1`,
       [token,userId,signedUp]
     );
+    await pool.query(
+      `UPDATE website_events SET user_id=$2 WHERE visitor_id=$1 AND user_id IS NULL`,
+      [token,userId]
+    );
   }catch{
     // Account/login flow must remain usable even if analytics storage fails.
   }
