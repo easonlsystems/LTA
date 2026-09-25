@@ -105,7 +105,11 @@ export async function trackWebsiteEvent(req:{headers:{cookie?:string;'user-agent
   try{
     const user=await userFromSessionCookie(req.headers.cookie).catch(()=>null);
     await pool.query(
-      `INSERT INTO website_events(visitor_id,user_id,event_name,path,metadata) VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT DO NOTHING`,
+      `INSERT INTO website_events(visitor_id,user_id,event_name,path,metadata,utm_source,utm_campaign,utm_content)
+       SELECT $1,$2,$3,$4,$5::jsonb,v.utm_source,v.utm_campaign,v.utm_content
+       FROM website_visitors v
+       WHERE v.visitor_id=$1
+       ON CONFLICT DO NOTHING`,
       [token,user?.id??null,eventName,cleanPath(path),JSON.stringify(safeMetadata)]
     );
   }catch{
