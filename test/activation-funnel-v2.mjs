@@ -64,10 +64,10 @@ assert.match(source,/finished_at IS NULL/);
 assert.match(source,/units_charged=CASE WHEN reused THEN 0 ELSE \$8 END/);
 assert.match(source,/units_refunded=CASE WHEN reused THEN 0 ELSE \$9 END/);
 assert.match(source,/message:'Source ready\. Try another link\.'/);
-assert.match(source,/topup_url:accountUrl/);
-assert.match(source,/This attempt used 0 units\. Open LTA → Account \(\$\{accountUrl\}\) to add units or review your plan/);
-assert.match(publicApi,/topup_url:result\.topup_url/);
-assert.match(mcp,/topup_url:z\.string\(\)\.url\(\)/);
+assert.match(source,/topup_path:topupPath/);
+assert.match(source,/This attempt used 0 units\. Open LTA → Account to add units or review your plan/);
+assert.match(publicApi,/topup_path:result\.topup_path/);
+assert.match(mcp,/topup_path:z\.string\(\)/);
 
 assert.match(quota,/analytics_reserved_usage_units/);
 assert.match(jobs,/analytics_cache_hit=\$4/);
