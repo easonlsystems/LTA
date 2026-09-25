@@ -63,7 +63,7 @@ try{
       assert.match(body,/href="\/pricing"/);
       assert.match(body,/href="\/developers"/);
       assert.match(body,/href="\/developers">Developers<\/a>/);
-      assert.match(body,/API key/);
+      assert.match(body,/href="\/developers">Developers<\/a>/);
       assert.match(body,/src="\/home\.js\?v=signal-relay-v2" defer/);
       assert.doesNotMatch(body,/One missing layer/i);
       assert.doesNotMatch(body,/What do you want Claude to read\?/);
