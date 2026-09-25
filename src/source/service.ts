@@ -192,7 +192,26 @@ async function reviveAffordableAwaitingQuotaJob(userId:string,jobId:string):Prom
 export async function startTranscriptJob(userId:string,url:string,options:{refresh?:boolean;profile?:DistributionProfile;clientSource?:ClientSource|string}={}):Promise<ToolJobResult>{
   const profile=options.profile??'default';
   const clientSource=normalizeClientSource(options.clientSource??(profile==='openai'?'chatgpt':'mcp'));
-  const parsed=parseAllowedMediaUrl(url,profile);
+  const accessId=await beginSourceAccessEvent(userId,url,clientSource);
+  let parsed;
+  try{
+    parsed=parseAllowedMediaUrl(url,profile);
+  }catch(error){
+    const err=asLink2AIError(error);
+    await recordActivationEvent(userId,'read_requested',{
+      distributionProfile:profile,
+      metadata:{source_domain:sourceDomain(url),refresh:Boolean(options.refresh),client_source:clientSource,error_code:err.code,access_id:accessId}
+    });
+    await failSourceAccessEvent(accessId,err.code);
+    throw error;
+  }
+
+  const sourceKey=`${parsed.platform}:${parsed.canonicalMediaId}`;
+  await attachSourceAccessEvent(accessId,{platform:parsed.platform,sourceKey});
+  await recordActivationEvent(userId,'read_requested',{
+    platform:parsed.platform,distributionProfile:profile,
+    metadata:{source_domain:sourceDomain(parsed.normalizedUrl),source_key:sourceKey,refresh:Boolean(options.refresh),client_source:clientSource,access_id:accessId}
+  });
   await recordActivationEvent(userId,'connector_enabled',{
     platform:parsed.platform,distributionProfile:profile,
     metadata:{inferred_from:'authenticated_link_tool_call',client_source:clientSource}
@@ -201,63 +220,73 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
     platform:parsed.platform,distributionProfile:profile,
     metadata:{refresh:Boolean(options.refresh),client_source:clientSource}
   });
-  const active=await pool.query<{id:string}>(
-    `SELECT j.id FROM transcript_jobs j WHERE j.user_id=$1 AND j.platform=$2
-     AND (j.canonical_media_id=$3 OR j.normalized_url=$4)
-     AND j.status IN ('queued','processing','awaiting_payment') ORDER BY j.created_at DESC LIMIT 1`,
-    [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl]
-  );
-  if(active.rowCount){
-    await reviveAffordableAwaitingQuotaJob(userId,active.rows[0].id);
-    await recordSourceAccessEvent(userId,active.rows[0].id,parsed.platform,clientSource,true);
-    return await waitForJob(userId,active.rows[0].id,env().MCP_INLINE_WAIT_MS,profile);
-  }
 
-  // A model may call the same read tool more than once while answering. Reuse a still-cached successful result
-  // for this user so retries/follow-ups do not consume quota twice. Explicit refresh bypasses successful-result
-  // reuse and the shared cache, but still reuses any in-flight job to avoid duplicate concurrent processing.
-  if(!options.refresh&&parsed.platform!=='x'){
-    const provenanceEpoch=cacheProvenanceEpoch(parsed.platform);
-    const completed=await pool.query<{id:string}>(
-      `SELECT j.id FROM transcript_jobs j JOIN transcript_cache c ON c.id=j.transcript_cache_id
-       WHERE j.user_id=$1 AND j.platform=$2 AND (j.canonical_media_id=$3 OR j.normalized_url=$4)
-         AND j.status='completed' AND c.expires_at>now()
-         AND ($5::timestamptz IS NULL OR c.created_at >= $5::timestamptz)
-         AND NOT ($6::boolean AND jsonb_array_length(COALESCE(c.visual_assets,'[]'::jsonb))=0)
-       ORDER BY j.completed_at DESC LIMIT 1`,
-      [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl,provenanceEpoch,
-       (parsed.platform==='instagram'&&parsed.kind==='post')||(parsed.platform==='tiktok'&&parsed.canonicalMediaId.startsWith('photo_'))]
+  try{
+    const active=await pool.query<{id:string}>(
+      `SELECT j.id FROM transcript_jobs j WHERE j.user_id=$1 AND j.platform=$2
+       AND (j.canonical_media_id=$3 OR j.normalized_url=$4)
+       AND j.status IN ('queued','processing','awaiting_payment') ORDER BY j.created_at DESC LIMIT 1`,
+      [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl]
     );
-    if(completed.rowCount){await recordSourceAccessEvent(userId,completed.rows[0].id,parsed.platform,clientSource,true);return await getJobResult(userId,completed.rows[0].id,profile);}
-  }
-
-  const plan=await planForUser(userId);
-  const job=await pool.query<{id:string}>(
-    `INSERT INTO transcript_jobs(user_id,platform,source_url,normalized_url,canonical_media_id,language,status,priority,client_source)
-     VALUES($1,$2,$3,$4,$5,'auto','queued',$6,$7)
-     ON CONFLICT DO NOTHING
-     RETURNING id`,
-    [userId,parsed.platform,parsed.sourceUrl,parsed.normalizedUrl,parsed.canonicalMediaId,priorityForPlan(plan),clientSource]
-  );
-  if(!job.rowCount){
-    const concurrent=await pool.query<{id:string}>(
-      `SELECT id FROM transcript_jobs WHERE user_id=$1 AND platform=$2 AND normalized_url=$3
-       AND status IN ('queued','processing','awaiting_payment') ORDER BY created_at DESC LIMIT 1`,
-      [userId,parsed.platform,parsed.normalizedUrl]
-    );
-    if(concurrent.rowCount){
-      await reviveAffordableAwaitingQuotaJob(userId,concurrent.rows[0].id);
-      await recordSourceAccessEvent(userId,concurrent.rows[0].id,parsed.platform,clientSource,true);
-      return await waitForJob(userId,concurrent.rows[0].id,env().MCP_INLINE_WAIT_MS,profile);
+    if(active.rowCount){
+      await reviveAffordableAwaitingQuotaJob(userId,active.rows[0].id);
+      await attachSourceAccessEvent(accessId,{jobId:active.rows[0].id,platform:parsed.platform,sourceKey,reused:true});
+      return await waitForJob(userId,active.rows[0].id,env().MCP_INLINE_WAIT_MS,profile);
     }
-    throw new Link2AIError('INTERNAL_ERROR','Could not create transcript job.',500,true);
-  }
-  const jobId=job.rows[0].id;
-  await recordSourceAccessEvent(userId,jobId,parsed.platform,clientSource,false);
 
-  // The worker owns every queued job, including a shared-cache hit. Completing it
-  // here would race a worker that claims the row immediately after the insert.
-  return await waitForJob(userId,jobId,env().MCP_INLINE_WAIT_MS,profile);
+    // A model may call the same read tool more than once while answering. Reuse a still-cached successful result
+    // for this user so retries/follow-ups do not consume quota twice. Explicit refresh bypasses successful-result
+    // reuse and the shared cache, but still reuses any in-flight job to avoid duplicate concurrent processing.
+    if(!options.refresh&&parsed.platform!=='x'){
+      const provenanceEpoch=cacheProvenanceEpoch(parsed.platform);
+      const completed=await pool.query<{id:string}>(
+        `SELECT j.id FROM transcript_jobs j JOIN transcript_cache c ON c.id=j.transcript_cache_id
+         WHERE j.user_id=$1 AND j.platform=$2 AND (j.canonical_media_id=$3 OR j.normalized_url=$4)
+           AND j.status='completed' AND c.expires_at>now()
+           AND ($5::timestamptz IS NULL OR c.created_at >= $5::timestamptz)
+           AND NOT ($6::boolean AND jsonb_array_length(COALESCE(c.visual_assets,'[]'::jsonb))=0)
+         ORDER BY j.completed_at DESC LIMIT 1`,
+        [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl,provenanceEpoch,
+         (parsed.platform==='instagram'&&parsed.kind==='post')||(parsed.platform==='tiktok'&&parsed.canonicalMediaId.startsWith('photo_'))]
+      );
+      if(completed.rowCount){
+        await attachSourceAccessEvent(accessId,{jobId:completed.rows[0].id,platform:parsed.platform,sourceKey,reused:true,cacheHit:true});
+        return await getJobResult(userId,completed.rows[0].id,profile);
+      }
+    }
+
+    const plan=await planForUser(userId);
+    const job=await pool.query<{id:string}>(
+      `INSERT INTO transcript_jobs(user_id,platform,source_url,normalized_url,canonical_media_id,language,status,priority,client_source)
+       VALUES($1,$2,$3,$4,$5,'auto','queued',$6,$7)
+       ON CONFLICT DO NOTHING
+       RETURNING id`,
+      [userId,parsed.platform,parsed.sourceUrl,parsed.normalizedUrl,parsed.canonicalMediaId,priorityForPlan(plan),clientSource]
+    );
+    if(!job.rowCount){
+      const concurrent=await pool.query<{id:string}>(
+        `SELECT id FROM transcript_jobs WHERE user_id=$1 AND platform=$2 AND normalized_url=$3
+         AND status IN ('queued','processing','awaiting_payment') ORDER BY created_at DESC LIMIT 1`,
+        [userId,parsed.platform,parsed.normalizedUrl]
+      );
+      if(concurrent.rowCount){
+        await reviveAffordableAwaitingQuotaJob(userId,concurrent.rows[0].id);
+        await attachSourceAccessEvent(accessId,{jobId:concurrent.rows[0].id,platform:parsed.platform,sourceKey,reused:true});
+        return await waitForJob(userId,concurrent.rows[0].id,env().MCP_INLINE_WAIT_MS,profile);
+      }
+      throw new Link2AIError('INTERNAL_ERROR','Could not create transcript job.',500,true);
+    }
+    const jobId=job.rows[0].id;
+    await attachSourceAccessEvent(accessId,{jobId,platform:parsed.platform,sourceKey});
+
+    // The worker owns every queued job, including a shared-cache hit. Completing it
+    // here would race a worker that claims the row immediately after the insert.
+    return await waitForJob(userId,jobId,env().MCP_INLINE_WAIT_MS,profile);
+  }catch(error){
+    const err=asLink2AIError(error);
+    await failSourceAccessEvent(accessId,err.code);
+    throw error;
+  }
 }
 
 export async function waitForJob(userId:string,jobId:string,maxWaitMs:number,profile:DistributionProfile='default'):Promise<ToolJobResult>{
