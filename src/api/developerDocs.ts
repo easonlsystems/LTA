@@ -3,59 +3,70 @@ function esc(value:string){return value.replace(/[&<>"']/g,char=>({'&':'&amp;','
 export function developerDocs(baseUrl:string):string{
   const base=baseUrl.replace(/\/$/,'');
   const mcp=base+'/mcp';
-  return `<main id="main-content" class="dev-page">
-  <section class="dev-hero">
-    <span class="badge"><span class="badge-dot"></span>Developers</span>
-    <h1>Connect LTA your way.</h1>
-    <p>Use Remote MCP inside an AI client, or use a generated API key from your own app.</p>
-  </section>
+  return `<main id="main-content" class="signal-subpage signal-dev-page">
+  <section class="signal-page-hero"><div class="signal-page-container">
+    <p class="signal-page-label">DEVELOPERS</p>
+    <h1>Use LTA through MCP or REST.</h1>
+    <p>Use Remote MCP inside an AI client, or generate an API key for your own application. These are separate paths; choose the one that matches where LTA runs.</p>
+  </div></section>
 
-  <section class="dev-grid">
-    <article class="dev-card mcp-card" id="mcp">
-      <span class="dev-kicker">Remote MCP</span>
-      <h2>Use LTA inside an AI client.</h2>
-      <p>Add this URL in a client's Custom MCP / connector settings. LTA handles sign-in through OAuth.</p>
-      <div class="endpoint-row">
-        <code id="mcp-endpoint">${esc(mcp)}</code>
-        <button type="button" id="copy-mcp-endpoint">Copy</button>
-      </div>
-      <div class="client-row">
-        <a href="/connect"><strong>Claude</strong><span>Custom Connector →</span></a>
-        <div><strong>Claude Code</strong><span>Remote MCP + OAuth</span></div>
-        <div><strong>Codex</strong><span>Remote MCP + OAuth</span></div>
-        <div><strong>Grok / other</strong><span>Custom MCP / OAuth</span></div>
-      </div>
-      <div class="cli-setup">
-        <div><span>Claude Code</span><code>claude mcp add --transport http lta ${esc(mcp)}</code></div>
-        <div><span>Codex</span><code>codex mcp add lta --url ${esc(mcp)}</code><code>codex mcp login lta</code></div>
-      </div>
-      <p class="fine">MCP does not use an <code>l2ai_live_…</code> API key. LTA handles MCP sign-in through OAuth.</p>
-    </article>
+  <section class="signal-page-section"><div class="signal-page-container">
+    <div class="dev-paths">
+      <article id="mcp">
+        <div class="dev-path-head"><span>REMOTE MCP</span><h2>Inside an AI client</h2><p>LTA handles sign-in through OAuth. You only need the MCP URL.</p></div>
+        <div class="dev-endpoint"><span>MCP endpoint</span><div><code id="mcp-endpoint">${esc(mcp)}</code><button type="button" id="copy-mcp-endpoint">Copy</button></div></div>
+        <div class="dev-client-list">
+          <div><strong>Claude</strong><span>Custom Connector</span><a href="/connect">Setup guide →</a></div>
+          <div><strong>Claude Code</strong><span>Remote MCP + OAuth</span><code>claude mcp add --transport http lta ${esc(mcp)}</code></div>
+          <div><strong>Codex</strong><span>Remote MCP + OAuth</span><code>codex mcp add lta --url ${esc(mcp)}</code><code>codex mcp login lta</code></div>
+          <div><strong>Other compatible clients</strong><span>Custom MCP / OAuth</span></div>
+        </div>
+        <p class="dev-fine">MCP does not use an <code>l2ai_live_…</code> API key.</p>
+      </article>
 
-    <article class="dev-card api-card" id="api">
-      <span class="dev-kicker">REST API</span>
-      <h2>Use LTA from your app.</h2>
-      <p>Generate an API key in Account, then use it with the LTA REST API.</p>
-      <div class="endpoint-stack">
-        <div><span>Base URL</span><code>${esc(base)}</code></div>
-        <div><span>Read endpoint</span><code>POST /v1/read</code></div>
-        <div><span>Auth</span><code>Authorization: Bearer &lt;API_KEY&gt;</code></div>
-      </div>
-      <a class="btn purple" href="/account">Generate API key →</a>
-    </article>
-  </section>
+      <article id="api">
+        <div class="dev-path-head"><span>REST API</span><h2>From your own app</h2><p>Generate an API key in Account, then call the LTA API directly.</p></div>
+        <div class="dev-api-list">
+          <div><span>Base URL</span><code>${esc(base)}</code></div>
+          <div><span>Read</span><code>POST /v1/read</code></div>
+          <div><span>Auth</span><code>Authorization: Bearer &lt;API_KEY&gt;</code></div>
+        </div>
+        <a class="signal-primary" href="/account">Generate API key <span aria-hidden="true">↗</span></a>
+      </article>
+    </div>
 
-  <section class="dev-note">
-    <strong>That’s it.</strong>
-    <span>MCP users need the MCP URL. REST API users need an API key.</span>
-    <a href="/sources">Supported sources →</a>
-  </section>
+    <div class="dev-bottom"><strong>MCP = AI client. REST = your app.</strong><a href="/sources">Check supported sources →</a></div>
+  </div></section>
 
   <script>(()=>{const b=document.getElementById('copy-mcp-endpoint');const e=document.getElementById('mcp-endpoint');b?.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(e?.textContent||'');b.textContent='Copied ✓';setTimeout(()=>b.textContent='Copy',1600);}catch{b.textContent='Copy manually';}});})();</script>
   <style>
-  .dev-page{max-width:1120px;margin:0 auto;padding:72px 28px 84px}.dev-hero{max-width:760px;margin-bottom:34px}.dev-hero h1{font-size:clamp(48px,6vw,72px);line-height:.96;letter-spacing:-.06em;margin:18px 0 16px}.dev-hero p{font-size:18px;line-height:1.6;color:#6f6a78;margin:0}.dev-grid{display:grid;grid-template-columns:1.08fr .92fr;gap:16px}.dev-card{border:1px solid rgba(44,39,55,.11);border-radius:24px;background:rgba(255,255,255,.88);padding:26px;box-shadow:0 16px 46px rgba(41,33,62,.055)}.mcp-card{border-color:rgba(111,84,232,.22);background:linear-gradient(145deg,#fff,#f8f5ff)}.dev-kicker{font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#6f54e8}.dev-card h2{font-size:30px;letter-spacing:-.045em;margin:10px 0 9px}.dev-card>p{font-size:14px;line-height:1.6;color:#6f6a78}.endpoint-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;margin:18px 0}.endpoint-row code{padding:13px 14px;border-radius:12px;background:#17151f;color:#fff;overflow-wrap:anywhere;font-size:12px}.endpoint-row button{border:0;border-radius:12px;padding:12px 16px;background:#6f54e8;color:#fff;font-weight:850;cursor:pointer}.client-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.client-row>a,.client-row>div{display:grid;gap:4px;padding:12px 13px;border:1px solid rgba(44,39,55,.10);border-radius:13px;background:#fff;text-decoration:none}.client-row strong{font-size:12px}.client-row span{font-size:10px;color:#6f6a78}.cli-setup{display:grid;gap:8px;margin-top:12px}.cli-setup>div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px;align-items:center;padding:10px 12px;border:1px solid rgba(44,39,55,.10);border-radius:12px;background:#fff}.cli-setup span{font-size:10px;font-weight:850;color:#827b89}.cli-setup code{font-size:11px;overflow-wrap:anywhere}.fine{font-size:11px!important;margin:13px 0 0}.endpoint-stack{display:grid;gap:8px;margin:18px 0}.endpoint-stack>div{padding:12px 13px;border:1px solid rgba(44,39,55,.10);border-radius:13px;background:#faf9fc}.endpoint-stack span{display:block;font-size:10px;font-weight:850;color:#827b89;margin-bottom:5px}.endpoint-stack code{font-size:12px;overflow-wrap:anywhere}.api-card .btn{margin-top:4px}.dev-note{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px;padding:16px 18px;border:1px solid rgba(44,39,55,.09);border-radius:16px;background:rgba(255,255,255,.72);font-size:12px}.dev-note span{color:#6f6a78}.dev-note a{margin-left:auto;text-decoration:none;font-weight:850;color:#5d48c5}
-  @media(max-width:800px){.dev-grid{grid-template-columns:1fr}.client-row{grid-template-columns:repeat(2,1fr)}.dev-note a{margin-left:0}}
-  @media(max-width:560px){.dev-page{padding:52px 18px 64px}.dev-hero h1{font-size:48px}.dev-card{padding:20px}.endpoint-row,.cli-setup>div{grid-template-columns:1fr}.endpoint-row button{width:100%}.client-row{grid-template-columns:1fr}}
+  .signal-dev-page .signal-page-section{padding-top:0}
+  .dev-paths{border-top:1px solid rgba(255,255,255,.11)}
+  .dev-paths>article{display:grid;grid-template-columns:minmax(260px,.72fr) minmax(0,1.28fr);gap:54px;padding:34px 0;border-bottom:1px solid rgba(255,255,255,.10)}
+  .dev-path-head>span{display:block;margin-bottom:10px;color:#777c89;font:800 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.13em}
+  .dev-path-head h2{margin:0 0 10px;font-size:26px;line-height:1.15;letter-spacing:-.03em;color:#f3f0e8}
+  .dev-path-head p{margin:0;color:#9296a2;font-size:14px;line-height:1.65}
+  .dev-endpoint>span,.dev-api-list span{display:block;margin-bottom:8px;color:#777c89;font:800 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.10em}
+  .dev-endpoint>div{display:grid;grid-template-columns:minmax(0,1fr) auto;border:1px solid rgba(255,255,255,.12);background:#0f121c}
+  .dev-endpoint code{padding:14px 15px;color:#d9d5cc;font-size:12px;overflow-wrap:anywhere}
+  .dev-endpoint button{border:0;border-left:1px solid rgba(255,255,255,.10);padding:0 18px;background:#8b72ff;color:#fff;font-weight:850;cursor:pointer}
+  .dev-client-list{display:grid;grid-template-columns:1fr 1fr;margin-top:18px;border-top:1px solid rgba(255,255,255,.10);border-left:1px solid rgba(255,255,255,.10)}
+  .dev-client-list>div{min-width:0;padding:16px;border-right:1px solid rgba(255,255,255,.10);border-bottom:1px solid rgba(255,255,255,.10);background:#0d1018}
+  .dev-client-list strong{display:block;font-size:13px}.dev-client-list span{display:block;margin:4px 0 10px;color:#777c89;font-size:11px}
+  .dev-client-list code{display:block;margin-top:5px;color:#b8b3aa;font-size:10px;line-height:1.5;overflow-wrap:anywhere}
+  .dev-client-list a{color:#c8beff;text-decoration:none;font-size:11px;font-weight:800}
+  .dev-fine{margin:12px 0 0;color:#777c89;font-size:11px}.dev-fine code{color:#b8b3aa}
+  .dev-api-list{display:grid;border-top:1px solid rgba(255,255,255,.10);margin-bottom:20px}
+  .dev-api-list>div{padding:15px 0;border-bottom:1px solid rgba(255,255,255,.10)}
+  .dev-api-list code{color:#d8d4cb;font-size:12px;overflow-wrap:anywhere}
+  .dev-bottom{display:flex;justify-content:space-between;gap:20px;padding:24px 0;color:#9296a2;font-size:13px}.dev-bottom strong{color:#d8d4cb}.dev-bottom a{color:#c8beff;text-decoration:none;font-weight:800}
+  @media(max-width:760px){
+    .dev-paths>article{grid-template-columns:1fr;gap:20px;padding:28px 0}
+    .dev-client-list{grid-template-columns:1fr}
+    .dev-endpoint>div{grid-template-columns:1fr}
+    .dev-endpoint button{min-height:46px;border-left:0;border-top:1px solid rgba(255,255,255,.10)}
+    .dev-bottom{display:grid}
+  }
   </style>
   </main>`;
 }
