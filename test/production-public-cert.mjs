@@ -39,7 +39,7 @@ await eventually('production revision availability',async()=>{
 
   const home=await request('/');
   assert.equal(home.response.status,200);
-  assert.match(home.text,/Public links → AI-readable source/);
+  assert.match(home.text,/data-activation-home/,'homepage must expose the activation surface');\n  assert.match(home.text,/data-install-handoff[^>]+href=\"\\/start\\?from=hero\"/,'homepage must expose the primary Claude install handoff');
   assert.match(home.text,/Use MCP/,'homepage must expose MCP directly');
   assert.match(home.text,/API key/,'homepage must keep REST API key access separate');
   assert.match(home.text,/id="sim-run"[^>]*aria-expanded="false"[^>]*aria-controls="sim-comparison-panels"/,'homepage comparison CTA must start collapsed');
@@ -48,7 +48,7 @@ await eventually('production revision availability',async()=>{
   assert.match(home.text,/Summarize this Instagram Reel\./,'production homepage must lead with the recorded Instagram proof');
   const reelLinks=home.text.match(/https:\/\/www\.instagram\.com\/reel\/Ddx6Q_MJNyg\//g)??[];
   assert.equal(reelLinks.length,3,'production homepage must link the real Reel in the proof header and both comparison chat messages');
-  assert.match(home.text,/Real LTA test case/,'production homepage must label the default Instagram proof as a real test case');
+  assert.match(home.text,/RECORDED PUBLIC TEST/,'production homepage must label the default Instagram proof as a recorded public test');
   assert.match(home.text,/instagram\.com\/reel\/Ddx6Q_MJNyg\//,'production homepage must expose the recorded Reel identity before the comparison');
   assert.match(home.text,/Same AI assistant · same public link/,'production comparison must be AI-client neutral');
   assert.doesNotMatch(home.text,/Simulated Claude conversation/,'production comparison must not be Claude-specific');
