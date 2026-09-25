@@ -58,6 +58,9 @@ assert.match(main,/trackWebsiteEvent\(req,'landing_view','\/'\)/);
 assert.match(main,/trackWebsiteEvent\(req,'add_lta_click'/);
 assert.match(main,/\+ → Connectors → LTA/);
 assert.match(main,/>Open Claude /);
+assert.match(main,/event_name='second_read_success'/);
+assert.match(main,/UTM campaign → activation/);
+assert.match(main,/utm_source.*utm_campaign.*utm_content/s);
 
 assert.match(source,/beginSourceAccessEvent/);
 assert.match(source,/recordActivationEvent\(userId,'read_requested'/);
