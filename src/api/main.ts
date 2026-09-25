@@ -455,15 +455,18 @@ button:focus-visible,summary:focus-visible,a:focus-visible,input:focus-visible{o
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.btn,.sim-run{transition:none!important}}
 
 /* Source relay homepage · interaction-first */
-body:has(.signal-home){background:#090b12!important;color:#f3f0e8}
-body:has(.signal-home) .wrap{max-width:none;padding:0}
+body:has(.signal-home){min-height:100svh;background:#090b12!important;color:#f3f0e8}
+body:has(.signal-home) .wrap{min-height:100svh;max-width:none;padding:0;display:flex;flex-direction:column}
+body:has(.signal-home) .signal-home{flex:1 0 auto;display:flex;flex-direction:column}
+body:has(.signal-home) .signal-stage{flex:1 0 auto;width:100%;display:flex;align-items:center}
+body:has(.signal-home) footer{flex:0 0 auto;padding:18px 0 20px}
 body:has(.signal-home) .home-nav{position:fixed;z-index:30;left:50%;top:18px;transform:translateX(-50%);width:min(calc(100vw - 40px),1320px);height:60px;padding:0 18px;border:1px solid rgba(255,255,255,.1)!important;border-radius:17px;background:rgba(10,12,20,.72)!important;backdrop-filter:blur(20px)!important;-webkit-backdrop-filter:blur(20px)!important;box-shadow:0 18px 60px rgba(0,0,0,.22)!important}
 body:has(.signal-home) .home-nav .brand,body:has(.signal-home) .home-nav a:not(.btn),body:has(.signal-home) .mobile-menu summary{color:#f3f0e8}
 body:has(.signal-home) .home-nav .mobile-menu-panel{background:#121521;border-color:rgba(255,255,255,.12)}
 body:has(.signal-home) footer{width:min(calc(100vw - 80px),1320px);margin:0 auto;color:#878b98;border-color:rgba(255,255,255,.1)}
 .signal-home{position:relative;overflow:hidden;background:#090b12;color:#f3f0e8}
 .signal-home a{color:inherit}.signal-home .a-container{width:min(calc(100vw - 80px),1320px);margin:0 auto}
-.signal-stage{position:relative;padding:118px 0 40px;background:radial-gradient(circle at 76% 14%,rgba(125,99,239,.15),transparent 26%),radial-gradient(circle at 12% 38%,rgba(238,176,84,.06),transparent 25%),#090b12}
+.signal-stage{position:relative;padding:102px 0 34px;background:radial-gradient(circle at 76% 14%,rgba(125,99,239,.15),transparent 26%),radial-gradient(circle at 12% 38%,rgba(238,176,84,.06),transparent 25%),#090b12}
 .signal-stage:before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.2;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(255,255,255,.02) 4px)}
 .signal-dust,.signal-dust:before,.signal-dust:after{position:absolute;inset:-10%;content:"";pointer-events:none;background-image:radial-gradient(circle,rgba(255,255,255,.4) 0 1px,transparent 1.4px);background-size:91px 91px;opacity:.12;animation:signalDrift 36s linear infinite}
 .signal-dust:before{background-size:137px 137px;opacity:.45;animation-duration:54s}.signal-dust:after{background-size:211px 211px;opacity:.6;animation-duration:74s}
