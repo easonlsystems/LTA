@@ -66,6 +66,7 @@ const linkResultOutputSchema=z.object({
   retryable:z.boolean().optional(),
   remaining_usage_units:z.number().int().nonnegative().optional().describe('Processing units currently remaining on the connected LTA account. If status is payment_required, preserve this number when explaining the block to the user.'),
   required_usage_units:z.number().int().nonnegative().optional().describe('Processing units required for this source when known. If status is payment_required, preserve this number when explaining the block to the user.'),
+  topup_path:z.string().optional().describe('LTA account path for adding units or reviewing the plan when status is payment_required. Tell the user to open LTA → Account to unblock the read.'),
 });
 
 const batchLinkResultOutputSchema=z.object({
@@ -249,6 +250,7 @@ export function chunkResult(result:ToolJobResult,offset=0,maxChars=MAX_CHARS):Re
         ? `LTA received transcript text, but this source did not provide timestamps that can prove timeline coverage.${visualNotice?` ${visualNotice}`:''}`
         : continuationNotice??visualNotice,
     transcript_offset:chunk.start,next_offset:next,total_characters:result.transcript.length,
+    ...(result.message?{message:result.message}:{}),
     ...(safeOffset===0&&result.transcript.length<=size?{segments:result.segments}: {})
   };
 }

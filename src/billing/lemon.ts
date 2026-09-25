@@ -7,6 +7,7 @@ import { PLAN_LIMITS } from '../quota/plans.js';
 import { canonicalLemonStatus, lemonBillingPeriod, shouldApplySubscriptionLifecycleEvent } from './order.js';
 import { reconcileFoundingOffer, releaseFoundingSlotForInitialRefund } from './founding.js';
 import { foundingBonusUnits, type FoundingPlan } from './foundingPolicy.js';
+import { recordActivationEvent } from '../analytics/product.js';
 
 export type PaidPlan = 'basic' | 'pro';
 export type TopupPack = '500' | '1500';
@@ -325,6 +326,17 @@ async function processTopupOrderEvent(eventName:string,event:any,obj:any):Promis
         );
       }
       await client.query('COMMIT');
+      if(inserted.rowCount){
+        await recordActivationEvent(userId,'topup_success',{
+          metadata:{
+            pack:requestedPack,
+            units_purchased:units,
+            units_refunded:refundedUnits,
+            units_net:Math.max(0,units-refundedUnits),
+            provider:'lemonsqueezy'
+          }
+        });
+      }
       return true;
     }
     if(eventName==='order_refunded'){

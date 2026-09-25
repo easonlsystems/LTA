@@ -103,6 +103,7 @@ export async function reserveQuota(userId: string, jobId: string, usageUnits: nu
          ON CONFLICT(job_id) DO UPDATE SET seconds=0, expires_at=EXCLUDED.expires_at`,
         [userId,jobId]
       );
+      await client.query('UPDATE transcript_jobs SET analytics_reserved_usage_units=0 WHERE id=$1 AND user_id=$2',[jobId,userId]);
       await client.query('COMMIT');
       return;
     }
@@ -142,6 +143,10 @@ export async function reserveQuota(userId: string, jobId: string, usageUnits: nu
        VALUES($1,$2,$3,now() + interval '60 minutes')
        ON CONFLICT(job_id) DO UPDATE SET seconds=EXCLUDED.seconds, expires_at=EXCLUDED.expires_at`,
       [userId, jobId, seconds]
+    );
+    await client.query(
+      'UPDATE transcript_jobs SET analytics_reserved_usage_units=$3 WHERE id=$1 AND user_id=$2',
+      [jobId,userId,Math.max(0,Math.ceil(usageUnits))]
     );
     await client.query('COMMIT');
   } catch (err) {

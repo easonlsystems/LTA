@@ -497,17 +497,28 @@ app.get('/start',async(req,reply)=>{
   const from=['nav','hero','footer','faq','pricing'].includes(fromRaw)?fromRaw:'other';
   await trackWebsiteEvent(req,'cta_start','/',{from});
   await trackWebsiteEvent(req,'connect_install_click','/',{from});
+  await trackWebsiteEvent(req,'add_lta_click','/',{from});
   const current=await userFromSessionCookie(req.headers.cookie).catch(()=>null);
-  if(current?.id)await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude',from}});
+  if(current?.id){
+    await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude',from}});
+    await recordActivationEvent(current.id,'add_lta_click',{distributionProfile:'default',metadata:{host:'claude',from}});
+  }
   return reply.redirect(claudeInstallUrl());
 });
 app.get('/connect/start',async(req,reply)=>{
-  await trackWebsiteEvent(req,'connect_install_click','/connect');  const current=await userFromSessionCookie(req.headers.cookie).catch(()=>null);  if(current?.id)await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude'}});
+  await trackWebsiteEvent(req,'connect_install_click','/connect');
+  await trackWebsiteEvent(req,'add_lta_click','/connect',{from:'connect'});
+  const current=await userFromSessionCookie(req.headers.cookie).catch(()=>null);
+  if(current?.id){
+    await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude',from:'connect'}});
+    await recordActivationEvent(current.id,'add_lta_click',{distributionProfile:'default',metadata:{host:'claude',from:'connect'}});
+  }
   return reply.redirect(claudeInstallUrl());
 });
 
 app.get('/',async(req,reply)=>{
   await trackWebsiteVisit(req,reply,'/');
+  await trackWebsiteEvent(req,'landing_view','/');
   return reply.type('text/html').send(siteShell(`<main id="main-content" class="activation-site signal-home" data-activation-home>
     <section class="signal-stage" id="simulation"><div class="signal-dust" aria-hidden="true"></div><div class="a-container signal-stage-inner">
       <header class="signal-intro">
@@ -653,8 +664,9 @@ app.get('/connect',async(req,reply)=>{
       </section>
       <section class="a-connect-panel a-connected" id="connected-next" aria-labelledby="connected-title" hidden>
         <span class="a-connected-mark" aria-hidden="true">✓</span>
-        <div><h2 id="connected-title">Connected ✓ Authorization is finished.</h2><p>Connected means authorization is finished. Make LTA available in this Claude conversation, then run one real test.</p></div>
+        <div><h2 id="connected-title">Connected ✓ Authorization is finished.</h2><p>Connected means authorization is finished. Your next job is one real read — not the dashboard.</p></div>
         <div class="a-next"><strong>Now in Claude</strong><span class="a-command">+ → Connectors → LTA</span></div>
+        <a class="a-primary" href="https://claude.ai/" target="_blank" rel="noopener">Open Claude <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
         <div class="a-test" id="first-test"><h3>Paste this test link and question</h3><p>Use a known real public Reel. LTA will bring its available source content into Claude.</p>
           <div class="a-test-row"><code id="test-url">https://www.instagram.com/reel/Ddx6Q_MJNyg/</code><button type="button" data-copy="test-url" aria-label="Copy Instagram Reel URL">Copy link</button></div>
           <div class="a-test-row"><span id="test-prompt">Summarize this Instagram Reel and list the main claims.</span><button type="button" data-copy="test-prompt" aria-label="Copy first question">Copy question</button></div>
@@ -685,7 +697,11 @@ app.get('/api/connect/status',async(req,reply)=>{
     [user.id,since]
   );
   const connected=Boolean(r.rows[0]?.connected);
-  if(connected)await trackWebsiteEvent(req,'connect_complete','/connect');
+  if(connected){
+    await trackWebsiteEvent(req,'connect_complete','/connect');
+    await trackWebsiteEvent(req,'oauth_success','/connect');
+    await trackWebsiteEvent(req,'connector_connected','/connect');
+  }
   return reply.send({authenticated:true,connected});
 });
 
@@ -1044,20 +1060,47 @@ app.get('/founder',async(req,reply)=>{
   ]);
 
   const productFunnelResult=await pool.query<{
-    connect_cta_click:string;connection_started:string;connection_success:string;
-    connector_enabled:string;first_link_attempt:string;first_successful_read:string;
+    add_lta_click:string;oauth_start:string;connector_connected:string;
+    read_requested:string;first_read_success:string;second_read_success:string;
   }>(`SELECT
-      COUNT(DISTINCT user_id) FILTER(WHERE event_name='connect_cta_click')::text AS connect_cta_click,
-      COUNT(DISTINCT user_id) FILTER(WHERE event_name='connection_started')::text AS connection_started,
-      COUNT(DISTINCT user_id) FILTER(WHERE event_name='connection_success')::text AS connection_success,
-      COUNT(DISTINCT user_id) FILTER(WHERE event_name='connector_enabled')::text AS connector_enabled,
-      COUNT(DISTINCT user_id) FILTER(WHERE event_name='first_link_attempt')::text AS first_link_attempt,
-      COUNT(DISTINCT user_id) FILTER(WHERE event_name='first_successful_read')::text AS first_successful_read
+      COUNT(DISTINCT user_id) FILTER(WHERE event_name='add_lta_click')::text AS add_lta_click,
+      COUNT(DISTINCT user_id) FILTER(WHERE event_name='oauth_start')::text AS oauth_start,
+      COUNT(DISTINCT user_id) FILTER(WHERE event_name='connector_connected')::text AS connector_connected,
+      COUNT(DISTINCT user_id) FILTER(WHERE event_name='read_requested')::text AS read_requested,
+      COUNT(DISTINCT user_id) FILTER(WHERE event_name='first_read_success')::text AS first_read_success,
+      COUNT(DISTINCT user_id) FILTER(WHERE event_name='second_read_success')::text AS second_read_success
     FROM product_activation_events e
     JOIN users u ON u.id=e.user_id
     WHERE COALESCE(e.distribution_profile,'default')='default'
       AND COALESCE(lower(u.email),'')<>$1
       AND COALESCE(u.analytics_excluded,false)=false`,[founderEmail]);
+
+  const campaignFunnelResult=await pool.query<{
+    utm_source:string|null;utm_campaign:string|null;utm_content:string|null;
+    add_lta:string;connected:string;first_read:string;second_read:string;
+  }>(`WITH funnel AS (
+      SELECT user_id,event_name,utm_source,utm_campaign,utm_content,created_at
+      FROM website_events
+      WHERE event_name='add_lta_click' AND user_id IS NOT NULL
+      UNION ALL
+      SELECT user_id,event_name,utm_source,utm_campaign,utm_content,created_at
+      FROM product_activation_events
+      WHERE event_name IN ('connector_connected','first_read_success','second_read_success')
+    )
+    SELECT
+      f.utm_source,f.utm_campaign,f.utm_content,
+      COUNT(DISTINCT f.user_id) FILTER(WHERE f.event_name='add_lta_click')::text AS add_lta,
+      COUNT(DISTINCT f.user_id) FILTER(WHERE f.event_name='connector_connected')::text AS connected,
+      COUNT(DISTINCT f.user_id) FILTER(WHERE f.event_name='first_read_success')::text AS first_read,
+      COUNT(DISTINCT f.user_id) FILTER(WHERE f.event_name='second_read_success')::text AS second_read
+    FROM funnel f
+    JOIN users u ON u.id=f.user_id
+    WHERE (f.utm_source IS NOT NULL OR f.utm_campaign IS NOT NULL OR f.utm_content IS NOT NULL)
+      AND COALESCE(lower(u.email),'')<>$1
+      AND COALESCE(u.analytics_excluded,false)=false
+    GROUP BY f.utm_source,f.utm_campaign,f.utm_content
+    ORDER BY MAX(f.created_at) DESC
+    LIMIT 20`,[founderEmail]);
 
   const providerHealthResult=await pool.query<{
     platform:string;operation:string;provider:string;attempts:string;successes:string;failures:string;
@@ -1084,12 +1127,13 @@ app.get('/founder',async(req,reply)=>{
   const activationVisitors=founderNum(activation?.activation_visitors),ctaStarts=founderNum(activation?.cta_starts),signupViews=founderNum(activation?.signup_views),signupSubmits=founderNum(activation?.signup_submits),signupFailures=founderNum(activation?.signup_failures),externalSignups=founderNum(activation?.external_signups),connectClicks=founderNum(activation?.connect_clicks),externalConnected=founderNum(activation?.external_connected),externalActivated=founderNum(activation?.external_activated),externalPaid=founderNum(activation?.external_paid);
   const activationStarted=founderTime(activation?.activation_started_at);
   const productFunnel=productFunnelResult.rows[0];
-  const productConnectCta=founderNum(productFunnel?.connect_cta_click);
-  const productConnectionStarted=founderNum(productFunnel?.connection_started);
-  const productConnectionSuccess=founderNum(productFunnel?.connection_success);
-  const productConnectorEnabled=founderNum(productFunnel?.connector_enabled);
-  const productFirstLinkAttempt=founderNum(productFunnel?.first_link_attempt);
-  const productFirstSuccessfulRead=founderNum(productFunnel?.first_successful_read);
+  const productAddLta=founderNum(productFunnel?.add_lta_click);
+  const productOauthStart=founderNum(productFunnel?.oauth_start);
+  const productConnectorConnected=founderNum(productFunnel?.connector_connected);
+  const productReadRequested=founderNum(productFunnel?.read_requested);
+  const productFirstReadSuccess=founderNum(productFunnel?.first_read_success);
+  const productSecondReadSuccess=founderNum(productFunnel?.second_read_success);
+  const campaignRows=campaignFunnelResult.rows.map(row=>`<tr><td>${founderEscape(row.utm_source??'—')}</td><td>${founderEscape(row.utm_campaign??'—')}</td><td>${founderEscape(row.utm_content??'—')}</td><td>${founderNum(row.add_lta)}</td><td>${founderNum(row.connected)}</td><td>${founderNum(row.first_read)}</td><td>${founderNum(row.second_read)}</td></tr>`).join('')||'<tr><td colspan="7">目前還沒有帶 UTM 的 activation 資料。</td></tr>';
   const providerHealthRows=providerHealthResult.rows.map(row=>{
     const attempts=founderNum(row.attempts),successes=founderNum(row.successes),failures=founderNum(row.failures);
     const health=attempts>0?Math.round(successes/attempts*100):0;
@@ -1143,8 +1187,10 @@ app.get('/founder',async(req,reply)=>{
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>使用者</h2><div class="fd-note">${totalMatched} 個帳號 · 點進去再看詳細資料</div></div><form method="get" action="/founder" class="fd-tools"><input class="fd-input" type="search" name="q" value="${searchValue}" placeholder="搜尋 Email"><button class="btn alt sm" type="submit">搜尋</button>${q?'<a class="btn alt sm" href="/founder">清除</a>':''}</form></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>Email</th><th>方案</th><th>AI</th><th>成功 read</th><th>使用量</th><th>最後活動</th><th></th></tr></thead><tbody>${accountRows}</tbody></table></div><div class="fd-panel-head"><span class="fd-label">每頁 100 筆</span><div class="fd-nav">${prev}${next}</div></div></section>
     <details class="fd-panel"><summary style="cursor:pointer;padding:18px;font-weight:800">進階診斷（平常不用看）</summary>
       <div style="padding:0 18px 18px">
-        <div class="fd-label" style="margin:8px 0">連接到第一次成功使用</div>
-        <div class="fd-funnel activation"><div class="fd-step"><b>${productConnectCta}</b><span>點「Add LTA」</span></div><div class="fd-step"><b>${productConnectionStarted}</b><span>開始登入／授權</span></div><div class="fd-step"><b>${productConnectionSuccess}</b><span>完成連接</span></div><div class="fd-step"><b>${productConnectorEnabled}</b><span>Claude 已能叫到 LTA</span></div><div class="fd-step"><b>${productFirstLinkAttempt}</b><span>第一次丟連結</span></div><div class="fd-step"><b>${productFirstSuccessfulRead}</b><span>第一次成功讀取</span></div></div>
+        <div class="fd-label" style="margin:8px 0">Activation funnel</div>
+        <div class="fd-funnel activation"><div class="fd-step"><b>${productAddLta}</b><span>Add LTA</span></div><div class="fd-step"><b>${productOauthStart}</b><span>OAuth start</span></div><div class="fd-step"><b>${productConnectorConnected}</b><span>Connected</span></div><div class="fd-step"><b>${productReadRequested}</b><span>Read requested</span></div><div class="fd-step"><b>${productFirstReadSuccess}</b><span>First read</span></div><div class="fd-step"><b>${productSecondReadSuccess}</b><span>Second distinct source</span></div></div>
+        <div class="fd-label" style="margin:18px 0 8px">UTM campaign → activation</div>
+        <div class="fd-scroll"><table class="fd-table" style="min-width:760px"><thead><tr><th>utm_source</th><th>utm_campaign</th><th>utm_content</th><th>Add LTA</th><th>Connected</th><th>First read</th><th>Second read</th></tr></thead><tbody>${campaignRows}</tbody></table></div>
         <div class="fd-label" style="margin:18px 0 8px">各平台最近 24 小時讀取狀況</div>
         <div class="fd-scroll"><table class="fd-table" style="min-width:760px"><thead><tr><th>平台</th><th>在做什麼</th><th>嘗試次數</th><th>成功率</th><th>失敗</th><th>平均時間</th><th>最近問題</th></tr></thead><tbody>${providerHealthRows}</tbody></table></div>
         <div class="fd-label" style="margin:18px 0 8px">最近讀取紀錄</div>

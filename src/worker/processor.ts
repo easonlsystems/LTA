@@ -87,7 +87,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
 
       const userExisting=reuseCache?await findUserCompletedCache(job.user_id,job.platform,parsed.canonicalMediaId):null;
       if(userExisting){
-        await markCompleted(job.id,userExisting.id,0);
+        await markCompleted(job.id,userExisting.id,0,true);
         logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'user_cache',content_kind:parsed.kind,duration_seconds:0,processing_ms:Date.now()-startedAt});
         return;
       }
@@ -96,7 +96,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       if(existing){
         await reserveQuota(job.user_id,job.id,cachedUsageUnits(existing));reserved=true;
         await finalizeQuota(job.user_id,job.id);reserved=false;
-        await markCompleted(job.id,existing.id,0);
+        await markCompleted(job.id,existing.id,0,true);
         logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'cache',content_kind:parsed.kind,duration_seconds:0,processing_ms:Date.now()-startedAt});
         return;
       }
@@ -118,7 +118,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       if(afterClaimCache){
         await reserveQuota(job.user_id,job.id,cachedUsageUnits(afterClaimCache));reserved=true;
         await finalizeQuota(job.user_id,job.id);reserved=false;
-        await markCompleted(job.id,afterClaimCache.id,0);
+        await markCompleted(job.id,afterClaimCache.id,0,true);
         logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'cache_after_claim',content_kind:parsed.kind,duration_seconds:0,processing_ms:Date.now()-startedAt});
         return;
       }
@@ -189,7 +189,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     const userExisting=reuseCache?await findUserCompletedCache(job.user_id,job.platform,metadata.canonicalMediaId):null;
     if(userExisting){
       if(metadata.durationSeconds<=0)await applyDuration(userExisting.duration_seconds);
-      await markCompleted(job.id,userExisting.id,metadata.durationSeconds);
+      await markCompleted(job.id,userExisting.id,metadata.durationSeconds,true);
       logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'user_cache',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,processing_ms:Date.now()-startedAt});
       return;
     }
@@ -202,7 +202,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);
       reserved=true;
       await finalizeQuota(job.user_id,job.id); reserved=false;
-      await markCompleted(job.id,existing.id,metadata.durationSeconds);
+      await markCompleted(job.id,existing.id,metadata.durationSeconds,true);
       logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'cache',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,processing_ms:Date.now()-startedAt});
       return;
     }
@@ -230,7 +230,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       if(metadata.durationSeconds<=0)await applyDuration(afterClaimCache.duration_seconds);
       if(!reserved){await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);reserved=true;}
       await finalizeQuota(job.user_id,job.id); reserved=false;
-      await markCompleted(job.id,afterClaimCache.id,metadata.durationSeconds);
+      await markCompleted(job.id,afterClaimCache.id,metadata.durationSeconds,true);
       logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'cache_after_claim',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,processing_ms:Date.now()-startedAt});
       return;
     }

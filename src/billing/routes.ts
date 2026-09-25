@@ -5,7 +5,8 @@ import { getUsageSnapshot } from '../quota/service.js';
 import { env } from '../config/env.js';
 import { logErrorEvent } from '../util/log.js';
 import { pool } from '../db/pool.js';
-import { trackWebsiteVisit } from '../analytics/visitors.js';
+import { trackWebsiteEvent, trackWebsiteVisit } from '../analytics/visitors.js';
+import { recordActivationEvent } from '../analytics/product.js';
 import { getFoundingOfferStatus } from './founding.js';
 import { FOUNDING_LIMIT } from './foundingPolicy.js';
 import { createApiKey, listApiKeys, revokeApiKey } from '../api/apiKeys.js';
@@ -114,6 +115,8 @@ export async function registerBillingRoutes(app:FastifyInstance):Promise<void>{
     const b=req.body as any;
     if(!verifyCsrfToken(req.headers.cookie,String(b?.csrf??'')))return reply.code(403).type('text/html').send(page(`<h1>${esc(env().PUBLIC_BRAND_NAME)}</h1><p>This top-up action expired. Please try again.</p><p><a href="/account">Back</a></p>`));
     const pack:TopupPack=b?.pack==='1500'?'1500':'500';
+    await trackWebsiteEvent(req,'topup_click','/account',{pack});
+    await recordActivationEvent(user.id,'topup_click',{metadata:{pack}});
     try{return reply.redirect(await createTopupCheckoutSession(user.id,pack));}
     catch(e){
       logErrorEvent('billing_topup_start_error',e);

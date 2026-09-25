@@ -41,7 +41,7 @@ function tokenFromCookie(header:string|undefined):string|null{
   return token&&UUID_RE.test(token)?token:null;
 }
 
-function sourceFromRequest(req:{url?:string;headers:{referer?:string|string[]}}):{referrer:string|null;utmSource:string|null;utmMedium:string|null;utmCampaign:string|null}{
+function sourceFromRequest(req:{url?:string;headers:{referer?:string|string[]}}):{referrer:string|null;utmSource:string|null;utmMedium:string|null;utmCampaign:string|null;utmContent:string|null}{
   const refererRaw=Array.isArray(req.headers.referer)?req.headers.referer[0]:req.headers.referer;
   let referrer:string|null=null;
   try{
@@ -49,14 +49,15 @@ function sourceFromRequest(req:{url?:string;headers:{referer?:string|string[]}})
     const ownHost=new URL(env().PUBLIC_BASE_URL).hostname.toLowerCase();
     referrer=refHost&&refHost!==ownHost?refHost.slice(0,255):null;
   }catch{referrer=null;}
-  let utmSource:string|null=null,utmMedium:string|null=null,utmCampaign:string|null=null;
+  let utmSource:string|null=null,utmMedium:string|null=null,utmCampaign:string|null=null,utmContent:string|null=null;
   try{
     const url=new URL(String(req.url??'/'),'https://link2ai.local');
     utmSource=cleanText(url.searchParams.get('utm_source'),100);
     utmMedium=cleanText(url.searchParams.get('utm_medium'),100);
     utmCampaign=cleanText(url.searchParams.get('utm_campaign'),160);
+    utmContent=cleanText(url.searchParams.get('utm_content'),160);
   }catch{/* ignore malformed request URL */}
-  return {referrer,utmSource,utmMedium,utmCampaign};
+  return {referrer,utmSource,utmMedium,utmCampaign,utmContent};
 }
 
 export async function trackWebsiteVisit(req:{url?:string;headers:{cookie?:string;'user-agent'?:string|string[];referer?:string|string[]}},reply:FastifyReply,path:string):Promise<void>{
@@ -70,16 +71,17 @@ export async function trackWebsiteVisit(req:{url?:string;headers:{cookie?:string
   try{
     const user=await userFromSessionCookie(req.headers.cookie).catch(()=>null);
     await pool.query(
-      `INSERT INTO website_visitors(visitor_id,user_id,first_path,last_path,page_views,first_referrer,utm_source,utm_medium,utm_campaign)
-       VALUES($1,$2,$3,$3,1,$4,$5,$6,$7)
+      `INSERT INTO website_visitors(visitor_id,user_id,first_path,last_path,page_views,first_referrer,utm_source,utm_medium,utm_campaign,utm_content)
+       VALUES($1,$2,$3,$3,1,$4,$5,$6,$7,$8)
        ON CONFLICT(visitor_id) DO UPDATE SET
          user_id=COALESCE(EXCLUDED.user_id,website_visitors.user_id),
          last_path=EXCLUDED.last_path,last_seen_at=now(),page_views=website_visitors.page_views+1,
          first_referrer=COALESCE(website_visitors.first_referrer,EXCLUDED.first_referrer),
-         utm_source=COALESCE(website_visitors.utm_source,EXCLUDED.utm_source),
-         utm_medium=COALESCE(website_visitors.utm_medium,EXCLUDED.utm_medium),
-         utm_campaign=COALESCE(website_visitors.utm_campaign,EXCLUDED.utm_campaign)`,
-      [token,user?.id??null,page,source.referrer,source.utmSource,source.utmMedium,source.utmCampaign]
+         utm_source=COALESCE(EXCLUDED.utm_source,website_visitors.utm_source),
+         utm_medium=COALESCE(EXCLUDED.utm_medium,website_visitors.utm_medium),
+         utm_campaign=COALESCE(EXCLUDED.utm_campaign,website_visitors.utm_campaign),
+         utm_content=COALESCE(EXCLUDED.utm_content,website_visitors.utm_content)`,
+      [token,user?.id??null,page,source.referrer,source.utmSource,source.utmMedium,source.utmCampaign,source.utmContent]
     );
     await pool.query(`INSERT INTO website_pageviews(visitor_id,path) VALUES($1,$2)`,[token,page]);
   }catch{
@@ -103,7 +105,11 @@ export async function trackWebsiteEvent(req:{headers:{cookie?:string;'user-agent
   try{
     const user=await userFromSessionCookie(req.headers.cookie).catch(()=>null);
     await pool.query(
-      `INSERT INTO website_events(visitor_id,user_id,event_name,path,metadata) VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT DO NOTHING`,
+      `INSERT INTO website_events(visitor_id,user_id,event_name,path,metadata,utm_source,utm_campaign,utm_content)
+       SELECT $1,$2,$3,$4,$5::jsonb,v.utm_source,v.utm_campaign,v.utm_content
+       FROM website_visitors v
+       WHERE v.visitor_id=$1
+       ON CONFLICT DO NOTHING`,
       [token,user?.id??null,eventName,cleanPath(path),JSON.stringify(safeMetadata)]
     );
   }catch{
@@ -118,6 +124,10 @@ export async function linkWebsiteVisitorToUser(cookieHeader:string|undefined,use
     await pool.query(
       `UPDATE website_visitors SET user_id=$2,last_seen_at=now(),signed_up_at=CASE WHEN $3::boolean THEN COALESCE(signed_up_at,now()) ELSE signed_up_at END WHERE visitor_id=$1`,
       [token,userId,signedUp]
+    );
+    await pool.query(
+      `UPDATE website_events SET user_id=$2 WHERE visitor_id=$1 AND user_id IS NULL`,
+      [token,userId]
     );
   }catch{
     // Account/login flow must remain usable even if analytics storage fails.
