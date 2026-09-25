@@ -1,6 +1,14 @@
 ALTER TABLE website_visitors
   ADD COLUMN IF NOT EXISTS utm_content text;
 
+ALTER TABLE website_events
+  ADD COLUMN IF NOT EXISTS utm_source text,
+  ADD COLUMN IF NOT EXISTS utm_campaign text,
+  ADD COLUMN IF NOT EXISTS utm_content text;
+
+CREATE INDEX IF NOT EXISTS website_events_campaign_idx
+  ON website_events(utm_source,utm_campaign,utm_content,created_at DESC);
+
 ALTER TABLE product_activation_events
   ADD COLUMN IF NOT EXISTS visitor_id uuid,
   ADD COLUMN IF NOT EXISTS utm_source text,
