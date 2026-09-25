@@ -62,7 +62,7 @@ try{
       assert.match(body,/href="\/sources"/);
       assert.match(body,/href="\/pricing"/);
       assert.match(body,/href="\/developers#mcp"/);
-      assert.match(body,/Use MCP/);
+      assert.match(body,/href="\/developers">Developers<\/a>/);
       assert.match(body,/API key/);
       assert.match(body,/src="\/home\.js\?v=signal-relay-v1" defer/);
       assert.doesNotMatch(body,/One missing layer/i);
