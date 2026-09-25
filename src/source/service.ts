@@ -45,15 +45,125 @@ export interface ToolJobResult {
   required_usage_units?:number;
 }
 
-async function recordSourceAccessEvent(userId:string,jobId:string,platform:string,clientSource:ClientSource,reused:boolean):Promise<void>{
+function sourceDomain(url:string):string|null{
+  try{return new URL(url).hostname.toLowerCase().slice(0,255)||null;}catch{return null;}
+}
+
+async function beginSourceAccessEvent(userId:string,url:string,clientSource:ClientSource):Promise<number|null>{
+  try{
+    const r=await pool.query<{id:number}>(
+      `INSERT INTO source_access_events(user_id,job_id,platform,client_source,reused,source_domain,outcome)
+       VALUES($1,NULL,NULL,$2,false,$3,'requested')
+       RETURNING id`,
+      [userId,clientSource,sourceDomain(url)]
+    );
+    return r.rows[0]?.id??null;
+  }catch{
+    // Attribution must never block source processing.
+    return null;
+  }
+}
+
+async function attachSourceAccessEvent(
+  accessId:number|null,
+  input:{jobId?:string|null;platform?:string|null;sourceKey?:string|null;reused?:boolean;cacheHit?:boolean}
+):Promise<void>{
+  if(accessId===null)return;
   try{
     await pool.query(
-      `INSERT INTO source_access_events(user_id,job_id,platform,client_source,reused) VALUES($1,$2,$3,$4,$5)`,
-      [userId,jobId,platform,clientSource,reused]
+      `UPDATE source_access_events SET
+         job_id=COALESCE($2,job_id),
+         platform=COALESCE($3,platform),
+         source_key=COALESCE($4,source_key),
+         reused=CASE WHEN $5::boolean THEN true ELSE reused END,
+         cache_hit=CASE WHEN $6::boolean THEN true ELSE cache_hit END
+       WHERE id=$1`,
+      [accessId,input.jobId??null,input.platform??null,input.sourceKey??null,Boolean(input.reused),Boolean(input.cacheHit)]
     );
   }catch{
     // Attribution must never block source processing.
   }
+}
+
+async function failSourceAccessEvent(accessId:number|null,errorCode:string):Promise<void>{
+  if(accessId===null)return;
+  try{
+    await pool.query(
+      `UPDATE source_access_events SET outcome='failed',error_code=$2,
+         processing_time_ms=GREATEST(0,(EXTRACT(EPOCH FROM (now()-created_at))*1000)::bigint),
+         units_charged=0,units_refunded=0,finished_at=now()
+       WHERE id=$1 AND finished_at IS NULL`,
+      [accessId,errorCode]
+    );
+  }catch{
+    // Attribution must never block source processing.
+  }
+}
+
+async function finalizeSourceAccessEvents(
+  userId:string,
+  row:any,
+  outcome:'completed'|'failed'|'quota_exceeded'
+):Promise<{finished:number;unitsCharged:number;unitsRefunded:number;cacheHit:boolean}>{
+  try{
+    const ledger=await pool.query<{seconds:string}>(
+      `SELECT COALESCE(SUM(seconds),0)::text AS seconds FROM usage_ledger WHERE user_id=$1 AND job_id=$2`,
+      [userId,row.id]
+    );
+    const unitsCharged=Math.max(0,Math.ceil(Number(ledger.rows[0]?.seconds??0)/60));
+    const reserved=Math.max(0,Number(row.analytics_reserved_usage_units??0)||0);
+    const unitsRefunded=Math.max(0,reserved-unitsCharged);
+    const cacheHit=Boolean(row.analytics_cache_hit);
+    const sourceKey=row.platform&&row.canonical_media_id?String(row.platform)+':'+String(row.canonical_media_id):null;
+    const result=await pool.query(
+      `UPDATE source_access_events SET
+         platform=COALESCE($3,platform),
+         source_key=COALESCE($4,source_key),
+         outcome=$5,
+         error_code=$6,
+         processing_time_ms=GREATEST(0,(EXTRACT(EPOCH FROM (now()-created_at))*1000)::bigint),
+         cache_hit=(cache_hit OR $7::boolean),
+         units_charged=CASE WHEN reused THEN 0 ELSE $8 END,
+         units_refunded=CASE WHEN reused THEN 0 ELSE $9 END,
+         finished_at=now()
+       WHERE user_id=$1 AND job_id=$2 AND finished_at IS NULL`,
+      [
+        userId,row.id,row.platform??null,sourceKey,outcome,
+        outcome==='completed'?null:String(row.error_code??(outcome==='quota_exceeded'?'QUOTA_EXCEEDED':'INTERNAL_ERROR')),
+        cacheHit,unitsCharged,unitsRefunded
+      ]
+    );
+    return {finished:result.rowCount??0,unitsCharged,unitsRefunded,cacheHit};
+  }catch{
+    return {finished:0,unitsCharged:0,unitsRefunded:0,cacheHit:Boolean(row?.analytics_cache_hit)};
+  }
+}
+
+async function recordReadSuccessMilestones(
+  userId:string,
+  row:any,
+  profile:DistributionProfile,
+  accounting:{unitsCharged:number;unitsRefunded:number;cacheHit:boolean}
+):Promise<number>{
+  const sourceKey=row.platform&&row.canonical_media_id?String(row.platform)+':'+String(row.canonical_media_id):'';
+  const distinct=await pool.query<{count:string}>(
+    `SELECT COUNT(DISTINCT source_key)::text AS count
+     FROM source_access_events
+     WHERE user_id=$1 AND outcome='completed' AND source_key IS NOT NULL`,
+    [userId]
+  ).catch(()=>({rows:[{count:'0'}]} as any));
+  const count=Math.max(0,Number(distinct.rows[0]?.count??0)||0);
+  const metadata={
+    job_id:String(row.id),
+    source_key:sourceKey,
+    source_domain:sourceDomain(String(row.normalized_url??row.source_url??'')),
+    cache_hit:accounting.cacheHit,
+    units_charged:accounting.unitsCharged,
+    units_refunded:accounting.unitsRefunded
+  };
+  if(count>=1)await recordActivationEvent(userId,'first_read_success',{platform:row.platform,distributionProfile:profile,metadata});
+  if(count>=2)await recordActivationEvent(userId,'second_read_success',{platform:row.platform,distributionProfile:profile,metadata});
+  return count;
 }
 
 
