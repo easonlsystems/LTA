@@ -65,7 +65,7 @@ assert.match(source,/units_charged=CASE WHEN reused THEN 0 ELSE \$8 END/);
 assert.match(source,/units_refunded=CASE WHEN reused THEN 0 ELSE \$9 END/);
 assert.match(source,/message:'Source ready\. Try another link\.'/);
 assert.match(source,/topup_url:accountUrl/);
-assert.match(source,/This attempt used 0 units\. Add units or review your plan at/);
+assert.match(source,/This attempt used 0 units\. Open LTA → Account \(\$\{accountUrl\}\) to add units or review your plan/);
 assert.match(publicApi,/topup_url:result\.topup_url/);
 assert.match(mcp,/topup_url:z\.string\(\)\.url\(\)/);
 
