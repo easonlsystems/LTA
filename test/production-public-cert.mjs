@@ -42,7 +42,7 @@ await eventually('production revision availability',async()=>{
   assert.match(home.text,/data-activation-home/,'homepage must expose the activation surface');
   assert.match(home.text,/data-install-handoff[^>]+href="\/start\?from=hero"/,'homepage must expose the primary Claude install handoff');
   assert.match(home.text,/href="\/developers">Developers<\/a>/,'homepage must expose the developer entry point to MCP');
-  assert.match(home.text,/API key/,'homepage must keep REST API key access separate');
+  assert.match(home.text,/href="\/developers">Developers<\/a>/,'homepage must route REST and MCP users to the dedicated developer surface');
   assert.match(home.text,/id="sim-run"[^>]*aria-expanded="false"[^>]*aria-controls="sim-comparison-panels"/,'homepage comparison CTA must start collapsed');
   assert.match(home.text,/id="sim-comparison-panels"[^>]*hidden/,'homepage comparison panels must be hidden on first paint');
   assert.doesNotMatch(home.text,/sim-answer sim-fail show/,'homepage must not preload the completed comparison');
