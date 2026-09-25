@@ -38,6 +38,10 @@ assert.match(migration,/source_access_events[\s\S]*units_charged/);
 assert.match(migration,/source_access_events[\s\S]*units_refunded/);
 
 assert.match(visitors,/utmContent/);
+assert.match(migration,/ALTER TABLE website_events[\s\S]*utm_source[\s\S]*utm_campaign[\s\S]*utm_content/);
+assert.match(visitors,/INSERT INTO website_events\(visitor_id,user_id,event_name,path,metadata,utm_source,utm_campaign,utm_content\)/);
+assert.match(visitors,/v\.utm_source,v\.utm_campaign,v\.utm_content/);
+assert.match(visitors,/UPDATE website_events SET user_id=\$2 WHERE visitor_id=\$1 AND user_id IS NULL/);
 assert.match(visitors,/utm_source=COALESCE\(EXCLUDED\.utm_source,website_visitors\.utm_source\)/);
 assert.match(visitors,/utm_campaign=COALESCE\(EXCLUDED\.utm_campaign,website_visitors\.utm_campaign\)/);
 assert.match(visitors,/utm_content=COALESCE\(EXCLUDED\.utm_content,website_visitors\.utm_content\)/);
