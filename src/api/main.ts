@@ -1078,19 +1078,28 @@ app.get('/founder',async(req,reply)=>{
   const campaignFunnelResult=await pool.query<{
     utm_source:string|null;utm_campaign:string|null;utm_content:string|null;
     add_lta:string;connected:string;first_read:string;second_read:string;
-  }>(`SELECT
-      e.utm_source,e.utm_campaign,e.utm_content,
-      COUNT(DISTINCT e.user_id) FILTER(WHERE e.event_name='add_lta_click')::text AS add_lta,
-      COUNT(DISTINCT e.user_id) FILTER(WHERE e.event_name='connector_connected')::text AS connected,
-      COUNT(DISTINCT e.user_id) FILTER(WHERE e.event_name='first_read_success')::text AS first_read,
-      COUNT(DISTINCT e.user_id) FILTER(WHERE e.event_name='second_read_success')::text AS second_read
-    FROM product_activation_events e
-    JOIN users u ON u.id=e.user_id
-    WHERE (e.utm_source IS NOT NULL OR e.utm_campaign IS NOT NULL OR e.utm_content IS NOT NULL)
+  }>(`WITH funnel AS (
+      SELECT user_id,event_name,utm_source,utm_campaign,utm_content,created_at
+      FROM website_events
+      WHERE event_name='add_lta_click' AND user_id IS NOT NULL
+      UNION ALL
+      SELECT user_id,event_name,utm_source,utm_campaign,utm_content,created_at
+      FROM product_activation_events
+      WHERE event_name IN ('connector_connected','first_read_success','second_read_success')
+    )
+    SELECT
+      f.utm_source,f.utm_campaign,f.utm_content,
+      COUNT(DISTINCT f.user_id) FILTER(WHERE f.event_name='add_lta_click')::text AS add_lta,
+      COUNT(DISTINCT f.user_id) FILTER(WHERE f.event_name='connector_connected')::text AS connected,
+      COUNT(DISTINCT f.user_id) FILTER(WHERE f.event_name='first_read_success')::text AS first_read,
+      COUNT(DISTINCT f.user_id) FILTER(WHERE f.event_name='second_read_success')::text AS second_read
+    FROM funnel f
+    JOIN users u ON u.id=f.user_id
+    WHERE (f.utm_source IS NOT NULL OR f.utm_campaign IS NOT NULL OR f.utm_content IS NOT NULL)
       AND COALESCE(lower(u.email),'')<>$1
       AND COALESCE(u.analytics_excluded,false)=false
-    GROUP BY e.utm_source,e.utm_campaign,e.utm_content
-    ORDER BY MAX(e.created_at) DESC
+    GROUP BY f.utm_source,f.utm_campaign,f.utm_content
+    ORDER BY MAX(f.created_at) DESC
     LIMIT 20`,[founderEmail]);
 
   const providerHealthResult=await pool.query<{
