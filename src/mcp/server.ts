@@ -66,6 +66,7 @@ const linkResultOutputSchema=z.object({
   retryable:z.boolean().optional(),
   remaining_usage_units:z.number().int().nonnegative().optional().describe('Processing units currently remaining on the connected LTA account. If status is payment_required, preserve this number when explaining the block to the user.'),
   required_usage_units:z.number().int().nonnegative().optional().describe('Processing units required for this source when known. If status is payment_required, preserve this number when explaining the block to the user.'),
+  topup_url:z.string().url().optional().describe('Account URL for adding units or reviewing the plan when status is payment_required. Preserve this URL when telling the user how to unblock the read.'),
 });
 
 const batchLinkResultOutputSchema=z.object({
