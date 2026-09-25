@@ -497,17 +497,28 @@ app.get('/start',async(req,reply)=>{
   const from=['nav','hero','footer','faq','pricing'].includes(fromRaw)?fromRaw:'other';
   await trackWebsiteEvent(req,'cta_start','/',{from});
   await trackWebsiteEvent(req,'connect_install_click','/',{from});
+  await trackWebsiteEvent(req,'add_lta_click','/',{from});
   const current=await userFromSessionCookie(req.headers.cookie).catch(()=>null);
-  if(current?.id)await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude',from}});
+  if(current?.id){
+    await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude',from}});
+    await recordActivationEvent(current.id,'add_lta_click',{distributionProfile:'default',metadata:{host:'claude',from}});
+  }
   return reply.redirect(claudeInstallUrl());
 });
 app.get('/connect/start',async(req,reply)=>{
-  await trackWebsiteEvent(req,'connect_install_click','/connect');  const current=await userFromSessionCookie(req.headers.cookie).catch(()=>null);  if(current?.id)await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude'}});
+  await trackWebsiteEvent(req,'connect_install_click','/connect');
+  await trackWebsiteEvent(req,'add_lta_click','/connect',{from:'connect'});
+  const current=await userFromSessionCookie(req.headers.cookie).catch(()=>null);
+  if(current?.id){
+    await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude',from:'connect'}});
+    await recordActivationEvent(current.id,'add_lta_click',{distributionProfile:'default',metadata:{host:'claude',from:'connect'}});
+  }
   return reply.redirect(claudeInstallUrl());
 });
 
 app.get('/',async(req,reply)=>{
   await trackWebsiteVisit(req,reply,'/');
+  await trackWebsiteEvent(req,'landing_view','/');
   return reply.type('text/html').send(siteShell(`<main id="main-content" class="activation-site signal-home" data-activation-home>
     <section class="signal-stage" id="simulation"><div class="signal-dust" aria-hidden="true"></div><div class="a-container signal-stage-inner">
       <header class="signal-intro">
@@ -653,8 +664,9 @@ app.get('/connect',async(req,reply)=>{
       </section>
       <section class="a-connect-panel a-connected" id="connected-next" aria-labelledby="connected-title" hidden>
         <span class="a-connected-mark" aria-hidden="true">✓</span>
-        <div><h2 id="connected-title">Connected ✓ Authorization is finished.</h2><p>Connected means authorization is finished. Make LTA available in this Claude conversation, then run one real test.</p></div>
+        <div><h2 id="connected-title">Connected ✓ Authorization is finished.</h2><p>Connected means authorization is finished. Your next job is one real read — not the dashboard.</p></div>
         <div class="a-next"><strong>Now in Claude</strong><span class="a-command">+ → Connectors → LTA</span></div>
+        <a class="a-primary" href="https://claude.ai/" target="_blank" rel="noopener">Open Claude <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
         <div class="a-test" id="first-test"><h3>Paste this test link and question</h3><p>Use a known real public Reel. LTA will bring its available source content into Claude.</p>
           <div class="a-test-row"><code id="test-url">https://www.instagram.com/reel/Ddx6Q_MJNyg/</code><button type="button" data-copy="test-url" aria-label="Copy Instagram Reel URL">Copy link</button></div>
           <div class="a-test-row"><span id="test-prompt">Summarize this Instagram Reel and list the main claims.</span><button type="button" data-copy="test-prompt" aria-label="Copy first question">Copy question</button></div>
@@ -685,7 +697,11 @@ app.get('/api/connect/status',async(req,reply)=>{
     [user.id,since]
   );
   const connected=Boolean(r.rows[0]?.connected);
-  if(connected)await trackWebsiteEvent(req,'connect_complete','/connect');
+  if(connected){
+    await trackWebsiteEvent(req,'connect_complete','/connect');
+    await trackWebsiteEvent(req,'oauth_success','/connect');
+    await trackWebsiteEvent(req,'connector_connected','/connect');
+  }
   return reply.send({authenticated:true,connected});
 });
 
