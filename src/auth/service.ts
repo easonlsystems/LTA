@@ -778,6 +778,8 @@ export async function createAuthorizationCode(input: {userId:string;clientId:str
 
 export async function exchangeAuthorizationCode(input: {code:string;clientId:string;redirectUri:string;codeVerifier:string;resource?:string;issuedResourceOverride?:string}): Promise<{access_token:string;refresh_token?:string;expires_in:number;scope:string}> {
   const client = await pool.connect();
+  let analyticsUserId:string|undefined;
+  let analyticsProfile='default';
   try {
     await client.query('BEGIN');
     const r = await client.query<{id:string;user_id:string;client_id:string;redirect_uri:string;code_challenge:string;resource:string;scope:string}>(
@@ -786,6 +788,7 @@ export async function exchangeAuthorizationCode(input: {code:string;clientId:str
     );
     if (!r.rowCount) throw new Link2AIError('AUTH_REQUIRED','Authorization code is invalid or expired.',401);
     const row = r.rows[0];
+    analyticsUserId=row.user_id;
     const requestedResource=input.resource?normalizeResource(input.resource):row.resource;
     const override=input.issuedResourceOverride?normalizeResource(input.issuedResourceOverride):null;
     const compatibilityNarrowing=override===mcpResource('openai')&&requestedResource===mcpResource()&&row.resource===mcpResource();
@@ -793,6 +796,7 @@ export async function exchangeAuthorizationCode(input: {code:string;clientId:str
       throw new Link2AIError('AUTH_REQUIRED','OAuth code verification failed.',401);
     }
     const issuedResource=compatibilityNarrowing?mcpResource('openai'):row.resource;
+    analyticsProfile=issuedResource===mcpResource('openai')?'openai':'default';
     await client.query('UPDATE oauth_codes SET consumed_at=now() WHERE id=$1',[row.id]);
     const access = randomToken(32);
     await client.query(
@@ -814,10 +818,23 @@ export async function exchangeAuthorizationCode(input: {code:string;clientId:str
       distribution_profile:issuedResource===mcpResource('openai')?'openai':'default'
     });
     await recordActivationEvent(row.user_id,'connection_success',{
-      distributionProfile:issuedResource===mcpResource('openai')?'openai':'default'
+      distributionProfile:analyticsProfile
+    });
+    await recordActivationEvent(row.user_id,'oauth_success',{
+      distributionProfile:analyticsProfile
+    });
+    await recordActivationEvent(row.user_id,'connector_connected',{
+      distributionProfile:analyticsProfile
     });
     return { access_token: access, ...(refresh?{refresh_token:refresh}:{}), expires_in: 3600, scope: row.scope };
-  } catch(err) { await client.query('ROLLBACK'); throw err; }
+  } catch(err) {
+    await client.query('ROLLBACK');
+    if(analyticsUserId){
+      const reason=err instanceof Link2AIError?err.code:'INTERNAL_ERROR';
+      await recordActivationEvent(analyticsUserId,'oauth_fail',{distributionProfile:analyticsProfile,metadata:{reason}});
+    }
+    throw err;
+  }
   finally { client.release(); }
 }
 
