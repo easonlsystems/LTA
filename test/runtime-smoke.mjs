@@ -51,7 +51,7 @@ try{
     if(route==='/'){
       assert.match(body,/<nav class="home-nav" aria-label="Primary">/);
       assert.match(body,/class="activation-site signal-home"/);
-      assert.match(body,/Your AI got the link\. <em>LTA brings the source\.<\/em>/);
+      assert.match(body,/Your AI got the link\.<\/span><em>LTA brings the source\.<\/em>/);
       assert.match(body,/LIVE SOURCE RELAY/);
       assert.match(body,/Add LTA to Claude/);
       assert.match(body,/RECORDED PUBLIC TEST/);
@@ -61,10 +61,10 @@ try{
       assert.match(body,/class="signal-console" id="proof"/);
       assert.match(body,/href="\/sources"/);
       assert.match(body,/href="\/pricing"/);
-      assert.match(body,/href="\/developers#mcp"/);
+      assert.match(body,/href="\/developers"/);
       assert.match(body,/href="\/developers">Developers<\/a>/);
       assert.match(body,/API key/);
-      assert.match(body,/src="\/home\.js\?v=signal-relay-v1" defer/);
+      assert.match(body,/src="\/home\.js\?v=signal-relay-v2" defer/);
       assert.doesNotMatch(body,/One missing layer/i);
       assert.doesNotMatch(body,/What do you want Claude to read\?/);
       assert.doesNotMatch(body,/Try the link Claude just failed to read\./);
