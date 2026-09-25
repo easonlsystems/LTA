@@ -209,7 +209,7 @@ nav{background:transparent!important;border-bottom-color:transparent!important;b
   .navlinks{gap:6px}
   .mobile-menu summary{width:40px;height:40px;padding:0;display:grid;place-items:center;font-size:0;border-radius:12px;background:#fff}
   .mobile-menu summary:after{content:"☰";font-size:16px;line-height:1;color:#4e4857}
-  .mobile-menu-panel{top:46px;right:-92px;min-width:210px;border-radius:16px}
+  .mobile-menu-panel{top:46px;right:0;min-width:210px;border-radius:16px}
   .navlinks .btn{min-height:40px;padding:9px 12px;font-size:11px}
   .experience-home .home-inner{padding-left:18px;padding-right:18px}
   .home-nav{left:max(14px,env(safe-area-inset-left));right:max(14px,env(safe-area-inset-right));width:auto;transform:none}
@@ -294,7 +294,7 @@ nav{background:transparent!important;border-bottom-color:transparent!important;b
   .experience-home .home-inner{padding-left:14px;padding-right:14px}
   .experience-hero h1{font-size:36px}
   .proof-slot{flex-basis:88%}
-  .mobile-menu-panel{right:-86px}
+  .mobile-menu-panel{right:0}
 }
 
 /* Simplified comparison interaction · 2026-09-17 */
