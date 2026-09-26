@@ -46,6 +46,7 @@ try{
   for(const route of ['/','/examples','/use-cases','/sources','/pricing','/connect','/support','/privacy','/terms']){
     const page=await fetch(`http://127.0.0.1:${port}${route}`,{headers:{host:'link2ai.example'}});
     assert.equal(page.status,200,`${route} should return 200`);
+    assert.match(page.headers.get('cache-control')??'',/no-cache|no-store/,`${route} HTML must revalidate after a production deploy`);
     const body=await page.text();
     assert.match(body,/LaunchBrand/);
     if(route==='/'){
@@ -337,7 +338,10 @@ try{
 
   const login=await fetch(`http://127.0.0.1:${port}/login?return_to=%2Faccount`,{headers:{host:'link2ai.example'}});
   assert.equal(login.status,200);
+  assert.match(login.headers.get('cache-control')??'',/no-store/);
   const loginText=await login.text();
+  assert.match(loginText,/data-auth-v2/);
+  assert.match(loginText,/background:#17141c/);
   assert.match(loginText,/Sign in to continue/);
   assert.match(loginText,/Continue with Google/);
   assert.match(loginText,/never sees or stores your Google password/);
@@ -351,7 +355,10 @@ try{
 
   const signup=await fetch(`http://127.0.0.1:${port}/signup?return_to=%2Faccount`,{headers:{host:'link2ai.example'}});
   assert.equal(signup.status,200);
+  assert.match(signup.headers.get('cache-control')??'',/no-store/);
   const signupText=await signup.text();
+  assert.match(signupText,/data-auth-v2/);
+  assert.match(signupText,/background:#17141c/);
   assert.match(signupText,/Create your LTA account/);
   assert.match(signupText,/Continue with Google/);
   assert.match(signupText,/auth\/google\/start/);
