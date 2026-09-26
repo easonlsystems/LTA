@@ -1,0 +1,36 @@
+name: Temporary production browser smoke
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  browser-smoke:
+    if: github.head_ref == 'chore/prod-browser-smoke-a919a71'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run desktop and mobile live Chromium smoke
+        env:
+          LTA_BASE_URL: https://api-production-0383e.up.railway.app
+          LTA_EXPECTED_REVISION: a919a71cbb2ffe662c7f95ba01ea78d170309916
+        run: |
+          mkdir -p /tmp/lta-browser-smoke
+          cd /tmp/lta-browser-smoke
+          npm init -y >/dev/null 2>&1
+          npm install --no-audit --no-fund playwright@1.57.0
+          npx playwright install --with-deps chromium
+          cp "$GITHUB_WORKSPACE/test/production-browser-smoke.mjs" ./production-browser-smoke.mjs
+          node ./production-browser-smoke.mjs
+      - name: Upload browser smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lta-production-browser-smoke-a919a71
+          path: /tmp/lta-browser-smoke/browser-smoke-artifacts
+          if-no-files-found: warn
