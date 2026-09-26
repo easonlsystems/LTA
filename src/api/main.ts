@@ -36,6 +36,18 @@ app.addContentTypeParser('application/x-www-form-urlencoded',{parseAs:'string'},
   try{return done(null,Object.fromEntries(new URLSearchParams(String(body??''))));}catch(err){return done(err as Error,undefined);}
 });
 
+app.addHook('onSend',async(request,reply,payload)=>{
+  const contentType=String(reply.getHeader('content-type')??'');
+  if(!contentType.includes('text/html'))return payload;
+  const path=request.url.split('?')[0];
+  if(/^\/(?:login|signup|oauth\/|auth\/|account(?:\/|$)|billing(?:\/|$))/.test(path)){
+    reply.header('Cache-Control','no-store, max-age=0').header('Pragma','no-cache');
+  }else{
+    reply.header('Cache-Control','no-cache, must-revalidate');
+  }
+  return payload;
+});
+
 const mcpHandler=createMcpHandler(()=>buildMcpServer());
 const nodeMcp=toNodeHandler(mcpHandler,{onerror:(err)=>logErrorEvent('mcp_adapter_error',err,{distribution_profile:'default'})});
 const openaiMcpHandler=createMcpHandler(()=>buildMcpServer('openai'));
