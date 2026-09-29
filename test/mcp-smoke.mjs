@@ -229,10 +229,19 @@ try{
   assert.doesNotMatch(JSON.stringify(openaiListed.result.tools),/get_video_transcript|get_video_time_range|get_video_map/);
   assert.match(openaiListed.result.tools[0].description,/YouTube\/Shorts, TikTok, Instagram, X, Bluesky, GitHub Issue\/PR, Hacker News, readable webpage\/article, or text-layer PDF/i);
   assert.match(openaiListed.result.tools[0].description,/Read one supported public URL/i);
+  const openaiReadSchema=openaiListed.result.tools.find(tool=>tool.name==='read_public_link').outputSchema.properties;
+  for(const field of ['source_key','source_fetched_at','cache_expires_at','extracted_token_estimate','transcript_source','transcript','topup_path']){
+    assert.equal(openaiReadSchema[field],undefined,`OpenAI read schema must omit internal/redundant field ${field}`);
+  }
+  const openaiFindSchema=openaiListed.result.tools.find(tool=>tool.name==='find_in_link').outputSchema.properties;
+  assert.equal(openaiFindSchema.source_key,undefined,'OpenAI find_in_link must omit the internal source key');
   const openaiUsageSchema=openaiListed.result.tools.find(tool=>tool.name==='get_usage').outputSchema.properties;
   assert.ok(openaiUsageSchema.remaining_usage_units,'OpenAI get_usage must expose authoritative remaining units');
   assert.equal(openaiUsageSchema.remaining_seconds,undefined,'OpenAI get_usage must not expose legacy seconds metadata');
   assert.equal(openaiUsageSchema.remaining_links,undefined,'OpenAI get_usage must not expose legacy link-count metadata');
+  assert.equal(openaiUsageSchema.concurrent_jobs,undefined,'OpenAI get_usage must omit internal concurrency state');
+  assert.equal(openaiUsageSchema.concurrency_limit,undefined,'OpenAI get_usage must omit internal concurrency limits');
+  assert.equal(openaiUsageSchema.quota_exempt,undefined,'OpenAI get_usage must omit internal exemption flags');
   for(const tool of openaiListed.result.tools){
     assert.deepEqual(tool.securitySchemes,[{type:'oauth2',scopes:['link2ai:read']}],tool.name+' must declare OAuth explicitly on the ChatGPT endpoint');
     assert.ok(tool.outputSchema&&tool.outputSchema.type==='object',tool.name+' must publish an output schema on the ChatGPT endpoint');

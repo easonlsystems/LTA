@@ -70,7 +70,7 @@ const linkResultOutputSchema=z.object({
   topup_path:z.string().optional().describe('LTA account path for adding units or reviewing the plan when status is payment_required. Tell the user to open LTA → Account to unblock the read.'),
 });
 
-const openaiLinkResultOutputSchema=linkResultOutputSchema.omit({topup_path:true});
+const openaiLinkResultOutputSchema=linkResultOutputSchema.omit({topup_path:true,source_key:true,source_fetched_at:true,cache_expires_at:true,extracted_token_estimate:true,transcript_source:true,transcript:true});
 
 const batchLinkResultOutputSchema=z.object({
   status:z.literal('batch'),
@@ -140,6 +140,8 @@ const sourceSearchOutputSchema=z.object({
   message:z.string().optional()
 });
 
+const openaiSourceSearchOutputSchema=sourceSearchOutputSchema.omit({source_key:true});
+
 const videoMapOutputSchema=z.object({
   status:z.enum(['completed','processing','payment_required','failed']),
   job_id:z.string().uuid().optional(),
@@ -183,10 +185,7 @@ const openaiUsageOutputSchema=z.object({
   used_usage_units:z.number().int().nonnegative().describe('Authoritative processing units consumed in the current allowance period.'),
   limit_usage_units:z.number().int().nonnegative().describe('Authoritative processing-unit allowance currently available to the account for this period, including applicable rollover/bonus units.'),
   remaining_usage_units:z.number().int().nonnegative().describe('Authoritative processing units remaining. Use this field to answer questions about how many LTA processing units are left.'),
-  concurrent_jobs:z.number().int().nonnegative(),
-  concurrency_limit:z.number().int().nonnegative(),
-  period_end:z.string().nullable().optional(),
-  quota_exempt:z.boolean().optional().describe('True only for founder/internal test accounts. When true, source reads are not charged processing units and the normal unit balance does not block testing.')
+  period_end:z.string().nullable().optional()
 });
 
 type Link2AIHandlerContext={http?:{authInfo?:AuthInfo & {extra?:{userId?:unknown;clientSource?:unknown}}}};
@@ -354,16 +353,34 @@ function applyVisualDelivery(data:Record<string,unknown>,delivery:{
   };
 }
 
-async function linkToolResponse(result:ToolJobResult,offset=0,maxChars=MAX_CHARS,includeVisuals=true){
+function minimizeOpenAiLinkData(data:Record<string,unknown>):Record<string,unknown>{
+  const {
+    source_key:_sourceKey,
+    source_fetched_at:_sourceFetchedAt,
+    cache_expires_at:_cacheExpiresAt,
+    extracted_token_estimate:_tokenEstimate,
+    transcript_source:_transcriptSource,
+    transcript:_legacyTranscript,
+    topup_path:_topupPath,
+    ...publicData
+  }=data;
+  return publicData;
+}
+
+async function linkToolResponse(result:ToolJobResult,offset=0,maxChars=MAX_CHARS,includeVisuals=true,minimizeForOpenAI=false){
   let data=chunkResult(result,offset,maxChars);
-  if(result.status!=='completed'||!includeVisuals||offset!==0)return toolResponse(data);
+  if(result.status!=='completed'||!includeVisuals||offset!==0){
+    if(minimizeForOpenAI)data=minimizeOpenAiLinkData(data);
+    return toolResponse(data);
+  }
   const delivery=await loadVisualImagePage(result,0,MAX_INLINE_VISUAL_ASSETS);
   data=applyVisualDelivery(data,delivery);
+  if(minimizeForOpenAI)data=minimizeOpenAiLinkData(data);
   return toolResponse(data,false,delivery.blocks);
 }
 
-async function safeLinkToolCall(action:()=>Promise<ToolJobResult>,offset=0,maxChars=MAX_CHARS,includeVisuals=true){
-  try{return await linkToolResponse(await action(),offset,maxChars,includeVisuals);}
+async function safeLinkToolCall(action:()=>Promise<ToolJobResult>,offset=0,maxChars=MAX_CHARS,includeVisuals=true,minimizeForOpenAI=false){
+  try{return await linkToolResponse(await action(),offset,maxChars,includeVisuals,minimizeForOpenAI);}
   catch(error){
     const err=asLink2AIError(error);
     return toolResponse({status:'failed',error_code:err.code,message:publicErrorMessage(err.code),retryable:err.retryable,usage_units:0},true);
@@ -564,7 +581,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
     _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true}
   } as any;
-  const readPublicLink=async(args:Record<string,unknown>,ctx:any)=>{const {url,refresh}=args as {url:string;refresh?:boolean};return safeLinkToolCall(async()=>await startTranscriptJob(userIdFromContext(ctx),url,{refresh:Boolean(refresh),profile,clientSource:clientSourceFromContext(ctx,profile)}));};
+  const readPublicLink=async(args:Record<string,unknown>,ctx:any)=>{const {url,refresh}=args as {url:string;refresh?:boolean};return safeLinkToolCall(async()=>await startTranscriptJob(userIdFromContext(ctx),url,{refresh:Boolean(refresh),profile,clientSource:clientSourceFromContext(ctx,profile)}),0,MAX_CHARS,true,openaiProfile);};
 
   server.registerTool('read_public_link',readPublicLinkConfig,readPublicLink);
 
@@ -599,7 +616,8 @@ export function buildMcpServer(profile:DistributionProfile='default'){
     const results=await Promise.all(unique.map(async(inputUrl)=>{
       try{
         const result=await startTranscriptJob(userId,inputUrl,{refresh:Boolean(refresh),profile,clientSource:clientSourceFromContext(ctx,profile)});
-        return {input_url:inputUrl,...chunkResult(result,0,perSourceInitialChars)};
+        const item={input_url:inputUrl,...chunkResult(result,0,perSourceInitialChars)};
+        return openaiProfile?{input_url:inputUrl,...minimizeOpenAiLinkData(item)}:item;
       }catch(error){
         const err=asLink2AIError(error);
         return {input_url:inputUrl,status:'failed' as const,error_code:err.code,message:publicErrorMessage(err.code),retryable:err.retryable,usage_units:0};
@@ -631,7 +649,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
     securitySchemes:LINK2AI_OAUTH_SECURITY,
     _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}
-  } as any,async(args:Record<string,unknown>,ctx:any)=>{const {job_id,offset,max_chars}=args as {job_id:string;offset?:number;max_chars?:number};return safeLinkToolCall(async()=>await getJobResult(userIdFromContext(ctx),job_id,profile),offset??0,max_chars??MAX_CHARS,true);});
+  } as any,async(args:Record<string,unknown>,ctx:any)=>{const {job_id,offset,max_chars}=args as {job_id:string;offset?:number;max_chars?:number};return safeLinkToolCall(async()=>await getJobResult(userIdFromContext(ctx),job_id,profile),offset??0,max_chars??MAX_CHARS,true,openaiProfile);});
 
   server.registerTool('get_visual_assets',{
     title:'Get attached images',
@@ -714,21 +732,22 @@ export function buildMcpServer(profile:DistributionProfile='default'){
       query:z.string().trim().min(2).max(500),
       max_matches:z.number().int().min(1).max(10).optional()
     },
-    outputSchema:sourceSearchOutputSchema.shape,
+    outputSchema:(openaiProfile?openaiSourceSearchOutputSchema:sourceSearchOutputSchema).shape,
     securitySchemes:LINK2AI_OAUTH_SECURITY,
     _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}
   } as any,async(args:Record<string,unknown>,ctx:any)=>safeToolCall(async()=>{
     const {job_id,query,max_matches}=args as {job_id:string;query:string;max_matches?:number};
     const result=await getJobResult(userIdFromContext(ctx),job_id,profile);
-    if(result.status!=='completed')return result as unknown as Record<string,unknown>;
+    if(result.status!=='completed')return openaiProfile?minimizeOpenAiLinkData(result as unknown as Record<string,unknown>):result as unknown as Record<string,unknown>;
     const transcript=result.transcript??'';
     const videoSegments=result.transcript_source!=='post'&&result.transcript_source!=='page'?(result.segments??[]):[];
     const matches=videoSegments.length
       ? searchVideoSegments(videoSegments,query,max_matches??5)
       : searchSourceText(transcript,query,max_matches??5);
     return {
-      status:'completed',job_id:result.job_id,source_url:result.source_url,source_key:result.source_key,
+      status:'completed',job_id:result.job_id,source_url:result.source_url,
+      ...(openaiProfile?{}:{source_key:result.source_key}),
       query,matches,
       ...(matches.length?{}:{message:openaiProfile?'No lexical match was found. Try broader concepts/synonyms or continue reading the source; this does not prove the topic is absent.':'No lexical match was found. Try broader concepts/synonyms, inspect the video map, or continue reading the source; this does not prove the topic is absent.'})
     };
@@ -764,7 +783,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
 
   server.registerTool('get_usage',{
     title:`Check ${env().PUBLIC_BRAND_NAME} usage`,
-    description:`Return the connected user's current ${env().PUBLIC_BRAND_NAME} plan, processing-unit usage, remaining processing units, concurrency usage, and current allowance period. remaining_usage_units is the authoritative available processing-unit balance. Legacy seconds/link fields may also be present on the default distribution for backward compatibility.`,
+    description:openaiProfile?`Return the connected user's current ${env().PUBLIC_BRAND_NAME} plan, processing-unit usage, remaining processing units, and current allowance period. remaining_usage_units is the authoritative available processing-unit balance.`:`Return the connected user's current ${env().PUBLIC_BRAND_NAME} plan, processing-unit usage, remaining processing units, concurrency usage, and current allowance period. remaining_usage_units is the authoritative available processing-unit balance. Legacy seconds/link fields may also be present on the default distribution for backward compatibility.`,
     inputSchema:{},
     outputSchema:(openaiProfile?openaiUsageOutputSchema:usageOutputSchema).shape,
     securitySchemes:LINK2AI_OAUTH_SECURITY,
