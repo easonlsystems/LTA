@@ -2,33 +2,49 @@
 
 Use the dedicated production reviewer account supplied privately in the OpenAI submission portal. No MFA, email confirmation, SMS confirmation, or private-network access may be required.
 
-The ChatGPT distribution is intentionally limited to individual public Bluesky posts, public GitHub Issues / pull requests, and Hacker News items / discussions. Other LTA distributions may support additional source types, but those source types are not available through the ChatGPT distribution. Failed reads consume 0 processing units. Profiles, feeds, timelines, broad crawling, private/login-only content, and paywall/DRM bypass remain unsupported.
+The ChatGPT distribution uses the same supported-source matrix as LTA's default/Claude distribution. Failed reads consume 0 processing units. Profiles, feeds, timelines, broad crawling, private/login-only content, paywall/DRM bypass, and visual-only claims not represented in returned text remain unsupported.
 
 ## Positive cases — exactly 5
 
-### P1 — Bluesky post
+### P1 — Instagram Reel
 **Prompt**
-Use LTA to read this Bluesky post and summarize the post plus the main public replies: https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f
+Use LTA to read this Instagram Reel and summarize the main points: https://www.instagram.com/reel/DdNnHPip4RD/
 
 **Expected behavior**
-- Invoke `read_public_link` for the exact Bluesky post.
-- Return the post text and available public-thread context with exact source identity.
-- If continuation is required, continue with `get_transcript_result`.
-- Keep source completeness limitations explicit.
+- Invoke `read_public_link` for the exact Reel.
+- Return available spoken/caption text and exact source identity.
+- If processing is still running, continue with `get_transcript_result`.
+- Do not invent visual-only details that are not represented in returned text.
 
 **Expected result structure**
-A concise source-grounded summary of the post and available public replies.
+A concise Reel summary grounded in LTA's returned transcript/source text.
 
 **Fixture**
-`https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f` — public Bluesky post used by the LTA reviewer demo.
+`https://www.instagram.com/reel/DdNnHPip4RD/` — public Reel previously verified in production LTA testing.
 
-### P2 — Hacker News discussion
+### P2 — YouTube video
+**Prompt**
+Use LTA to read this YouTube video and summarize what it explains: https://www.youtube.com/watch?v=M7lc1UVf-VE
+
+**Expected behavior**
+- Invoke `read_public_link` for the exact public YouTube URL.
+- Prefer usable captions when available and use the configured media/transcription fallback when needed.
+- If processing is still running, continue with `get_transcript_result`.
+- Do not invent visual-only details that are not represented in returned text.
+
+**Expected result structure**
+A concise content-grounded summary based on the source text returned by LTA.
+
+**Fixture**
+`https://www.youtube.com/watch?v=M7lc1UVf-VE` — public YouTube fixture.
+
+### P3 — Hacker News discussion
 **Prompt**
 Read this Hacker News discussion with LTA and summarize the strongest disagreements and the evidence each side gives: https://news.ycombinator.com/item?id=37137448
 
 **Expected behavior**
 - Invoke `read_public_link` for the exact Hacker News item.
-- Read the discussion returned through the Hacker News Firebase API path used by LTA.
+- Read the discussion returned through the official Hacker News Firebase API path used by LTA.
 - Follow `next_offset` while `continuation_required=true` if the delivered result spans multiple chunks.
 - Do not treat a partial delivery as the complete source.
 
@@ -37,22 +53,6 @@ A concise map of the main positions and the public comments supporting them.
 
 **Fixture**
 `https://news.ycombinator.com/item?id=37137448` — a compact Draw.io discussion with a clear disagreement about whether the project should be described as fully open source.
-
-### P3 — Find inside a GitHub pull request
-**Prompt**
-Use LTA to read this pull request, find where maxHeadersCount is discussed, and summarize the relevant change: https://github.com/nodejs/node/pull/65472
-
-**Expected behavior**
-- Invoke `read_public_link` for the exact pull request.
-- Use `find_in_link` on the processed result to locate the relevant discussion.
-- Treat search as a locator rather than proof that omitted text does not exist.
-- Attribute the summary to the pull request.
-
-**Expected result structure**
-A concise explanation of the maxHeadersCount-related change grounded in the pull request and its discussion.
-
-**Fixture**
-`https://github.com/nodejs/node/pull/65472` — a compact Node.js pull request for the maxHeadersCount documentation fix.
 
 ### P4 — Multi-source GitHub comparison
 **Prompt**
@@ -89,10 +89,10 @@ Dedicated production reviewer account.
 
 ### N1 — Broad profile/feed crawl
 **Prompt**
-Use LTA to crawl every post from this Bluesky profile and summarize the account: https://bsky.app/profile/bsky.app
+Use LTA to crawl every post from this Instagram profile and summarize the account: https://www.instagram.com/instagram/
 
 **Expected behavior**
-Do not perform broad crawling. Explain that the ChatGPT distribution of LTA reads supported exact public source URLs rather than profiles, feeds, timelines, or bulk collections.
+Do not perform broad crawling. Explain that LTA reads supported exact public source URLs rather than profiles, feeds, timelines, or bulk collections.
 
 **Why the plugin must not complete the requested operation**
 Broad crawling is outside LTA's declared product scope and supported-source contract.
@@ -109,7 +109,7 @@ The user's explicit instruction not to use external fetching must take precedenc
 
 ### N3 — URL is incidental
 **Prompt**
-Save this link for later: https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f
+Save this link for later: https://www.youtube.com/watch?v=M7lc1UVf-VE
 
 **Expected behavior**
 Do not invoke LTA merely because a supported URL appears in the conversation.

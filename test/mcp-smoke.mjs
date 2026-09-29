@@ -215,7 +215,7 @@ try{
   assert.ok(listed.result.tools[7].outputSchema.properties.sections,'get_video_map must expose timeline sections');
 
   const openaiInitialized=await callOpenai({jsonrpc:'2.0',id:20,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'openai-audit',version:'1'}}});
-  assert.match(openaiInitialized.result.instructions??'',/intentionally limited to Bluesky, GitHub Issue\/PR, and Hacker News/i);
+  assert.match(openaiInitialized.result.instructions??'',/same supported-source matrix as LTA's default\/Claude distribution/i);
   assert.match(openaiInitialized.result.instructions??'',/provides AI-readable context from supported public links/i);
   assert.doesNotMatch(openaiInitialized.result.instructions??'',/use get_video_time_range|use get_video_map/i);
   assert.deepEqual(
@@ -227,7 +227,7 @@ try{
   const openaiListed=await callOpenai({jsonrpc:'2.0',id:21,method:'tools/list',params:{}});
   assert.deepEqual(openaiListed.result.tools.map(tool=>tool.name),['read_public_link','read_public_links','get_transcript_result','get_visual_assets','find_in_link','get_usage']);
   assert.doesNotMatch(JSON.stringify(openaiListed.result.tools),/get_video_transcript|get_video_time_range|get_video_map/);
-  assert.match(openaiListed.result.tools[0].description,/Bluesky, GitHub Issue\/PR, or Hacker News/i);
+  assert.match(openaiListed.result.tools[0].description,/YouTube\/Shorts, TikTok, Instagram, X, Bluesky, GitHub Issue\/PR, Hacker News, readable webpage\/article, or text-layer PDF/i);
   assert.match(openaiListed.result.tools[0].description,/Read one supported public URL/i);
   const openaiUsageSchema=openaiListed.result.tools.find(tool=>tool.name==='get_usage').outputSchema.properties;
   assert.ok(openaiUsageSchema.remaining_usage_units,'OpenAI get_usage must expose authoritative remaining units');
