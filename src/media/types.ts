@@ -41,6 +41,8 @@ export interface MediaMetadata {
   title?: string;
   creator?: string;
   description?: string;
+  ageLimit?: number;
+  sensitive?: boolean;
   durationSeconds: number;
   subtitles: Record<string, Array<{ url: string; ext?: string; name?: string }>>;
   automaticCaptions: Record<string, Array<{ url: string; ext?: string; name?: string }>>;
