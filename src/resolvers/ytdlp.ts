@@ -165,7 +165,7 @@ export class YtDlpResolver implements MediaResolver {
       title: clipExternalText(raw.title,METADATA_LIMITS.title),
       creator: clipExternalText(typeof raw.uploader==='string'?raw.uploader:raw.channel,METADATA_LIMITS.creator),
       description: clipExternalText(raw.description,METADATA_LIMITS.description),
-      ageLimit:Number.isFinite(Number(raw.age_limit))?Math.max(0,Number(raw.age_limit)):undefined,
+      ...(Number.isFinite(Number(raw.age_limit))&&Number(raw.age_limit)>0?{ageLimit:Math.max(0,Number(raw.age_limit))}:{}),
       durationSeconds: duration,
       subtitles: normalizeEntries(raw.subtitles),
       automaticCaptions: normalizeEntries(raw.automatic_captions)
