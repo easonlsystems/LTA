@@ -776,16 +776,45 @@ export function buildMcpServer(profile:DistributionProfile='default'){
       })
     );
 
-    server.server.setRequestHandler('skills/list' as any,((request:any)=>{
-      const cursor=request?.params?.cursor;
-      if(cursor!==undefined&&cursor!==null&&cursor!=='')return {skills:[]};
-      return {skills:[openAiSkillEntry()]};
-    }) as any);
+    const skillResourceSchema=z.object({
+      uri:z.string(),
+      digest:z.string().regex(/^sha256:[0-9a-f]{64}$/)
+    });
+    const skillEntrySchema=z.object({
+      uri:z.string(),
+      frontmatter:z.object({
+        name:z.string(),
+        description:z.string()
+      }),
+      resources:z.array(skillResourceSchema)
+    });
 
-    server.server.setRequestHandler('skills/get' as any,((request:any)=>{
-      if(request?.params?.uri!==OPENAI_SKILL_URI)throw new Error('Unknown LTA skill URI.');
-      return {skill:openAiSkillEntry()};
-    }) as any);
+    server.server.setRequestHandler(
+      'skills/list',
+      {
+        params:z.object({cursor:z.string().optional()}),
+        result:z.object({
+          skills:z.array(skillEntrySchema),
+          nextCursor:z.string().optional()
+        })
+      },
+      async params=>{
+        if(params.cursor)return {skills:[]};
+        return {skills:[openAiSkillEntry()]};
+      }
+    );
+
+    server.server.setRequestHandler(
+      'skills/get',
+      {
+        params:z.object({uri:z.string()}),
+        result:z.object({skill:skillEntrySchema})
+      },
+      async params=>{
+        if(params.uri!==OPENAI_SKILL_URI)throw new Error('Unknown LTA skill URI.');
+        return {skill:openAiSkillEntry()};
+      }
+    );
   }
 
   // @modelcontextprotocol/server 2.0.0 serializes auth schemes only inside
