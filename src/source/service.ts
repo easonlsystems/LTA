@@ -9,6 +9,7 @@ import { planForUser, priorityForPlan } from '../worker/jobs.js';
 import { recordActivationEvent } from '../analytics/product.js';
 import { normalizeClientSource, type ClientSource } from './clientSource.js';
 import type { VisualAssetRef } from '../media/types.js';
+import { generalAudienceBlockReason } from '../safety/generalAudience.js';
 
 export interface ToolJobResult {
   status: 'processing'|'completed'|'payment_required'|'failed';
@@ -330,6 +331,26 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
   if(row.status==='completed'&&!row.transcript){
     await finalizeSourceAccessEvents(userId,{...row,error_code:'TRANSCRIPT_EXPIRED'},'failed');
     return {status:'failed',job_id:row.id,error_code:'TRANSCRIPT_EXPIRED',message:'This temporary result has expired. Call Read link content with the original link to read it again.',usage_units:0};
+  }
+  if(row.status==='completed'&&profile==='openai'){
+    const reason=generalAudienceBlockReason({
+      sourceUrl:String(row.normalized_url??row.source_url??''),
+      title:row.title,
+      description:row.caption,
+      text:row.transcript
+    });
+    if(reason){
+      await finalizeSourceAccessEvents(userId,{...row,error_code:'CONTENT_RESTRICTED'},'failed');
+      return {
+        status:'failed',
+        job_id:row.id,
+        platform:row.platform,
+        error_code:'CONTENT_RESTRICTED',
+        message:publicErrorMessage('CONTENT_RESTRICTED'),
+        retryable:false,
+        usage_units:0
+      };
+    }
   }
   if(row.status==='completed'){
     await recordActivationEvent(userId,'connector_enabled',{
