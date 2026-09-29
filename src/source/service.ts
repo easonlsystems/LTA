@@ -8,6 +8,7 @@ import { cacheProvenanceEpoch } from '../worker/cache.js';
 import { planForUser, priorityForPlan } from '../worker/jobs.js';
 import { recordActivationEvent } from '../analytics/product.js';
 import { normalizeClientSource, type ClientSource } from './clientSource.js';
+import { generalAudienceBlockReason } from '../safety/generalAudience.js';
 import type { VisualAssetRef } from '../media/types.js';
 
 export interface ToolJobResult {
@@ -330,6 +331,25 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
   if(row.status==='completed'&&!row.transcript){
     await finalizeSourceAccessEvents(userId,{...row,error_code:'TRANSCRIPT_EXPIRED'},'failed');
     return {status:'failed',job_id:row.id,error_code:'TRANSCRIPT_EXPIRED',message:'This temporary result has expired. Call Read link content with the original link to read it again.',usage_units:0};
+  }
+  if(profile==='openai'&&row.status==='completed'){
+    const audienceReason=generalAudienceBlockReason({
+      sourceUrl:row.normalized_url??row.source_url,
+      title:row.title,
+      description:row.caption,
+      text:row.transcript
+    });
+    if(audienceReason){
+      await finalizeSourceAccessEvents(userId,{...row,error_code:'CONTENT_RESTRICTED'},'failed');
+      return {
+        status:'failed',
+        job_id:row.id,
+        platform:row.platform,
+        error_code:'CONTENT_RESTRICTED',
+        message:'This source is outside LTA’s general-audience ChatGPT scope. No processing units were charged for this read.',
+        usage_units:0
+      };
+    }
   }
   if(row.status==='completed'){
     await recordActivationEvent(userId,'connector_enabled',{
