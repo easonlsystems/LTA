@@ -34,7 +34,7 @@ for(const [url,platform] of openaiBlocked){
   assert.equal(platformAllowedForProfile(parsedDefault.platform,'openai'),false);
   assert.throws(
     ()=>parseAllowedMediaUrl(url,'openai'),
-    error=>error?.code==='UNSUPPORTED_URL'&&error?.details?.cause_code==='openai_source_not_authorized'
+    error=>error?.code==='PLATFORM_BLOCKED'&&error?.details?.cause_code==='openai_source_not_authorized'
   );
 }
 
