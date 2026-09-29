@@ -34,7 +34,7 @@ export class XSyndicationResolver implements MediaResolver{
       title:video.title,
       creator:video.creator,
       description:video.description,
-      sensitive:video.sensitive,
+      ...(video.sensitive?{sensitive:true}:{}),
       durationSeconds:video.durationSeconds,
       subtitles:{},
       automaticCaptions:{}
