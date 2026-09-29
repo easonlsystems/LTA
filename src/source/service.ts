@@ -432,19 +432,19 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
 export async function usageForTool(userId:string,profile:DistributionProfile='default'){
   await recordActivationEvent(userId,'connector_enabled',{distributionProfile:profile,metadata:{inferred_from:'usage_tool_call'}});
   const usage=await getUsageSnapshot(userId);
-  const authoritative={
+  const publicUsage={
     plan:usage.plan,
     used_usage_units:usage.used_usage_units,
     limit_usage_units:usage.limit_usage_units,
     remaining_usage_units:usage.remaining_usage_units,
+    period_end:usage.period_end
+  };
+  if(profile==='openai')return publicUsage;
+  return {
+    ...publicUsage,
     concurrent_jobs:usage.concurrent_jobs,
     concurrency_limit:usage.concurrency_limit,
-    period_end:usage.period_end,
-    quota_exempt:usage.quota_exempt
-  };
-  if(profile==='openai')return authoritative;
-  return {
-    ...authoritative,
+    quota_exempt:usage.quota_exempt,
     used_seconds:usage.used_seconds,
     limit_seconds:usage.limit_seconds,
     remaining_seconds:usage.remaining_seconds,
