@@ -7,6 +7,7 @@ export type Link2AIErrorCode =
   | 'GEO_BLOCKED'
   | 'RATE_LIMITED'
   | 'PLATFORM_BLOCKED'
+  | 'CONTENT_RESTRICTED'
   | 'EXTRACTION_FAILED'
   | 'DOWNLOAD_TOO_LARGE'
   | 'DURATION_LIMIT_EXCEEDED'
@@ -50,6 +51,7 @@ export function publicErrorMessage(code:string):string{
     case 'GEO_BLOCKED': return 'This source is unavailable from LTA’s current processing region.';
     case 'RATE_LIMITED': return 'The source platform is temporarily rate-limiting access. Try again later.';
     case 'PLATFORM_BLOCKED': return 'This source is not available through this LTA distribution. No processing units were charged.';
+    case 'CONTENT_RESTRICTED': return 'This source is outside LTA’s general-audience ChatGPT scope. No processing units were charged.';
     case 'EXTRACTION_FAILED': return 'LTA could not retrieve a complete, reliable result from this source. No processing units were charged.';
     case 'DOWNLOAD_TOO_LARGE': return 'This source could not be processed within the current infrastructure limits. No processing units were charged.';
     case 'DURATION_LIMIT_EXCEEDED': return 'This source could not be processed within the current service limits. No processing units were charged.';
