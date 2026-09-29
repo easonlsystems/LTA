@@ -70,12 +70,22 @@ const linkResultOutputSchema=z.object({
   topup_path:z.string().optional().describe('LTA account path for adding units or reviewing the plan when status is payment_required. Tell the user to open LTA → Account to unblock the read.'),
 });
 
+const openaiLinkResultOutputSchema=linkResultOutputSchema.omit({topup_path:true});
+
 const batchLinkResultOutputSchema=z.object({
   status:z.literal('batch'),
   source_count:z.number().int().nonnegative(),
   unique_source_count:z.number().int().nonnegative(),
   per_source_initial_chars:z.number().int().positive(),
   results:z.array(linkResultOutputSchema.extend({input_url:z.string().url()}))
+});
+
+const openaiBatchLinkResultOutputSchema=z.object({
+  status:z.literal('batch'),
+  source_count:z.number().int().nonnegative(),
+  unique_source_count:z.number().int().nonnegative(),
+  per_source_initial_chars:z.number().int().positive(),
+  results:z.array(openaiLinkResultOutputSchema.extend({input_url:z.string().url()}))
 });
 
 const visualAssetOutputSchema=z.object({
@@ -549,7 +559,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
     title:'Read public link',
     description:`Read one supported public URL and return AI-readable source context plus source identity, completeness, provenance, usage, and continuation metadata. Supported source types include ${supportedSources}. Supported social image posts can include attached images as MCP image content blocks so the connected AI can inspect the original visuals directly. Use this when the requested task requires the contents of one supported public link. The optional refresh flag forces a fresh source read and may consume processing units again. Profiles, feeds, private/login-gated content, paywalled/DRM content, and broad crawling are outside this tool's scope.`,
     inputSchema:{url:z.string().url().describe('Supported public link whose contents are needed to answer the user'),refresh:z.boolean().optional().describe('Force a fresh source read only when freshness is explicitly required')},
-    outputSchema:linkResultOutputSchema.shape,
+    outputSchema:(openaiProfile?openaiLinkResultOutputSchema:linkResultOutputSchema).shape,
     securitySchemes:LINK2AI_OAUTH_SECURITY,
     _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true}
@@ -566,7 +576,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
       urls:z.array(z.string().url()).min(2).max(20).describe('Supported public links needed for one comparison or synthesis task'),
       refresh:z.boolean().optional().describe('Force fresh reads for all supplied sources only when freshness is explicitly required')
     },
-    outputSchema:batchLinkResultOutputSchema.shape,
+    outputSchema:(openaiProfile?openaiBatchLinkResultOutputSchema:batchLinkResultOutputSchema).shape,
     securitySchemes:LINK2AI_OAUTH_SECURITY,
     _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true}
@@ -617,7 +627,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
       offset:z.number().int().nonnegative().optional(),
       max_chars:z.number().int().min(1000).max(50000).optional()
     },
-    outputSchema:linkResultOutputSchema.shape,
+    outputSchema:(openaiProfile?openaiLinkResultOutputSchema:linkResultOutputSchema).shape,
     securitySchemes:LINK2AI_OAUTH_SECURITY,
     _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}
