@@ -192,5 +192,6 @@ assert.match(authenticatedWorkflowSource,/push:[\s\S]*branches: \["main"\]/,'Aut
 assert.match(authenticatedCertSource,/refresh:true/,'Live production canaries must bypass cache and exercise the current source providers');
 assert.match(authenticatedCertSource,/instagram-reel/,'Authenticated certification must include a real Instagram media canary');
 assert.match(authenticatedCertSource,/assert\.equal\(before\.data\.quota_exempt,true/,'Fresh canaries must require a no-charge internal certification account');
+assert.match(authServiceSource,/verifyReviewerLogin[\s\S]*analytics_excluded\) VALUES\(\$1,'pro','active',true\)[\s\S]*analytics_excluded=true/,'OpenAI reviewer login must keep the dedicated reviewer account quota-exempt and out of product analytics');
 
 console.log('release audit tests PASS');
