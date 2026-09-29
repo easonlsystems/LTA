@@ -129,6 +129,12 @@ assert.ok(longVideoMap.effective_window_seconds>=1170,'video map should widen wi
 assert.ok(longVideoMap.sections.length<=10);
 
 const handler=createMcpHandler(buildMcpServer);
+const openaiConstructionAudit=buildMcpServer('openai');
+assert.deepEqual(
+  openaiConstructionAudit.server.getCapabilities().extensions?.['io.modelcontextprotocol/skills'],
+  {},
+  'OpenAI MCP construction must retain the skills extension capability'
+);
 const openaiHandler=createMcpHandler(()=>buildMcpServer('openai'));
 const authInfo={
   token:'test',clientId:'test',scopes:['link2ai:read'],
@@ -154,8 +160,9 @@ async function callOpenai(body){
     headers:{'content-type':'application/json','accept':'application/json, text/event-stream'},
     body:JSON.stringify(body)
   }),{authInfo,parsedBody:body});
-  assert.equal(response.status,200);
   const text=await response.text();
+  assert.equal(response.status,200,'OpenAI MCP returned '+response.status+' for '+body.method+': '+text);
+
   const line=text.split(/\r?\n/).find(value=>value.startsWith('data: '));
   assert.ok(line,'OpenAI MCP response must contain an SSE data event');
   return JSON.parse(line.slice(6));
