@@ -12,7 +12,7 @@ export function platformAllowedForProfile(platform:Platform,profile:Distribution
 export function assertPlatformAllowedForProfile(platform:Platform,profile:DistributionProfile):void{
   if(platformAllowedForProfile(platform,profile))return;
   throw new Link2AIError(
-    'UNSUPPORTED_URL',
+    'PLATFORM_BLOCKED',
     'This source is not available through the ChatGPT distribution of LTA.',
     422,
     false,
