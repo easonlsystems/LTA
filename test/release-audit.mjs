@@ -44,6 +44,7 @@ assert.match(generalAudienceSource,/age_restricted_source/,'ChatGPT general-audi
 assert.match(generalAudienceSource,/platform_sensitive_media/,'ChatGPT general-audience safeguard must honor platform sensitive-media metadata');
 assert.match(processorSource,/job\.client_source!=='chatgpt'/,'General-audience source filtering must be scoped to ChatGPT and must not narrow Claude/default behavior');
 assert.match(processorSource,/CONTENT_RESTRICTED/,'ChatGPT worker path must fail general-audience violations without completing the source read');
+assert.match(mcpServiceSource,/profile==='openai'&&row\.status==='completed'[\s\S]*generalAudienceBlockReason[\s\S]*CONTENT_RESTRICTED/,'OpenAI result delivery must re-check cached or cross-client completed content before returning it');
 assert.match(errorSource,/CONTENT_RESTRICTED[\s\S]*general-audience ChatGPT scope/,'General-audience failures must have a stable public error');
 assert.match(ytdlpSource,/age_limit/,'Media extraction must preserve platform age-limit metadata for ChatGPT safety checks');
 assert.match(xResolverPureSource,/possibly_sensitive/,'X extraction must preserve platform sensitive-media metadata for ChatGPT safety checks');
