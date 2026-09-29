@@ -4,6 +4,7 @@ type JsonObject=Record<string,unknown>;
 function obj(v:unknown):JsonObject|null{return v!==null&&typeof v==='object'&&!Array.isArray(v)?v as JsonObject:null;}
 function str(v:unknown):string{return typeof v==='string'?v:'';}
 function num(v:unknown):number{return typeof v==='number'&&Number.isFinite(v)?v:0;}
+function bool(v:unknown):boolean{return v===true||v==='true'||v===1;}
 
 export function xSyndicationToken(id:string):string{
   const n=Number(id);
@@ -17,6 +18,7 @@ export interface XSyndicationVideo{
   title?:string;
   creator?:string;
   description?:string;
+  sensitive?:boolean;
 }
 
 function pickMp4Variant(variants:unknown):string{
@@ -46,7 +48,8 @@ export function parseXSyndicationVideo(payload:unknown):XSyndicationVideo|null{
           durationSeconds:Math.max(0,Math.ceil(num(video.durationMs)/1000)),
           title:clipExternalText(str(node.text),METADATA_LIMITS.title),
           creator:clipExternalText(str(user?.name)||str(user?.screen_name),METADATA_LIMITS.creator),
-          description:clipExternalText(str(node.text),METADATA_LIMITS.description)
+          description:clipExternalText(str(node.text),METADATA_LIMITS.description),
+          sensitive:bool(node.possibly_sensitive)||bool(node.possiblySensitive)
         };
       }
     }
@@ -62,7 +65,8 @@ export function parseXSyndicationVideo(payload:unknown):XSyndicationVideo|null{
           durationSeconds:Math.max(0,Math.ceil(num(info.duration_millis)/1000)),
           title:clipExternalText(str(node.text),METADATA_LIMITS.title),
           creator:clipExternalText(str(user?.name)||str(user?.screen_name),METADATA_LIMITS.creator),
-          description:clipExternalText(str(node.text),METADATA_LIMITS.description)
+          description:clipExternalText(str(node.text),METADATA_LIMITS.description),
+          sensitive:bool(node.possibly_sensitive)||bool(node.possiblySensitive)
         };
       }
     }
