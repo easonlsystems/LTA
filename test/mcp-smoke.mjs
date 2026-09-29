@@ -11,6 +11,8 @@ const [{createMcpHandler},{buildMcpServer,unicodeSafeSlice,chunkResult,selectTim
   import('../dist/src/db/pool.js')
 ]);
 
+const {OPENAI_SKILL_MD,OPENAI_SKILL_URI,OPENAI_SKILL_DIGEST}=await import('../dist/src/mcp/openaiSkill.js');
+
 const unicodeChunk=unicodeSafeSlice(`a😀b`,0,2);
 assert.equal(unicodeChunk.text,'a');
 assert.equal(unicodeChunk.end,1);
@@ -209,6 +211,11 @@ try{
   assert.match(openaiInitialized.result.instructions??'',/same supported-source matrix as LTA's default\/Claude distribution/i);
   assert.match(openaiInitialized.result.instructions??'',/provides AI-readable context from supported public links/i);
   assert.doesNotMatch(openaiInitialized.result.instructions??'',/use get_video_time_range|use get_video_map/i);
+  assert.deepEqual(
+    openaiInitialized.result.capabilities?.extensions?.['io.modelcontextprotocol/skills'],
+    {},
+    'OpenAI MCP must advertise the skills extension under capabilities.extensions'
+  );
 
   const openaiListed=await callOpenai({jsonrpc:'2.0',id:21,method:'tools/list',params:{}});
   assert.deepEqual(openaiListed.result.tools.map(tool=>tool.name),['read_public_link','read_public_links','get_transcript_result','get_visual_assets','find_in_link','get_usage']);
@@ -223,6 +230,24 @@ try{
     assert.deepEqual(tool.securitySchemes,[{type:'oauth2',scopes:['link2ai:read']}],tool.name+' must declare OAuth explicitly on the ChatGPT endpoint');
     assert.ok(tool.outputSchema&&tool.outputSchema.type==='object',tool.name+' must publish an output schema on the ChatGPT endpoint');
   }
+
+  const skillList=await callOpenai({jsonrpc:'2.0',id:22,method:'skills/list',params:{}});
+  assert.equal(skillList.result.skills.length,1,'OpenAI MCP must publish exactly one submission skill');
+  const skillEntry=skillList.result.skills[0];
+  assert.equal(skillEntry.uri,OPENAI_SKILL_URI);
+  assert.equal(skillEntry.frontmatter.name,'read-public-links-with-lta');
+  assert.match(skillEntry.frontmatter.description,/Use LTA when a user's question depends on the contents of a supported public link/i);
+  assert.deepEqual(skillEntry.resources,[{uri:OPENAI_SKILL_URI,digest:OPENAI_SKILL_DIGEST}]);
+  assert.match(OPENAI_SKILL_DIGEST,/^sha256:[0-9a-f]{64}$/);
+
+  const skillGet=await callOpenai({jsonrpc:'2.0',id:23,method:'skills/get',params:{uri:OPENAI_SKILL_URI}});
+  assert.deepEqual(skillGet.result.skill,skillEntry,'skills/get must return the exact skills/list catalog entry');
+
+  const skillResource=await callOpenai({jsonrpc:'2.0',id:24,method:'resources/read',params:{uri:OPENAI_SKILL_URI}});
+  assert.equal(skillResource.result.contents.length,1);
+  assert.equal(skillResource.result.contents[0].uri,OPENAI_SKILL_URI);
+  assert.equal(skillResource.result.contents[0].mimeType,'text/markdown');
+  assert.equal(skillResource.result.contents[0].text,OPENAI_SKILL_MD,'resources/read must return the exact bytes used for the advertised digest');
 
 
   // Assertions for the production capability contract: descriptions stay narrow and match actual source-reading behavior.
