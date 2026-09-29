@@ -159,6 +159,10 @@ assert.doesNotMatch(apiSource,/產品轉換漏斗 · external only/,'Founder def
 assert.match(apiSource,/試用累積用量/,'Founder trial usage must be labeled as lifetime cumulative usage');
 assert.match(billingRoutesSource,/trial units used \(lifetime\)/,'Account UI must not describe trial usage as a billing-cycle counter');
 assert.doesNotMatch(apiSource,/supports videos up to 30 minutes|supports videos up to 120 minutes|very large sources may return partial context/i,'Published copy must match the unit-bounded full-source policy');
+assert.match(apiSource,/Who receives data[\s\S]*connected AI client[\s\S]*public source platform/i,'Privacy policy must disclose connected-AI and source-platform recipients');
+assert.match(apiSource,/Retention[\s\S]*72 hours[\s\S]*24 hours[\s\S]*one year/i,'Privacy policy must disclose concrete content, pending-job, and visitor-cookie retention periods');
+assert.match(apiSource,/Your controls[\s\S]*revoke LTA API keys[\s\S]*disconnect LTA from an AI client[\s\S]*access, correction, or deletion/i,'Privacy policy must disclose user privacy controls');
+assert.match(apiSource,/does not sell personal data/i,'Privacy policy must state the personal-data sale boundary');
 assert.match(mcpServiceSource,/if\(!options\.refresh(?:&&parsed\.platform!=='x')?\)[\s\S]*j\.status='completed'[\s\S]*c\.expires_at>now\(\)/,'Normal non-X same-source reads must reuse a still-valid completed user result');
 assert.match(mcpServiceSource,/if\(!options\.refresh&&parsed\.platform!=='x'\)/,'Explicit refresh and X must bypass same-user completed-result reuse');
 assert.doesNotMatch(mcpServiceSource,/await findCache/,'API must leave shared-cache completion to the worker that claims the queued job');
