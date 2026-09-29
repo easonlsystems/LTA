@@ -649,7 +649,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
     securitySchemes:LINK2AI_OAUTH_SECURITY,
     _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}
-  } as any,async(args:Record<string,unknown>,ctx:any)=>{const {job_id,offset,max_chars}=args as {job_id:string;offset?:number;max_chars?:number};return safeLinkToolCall(async()=>await getJobResult(userIdFromContext(ctx),job_id,profile),offset??0,max_chars??MAX_CHARS,true,openaiProfile);});
+  } as any,async(args:Record<string,unknown>,ctx:any)=>{const {job_id,offset,max_chars}=args as {job_id:string;offset?:number;max_chars?:number};return safeLinkToolCall(async()=>await getJobResult(userIdFromContext(ctx),job_id,profile),offset??0,max_chars??MAX_CHARS,!openaiProfile,openaiProfile);});
 
   server.registerTool('get_visual_assets',{
     title:'Get attached images',
