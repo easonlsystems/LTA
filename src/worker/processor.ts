@@ -18,6 +18,7 @@ import { acquireMediaClaim, releaseMediaClaim } from './mediaClaims.js';
 import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limits.js';
 import { regionalFallbackTarget } from './regions.js';
 import { recordProviderOutcome } from '../resolvers/providerTelemetry.js';
+import { generalAudienceBlockReason } from '../safety/generalAudience.js';
 
 const resolver=new ResolverOrchestrator();
 
@@ -45,6 +46,25 @@ function captionDurationSeconds(segments:Array<{start:number;end:number;text:str
     if(Number.isFinite(segment.end)&&segment.end>maxEnd)maxEnd=segment.end;
   }
   return maxEnd>0?Math.ceil(maxEnd):0;
+}
+
+function enforceChatGptGeneralAudience(job:JobRow,input:{
+  sourceUrl?:string|null;title?:string|null;description?:string|null;text?:string|null;ageLimit?:number|null;sensitive?:boolean|null;
+}):void{
+  if(job.client_source!=='chatgpt')return;
+  const reason=generalAudienceBlockReason(input);
+  if(!reason)return;
+  throw new Link2AIError(
+    'CONTENT_RESTRICTED',
+    'This source is outside the general-audience scope of the ChatGPT distribution.',
+    422,
+    false,
+    {cause_code:reason}
+  );
+}
+
+function enforceChatGptCache(job:JobRow,row:{title?:string|null;caption?:string|null;transcript?:string|null}):void{
+  enforceChatGptGeneralAudience(job,{title:row.title,description:row.caption,text:row.transcript});
 }
 
 export async function processJob(job:JobRow,runtime?:{workerRegion:string;regionOrder:string[]}):Promise<void>{
@@ -87,6 +107,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
 
       const userExisting=reuseCache?await findUserCompletedCache(job.user_id,job.platform,parsed.canonicalMediaId):null;
       if(userExisting){
+        enforceChatGptCache(job,userExisting);
         await markCompleted(job.id,userExisting.id,0,true);
         logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'user_cache',content_kind:parsed.kind,duration_seconds:0,processing_ms:Date.now()-startedAt});
         return;
@@ -94,6 +115,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
 
       const existing=reuseCache?await findCache(job.platform,parsed.canonicalMediaId,job.language):null;
       if(existing){
+        enforceChatGptCache(job,existing);
         await reserveQuota(job.user_id,job.id,cachedUsageUnits(existing));reserved=true;
         await finalizeQuota(job.user_id,job.id);reserved=false;
         await markCompleted(job.id,existing.id,0,true);
@@ -116,6 +138,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
 
       const afterClaimCache=reuseCache?await findCache(job.platform,parsed.canonicalMediaId,job.language):null;
       if(afterClaimCache){
+        enforceChatGptCache(job,afterClaimCache);
         await reserveQuota(job.user_id,job.id,cachedUsageUnits(afterClaimCache));reserved=true;
         await finalizeQuota(job.user_id,job.id);reserved=false;
         await markCompleted(job.id,afterClaimCache.id,0,true);
@@ -124,6 +147,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       }
 
       const content=await extractTextLink(parsed,{maxUsageUnits:availability.remaining_usage_units});
+      enforceChatGptGeneralAudience(job,{sourceUrl:content.sourceUrl,title:content.title,description:content.caption,text:content.text});
       await reserveQuota(job.user_id,job.id,content.completeness.usageUnits);reserved=true;
       const cache=await saveCache({
         platform:parsed.platform,canonicalMediaId:parsed.canonicalMediaId,sourceUrl:content.sourceUrl,
@@ -175,6 +199,11 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       await setJobMetadata(job.id,metadata.canonicalMediaId,duration);
     };
 
+    enforceChatGptGeneralAudience(job,{
+      sourceUrl:metadata.webpageUrl,title:metadata.title,description:metadata.description,
+      ageLimit:metadata.ageLimit,sensitive:metadata.sensitive
+    });
+
     logEvent('resolver_metadata_success',{
       job_id:job.id,platform:job.platform,resolver:metadata.resolver??'unknown',
       duration_seconds:metadata.durationSeconds||null,duration_pending:metadata.durationSeconds<=0
@@ -189,6 +218,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     const userExisting=reuseCache?await findUserCompletedCache(job.user_id,job.platform,metadata.canonicalMediaId):null;
     if(userExisting){
       if(metadata.durationSeconds<=0)await applyDuration(userExisting.duration_seconds);
+      enforceChatGptCache(job,userExisting);
       await markCompleted(job.id,userExisting.id,metadata.durationSeconds,true);
       logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'user_cache',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,processing_ms:Date.now()-startedAt});
       return;
@@ -199,6 +229,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     const existing=reuseCache?await findCache(job.platform,metadata.canonicalMediaId,job.language):null;
     if(existing){
       if(metadata.durationSeconds<=0)await applyDuration(existing.duration_seconds);
+      enforceChatGptCache(job,existing);
       await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);
       reserved=true;
       await finalizeQuota(job.user_id,job.id); reserved=false;
@@ -228,6 +259,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     const afterClaimCache=reuseCache?await findCache(job.platform,metadata.canonicalMediaId,job.language):null;
     if(afterClaimCache){
       if(metadata.durationSeconds<=0)await applyDuration(afterClaimCache.duration_seconds);
+      enforceChatGptCache(job,afterClaimCache);
       if(!reserved){await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);reserved=true;}
       await finalizeQuota(job.user_id,job.id); reserved=false;
       await markCompleted(job.id,afterClaimCache.id,metadata.durationSeconds,true);
@@ -242,6 +274,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     }
 
     if(caption?.transcript&&metadata.durationSeconds>0){
+      enforceChatGptGeneralAudience(job,{sourceUrl:metadata.webpageUrl,title:metadata.title,description:metadata.description,text:caption.transcript});
       if(!reserved){await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);reserved=true;}
       const completeness=videoCompleteness(caption.transcript,metadata.durationSeconds,caption.segments);
       const quality=videoTranscriptQuality(caption.transcript,metadata.durationSeconds);
@@ -314,6 +347,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
         cause_code:'transcript_too_sparse',signal_chars:asrQuality.signalChars,minimum_signal_chars:asrQuality.minimumSignalChars
       });
     }
+    enforceChatGptGeneralAudience(job,{sourceUrl:metadata.webpageUrl,title:metadata.title,description:metadata.description,text:asr.transcript});
     const cache=await saveCache({
       platform:job.platform,canonicalMediaId:metadata.canonicalMediaId,sourceUrl:metadata.webpageUrl,
       title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
