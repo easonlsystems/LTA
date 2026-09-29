@@ -28,8 +28,9 @@ OAuth 2.1 authorization-code + PKCE. The ChatGPT distribution uses a dedicated O
 - `read_public_link` can create/reuse a supported source-processing job and consume LTA processing units.
 - `read_public_links` keeps each supported source separate.
 - `get_transcript_result` is read-only and continues/paginates an existing job.
+- `get_visual_assets` is read-only and delivers attached images from an already processed supported social-post job without charging processing units again.
 - `find_in_link` searches an already processed source.
 - `get_usage` is read-only.
-- The ChatGPT-specific endpoint intentionally keeps a five-tool surface even though its supported-source matrix matches the default/Claude distribution.
+- The ChatGPT-specific endpoint intentionally keeps a six-tool surface even though its supported-source matrix matches the default/Claude distribution.
 - Failed/unsupported reads consume 0 processing units.
 - Returned source text is treated as untrusted external content, and incomplete upstream results are reported honestly rather than fabricated.
