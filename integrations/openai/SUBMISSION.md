@@ -40,7 +40,7 @@ The ChatGPT distribution uses a dedicated OAuth resource audience for:
 
 `https://api-production-0383e.up.railway.app/mcp/openai`
 
-A token issued for the general LTA `/mcp` resource is not accepted by `/mcp/openai`. For compatibility with already-installed ChatGPT connectors whose runtime may still POST to legacy `/mcp`, an OpenAI-scoped `/mcp/openai` token presented there is routed only to the restricted five-tool OpenAI handler; it never gains access to the general `/mcp` tool surface.
+A token issued for the general LTA `/mcp` resource is not accepted by `/mcp/openai`. For compatibility with already-installed ChatGPT connectors whose runtime may still POST to legacy `/mcp`, an OpenAI-scoped `/mcp/openai` token presented there is routed only to the restricted six-tool OpenAI handler; it never gains access to the general `/mcp` tool surface.
 
 Normal users sign in to LTA with Google. OpenAI reviewers use the dedicated reviewer email/password flow exposed on the LTA sign-in page. Reviewer credentials are configured only in production environment variables and must be supplied privately in the submission portal. The reviewer flow must not require MFA or any out-of-band verification.
 
@@ -72,7 +72,7 @@ The ChatGPT-specific endpoint may expose a smaller tool surface than the default
 
 ## Tool review notes
 
-The ChatGPT-specific MCP endpoint exposes five tools.
+The ChatGPT-specific MCP endpoint exposes six tools.
 
 ### read_public_link
 Starts or reuses a LTA source-reading job for one allowed exact public URL.
@@ -96,6 +96,15 @@ Reads the current state/content of an existing user-owned job after the ChatGPT 
 - readOnlyHint: true.
 - destructiveHint: false.
 - openWorldHint: false.
+- OAuth required: `link2ai:read`.
+
+### get_visual_assets
+Delivers attached images from an already processed supported social-post job as MCP image content blocks for direct model inspection.
+
+- readOnlyHint: true.
+- destructiveHint: false.
+- openWorldHint: true.
+- Does not re-read or re-charge the source.
 - OAuth required: `link2ai:read`.
 
 ### find_in_link
