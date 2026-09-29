@@ -171,7 +171,10 @@ assert.match(mcpSource,/video matches include timestamps|start_seconds/,'Video s
 assert.match(mcpSource,/zero-match result is not a semantic guarantee of absence/i,'Source search must not turn lexical misses into false absence claims');
 assert.doesNotMatch(mcpSource,/checkout_url|plan_info_url/,'Public MCP schemas must not expose checkout or plan-purchase URLs for digital subscriptions or credits');
 assert.doesNotMatch(mcpServiceSource,/plan_info_url|\/pricing/,'ChatGPT tool results must not return upgrade, top-up, or plan-purchase links');
-assert.match(mcpServiceSource,/Open LTA → Account/,'Quota exhaustion must direct users to the LTA account page without exposing infrastructure URLs or initiating a purchase');
+assert.match(mcpSource,/const openaiLinkResultOutputSchema=linkResultOutputSchema\.omit\(\{topup_path:true\}\)/,'OpenAI tool schemas must omit the account top-up path');
+assert.match(mcpServiceSource,/const topupPath=profile==='openai'\?undefined:'\/account'/,'OpenAI quota responses must omit the account top-up path');
+assert.match(mcpServiceSource,/message:profile==='openai'/,'OpenAI quota messaging must use a non-commercial response branch');
+assert.match(mcpServiceSource,/Open LTA → Account/,'Non-OpenAI quota exhaustion may still direct users to the LTA account page without exposing infrastructure URLs');
 assert.doesNotMatch(mcpServiceSource,/PUBLIC_BASE_URL[^\n]*\/account|\/account in your browser/,'MCP quota errors must not surface the raw production host as product UX');
 assert.match(mcpSource,/compatibility identifiers containing "link2ai" are internal/,'MCP server instructions must keep the public product name as LTA even for compatibility identifiers');
 assert.doesNotMatch(billingRoutesSource,/e instanceof Error\?e\.message:'Could not start top-up checkout\.'/,'Billing UI must not echo raw provider error messages to users');
