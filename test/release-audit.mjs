@@ -34,10 +34,8 @@ const authenticatedCertSource=await readFile(new URL('../test/production-authent
 const authenticatedWorkflowSource=await readFile(new URL('../.github/workflows/production-authenticated-certification.yml',import.meta.url),'utf8');
 assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News must use the official Firebase API path');
 assert.doesNotMatch(linkSource,/hn\.algolia\.com/,'OpenAI-ready core must not depend on the community Algolia HN adapter');
-assert.match(policySource,/OPENAI_ALLOWED_PLATFORMS/,'ChatGPT must maintain an explicit source allowlist');
-assert.match(policySource,/\['bluesky','github','hackernews'\]/,'ChatGPT source allowlist must stay limited to the authorized API-backed source paths');
-assert.match(policySource,/profile!=='openai'\|\|OPENAI_ALLOWED_PLATFORMS\.has\(platform\)/,'Default\/Claude sources must remain unchanged while ChatGPT is narrowed');
-assert.match(policySource,/openai_source_not_authorized/,'Blocked ChatGPT sources must fail with an explicit policy cause');
+assert.doesNotMatch(policySource,/OPENAI_ALLOWED_PLATFORMS/,'ChatGPT must not maintain a narrower source allowlist than the default/Claude distribution');
+assert.match(policySource,/same[\s\S]*source matrix/i,'ChatGPT source policy must explicitly preserve parity with the default/Claude distribution');
 assert.match(apiSource,/app\.all\('\/mcp\/openai'/,'API must expose a distinct ChatGPT MCP endpoint');
 assert.match(apiSource,/const openaiAuth=await authInfoFromBearer\(request\.headers\.authorization,mcpResource\('openai'\)\)/,'Legacy /mcp must recognize OpenAI-scoped bearer tokens');
 assert.match(apiSource,/if\(openaiAuth\)[\s\S]*return nodeOpenaiMcp/,'OpenAI-scoped legacy /mcp traffic must use the restricted OpenAI handler');
