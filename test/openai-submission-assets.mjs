@@ -7,6 +7,7 @@ const release=await readFile(new URL('../integrations/openai/RELEASE_NOTES.md',i
 const submission=await readFile(new URL('../integrations/openai/SUBMISSION.md',import.meta.url),'utf8');
 const mcp=JSON.parse(await readFile(new URL('../integrations/openai/mcp.json',import.meta.url),'utf8'));
 const skill=await readFile(new URL('../integrations/openai/skills/read-public-links/SKILL.md',import.meta.url),'utf8');
+const {OPENAI_SKILL_MD,OPENAI_SKILL_NAME,OPENAI_SKILL_URI,OPENAI_SKILL_DIGEST}=await import('../dist/src/mcp/openaiSkill.js');
 
 assert.equal((cases.match(/^### P\d+ /gm)||[]).length,5,'OpenAI remote MCP submission requires exactly five positive cases');
 assert.equal((cases.match(/^### N\d+ /gm)||[]).length,3,'OpenAI remote MCP submission requires exactly three negative cases');
@@ -17,15 +18,21 @@ assert.match(cases,/https:\/\/news\.ycombinator\.com\/item\?id=37137448/,'OpenAI
 assert.match(cases,/https:\/\/github\.com\/nodejs\/node\/issues\/65470[\s\S]*https:\/\/github\.com\/nodejs\/node\/pull\/65472/,'OpenAI multi-source fixture must compare a compact related Node.js issue\/PR pair');
 
 assert.equal(mcp.mcpServers.link2ai.url,'https://api-production-0383e.up.railway.app/mcp/openai');
-assert.match(skill,/same exact-public-source categories as its default\/Claude distribution/i);
+assert.equal(OPENAI_SKILL_NAME,'read-public-links-with-lta');
+assert.equal(OPENAI_SKILL_URI,'skill://lta/read-public-links-with-lta/SKILL.md');
+assert.match(OPENAI_SKILL_DIGEST,/^sha256:[0-9a-f]{64}$/);
+assert.equal(skill.trim(),OPENAI_SKILL_MD.trim(),'Submission SKILL.md must exactly match the production MCP skill snapshot');
+assert.match(skill,/LTA supports exact public links from/i);
 assert.match(skill,/YouTube and YouTube Shorts/i);
 assert.match(skill,/Instagram Reels/i);
 assert.match(skill,/TikTok/i);
 assert.match(skill,/readable public HTTPS webpages/i);
 assert.match(skill,/text-layer PDFs/i);
+assert.match(skill,/get_visual_assets/i,'Skill must teach ChatGPT when to retrieve attached visual assets');
 assert.match(skill,/explicitly asks to use LTA/i,'Skill must honor explicit LTA requests');
 assert.match(skill,/do not spend LTA processing units/i,'Skill must avoid unnecessary quota use when native access is sufficient');
 assert.match(skill,/server logs/i,'Skill must keep logs and internal diagnostics out of normal user-facing answers');
+assert.doesNotMatch(skill,/read-public-links-with-link2ai/i,'Skill metadata must use the LTA brand');
 assert.doesNotMatch(skill,/plan_info_url|checkout_url/i,'Skill must not instruct ChatGPT to surface purchase or checkout URLs');
 
 assert.match(cases,/continuation_required/);
