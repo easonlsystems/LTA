@@ -16,8 +16,9 @@ assert.match(api,/startTranscriptJob\(auth\.userId,url/,'REST reads must use the
 assert.match(mcp,/startTranscriptJob\(userIdFromContext\(ctx\),url/,'MCP reads must use the same shared job entrypoint');
 
 assert.equal(grokConfig.server_url,'https://api-production-0383e.up.railway.app/mcp','Grok must use the production shared MCP endpoint');
-assert.match(policy,/same\s+[\s\S]*source matrix/i,'distribution policy must preserve the same supported-source matrix');
-assert.doesNotMatch(policy,/GROK_ALLOWED|CLAUDE_ALLOWED|API_ALLOWED/,'clients must not fork independent source allowlists');
+assert.match(policy,/OPENAI_ALLOWED_PLATFORMS/,'OpenAI may use a narrower reviewed source allowlist');
+assert.match(policy,/profile!==\'openai\'\|\|OPENAI_ALLOWED_PLATFORMS\.has\(platform\)/,'Only the OpenAI distribution may be narrowed');
+assert.doesNotMatch(policy,/GROK_ALLOWED|CLAUDE_ALLOWED|API_ALLOWED/,'other clients must not fork independent source allowlists');
 
 for(const field of ['source_url','source_key','source_fetched_at','cache_expires_at','usage_units','remaining_usage_units','required_usage_units']){
   assert.ok(source.includes(field),`shared source result must retain ${field}`);

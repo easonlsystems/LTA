@@ -10,13 +10,13 @@ Record one continuous desktop capture, approximately 2–4 minutes, showing the 
 
 1. Show the LTA public website briefly.
 2. In ChatGPT, show LTA already installed/connected through the review configuration using the production `/mcp/openai` endpoint.
-3. Paste `https://www.instagram.com/reel/DdNnHPip4RD/` and ask: “Use LTA to read this Instagram Reel and summarize the main points.”
+3. Paste `https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f` and ask: “Use LTA to read this Bluesky post and summarize the post plus the main public replies.”
 4. Show LTA OAuth/reviewer authentication if the review connection requires it.
-5. Show the tool call returning the exact Instagram source identity and transcript/source text. Do not invent visual-only details.
-6. Paste `https://www.youtube.com/watch?v=M7lc1UVf-VE` and ask: “Use LTA to read this YouTube video and summarize what it explains.” If processing is asynchronous, show `get_transcript_result` continuing the job.
-7. Paste `https://github.com/nodejs/node/pull/65472` and ask: “Read this pull request with LTA and summarize the change, the main reviewer concern, and how it was resolved.”
+5. Show the tool call returning the exact Bluesky source identity and source text.
+6. Paste `https://news.ycombinator.com/item?id=37137448` and ask: “Read this Hacker News discussion with LTA and summarize the strongest disagreements and the evidence each side gives.” If continuation is required, show `get_transcript_result` continuing the result.
+7. Paste `https://github.com/nodejs/node/pull/65472` and ask: “Use LTA to read this pull request, find where maxHeadersCount is discussed, and summarize the relevant change.” Show `find_in_link` when it is used.
 8. Ask “How many LTA processing units do I have left?” and show `get_usage`.
-9. End on a successful LTA answer for one of the supported media sources.
+9. End on a successful LTA answer for one of the supported ChatGPT sources.
 
 ## Recording rules
 
@@ -30,10 +30,9 @@ Record one continuous desktop capture, approximately 2–4 minutes, showing the 
 
 ## Exact review fixtures
 
-- Instagram Reel: https://www.instagram.com/reel/DdNnHPip4RD/
-- YouTube: https://www.youtube.com/watch?v=M7lc1UVf-VE
+- Bluesky: https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f
+- Hacker News: https://news.ycombinator.com/item?id=37137448
 - GitHub PR: https://github.com/nodejs/node/pull/65472
-- Hacker News (optional extra positive demo): https://news.ycombinator.com/item?id=37137448
-- Bluesky (optional extra positive demo): https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f
+- GitHub issue: https://github.com/nodejs/node/issues/65470
 
 Use these exact URLs in the recording so the demo matches the submitted review cases.
