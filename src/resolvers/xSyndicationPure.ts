@@ -49,7 +49,7 @@ export function parseXSyndicationVideo(payload:unknown):XSyndicationVideo|null{
           title:clipExternalText(str(node.text),METADATA_LIMITS.title),
           creator:clipExternalText(str(user?.name)||str(user?.screen_name),METADATA_LIMITS.creator),
           description:clipExternalText(str(node.text),METADATA_LIMITS.description),
-          sensitive:bool(node.possibly_sensitive)||bool(node.possiblySensitive)
+          ...((bool(node.possibly_sensitive)||bool(node.possiblySensitive))?{sensitive:true}:{})
         };
       }
     }
@@ -66,7 +66,7 @@ export function parseXSyndicationVideo(payload:unknown):XSyndicationVideo|null{
           title:clipExternalText(str(node.text),METADATA_LIMITS.title),
           creator:clipExternalText(str(user?.name)||str(user?.screen_name),METADATA_LIMITS.creator),
           description:clipExternalText(str(node.text),METADATA_LIMITS.description),
-          sensitive:bool(node.possibly_sensitive)||bool(node.possiblySensitive)
+          ...((bool(node.possibly_sensitive)||bool(node.possiblySensitive))?{sensitive:true}:{})
         };
       }
     }
