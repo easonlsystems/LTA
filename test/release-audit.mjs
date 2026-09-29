@@ -173,6 +173,7 @@ assert.doesNotMatch(mcpSource,/checkout_url|plan_info_url/,'Public MCP schemas m
 assert.doesNotMatch(mcpServiceSource,/plan_info_url|\/pricing/,'ChatGPT tool results must not return upgrade, top-up, or plan-purchase links');
 assert.match(mcpSource,/const openaiLinkResultOutputSchema=linkResultOutputSchema\.omit\(\{topup_path:true,source_key:true,source_fetched_at:true,cache_expires_at:true,extracted_token_estimate:true,transcript_source:true,transcript:true\}\)/,'OpenAI tool schemas must omit purchase, internal identifier, cache, and redundant transcript fields');
 assert.match(mcpSource,/const openaiSourceSearchOutputSchema=sourceSearchOutputSchema\.omit\(\{source_key:true\}\)/,'OpenAI source search must omit the internal source key');
+assert.match(mcpSource,/getJobResult\(userIdFromContext\(ctx\),job_id,profile\),offset\?\?0,max_chars\?\?MAX_CHARS,!openaiProfile,openaiProfile/,'OpenAI get_transcript_result must not fetch external image assets while marked closed-world');
 assert.match(mcpServiceSource,/if\(profile==='openai'\)return publicUsage/,'OpenAI usage responses must stop before internal concurrency and exemption metadata');
 assert.match(mcpServiceSource,/const topupPath=profile==='openai'\?undefined:'\/account'/,'OpenAI quota responses must omit the account top-up path');
 assert.match(mcpServiceSource,/message:profile==='openai'/,'OpenAI quota messaging must use a non-commercial response branch');
