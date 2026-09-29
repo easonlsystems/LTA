@@ -591,8 +591,12 @@ export async function verifyReviewerLogin(emailRaw:string,password:string,return
   try{
     await client.query('BEGIN');
     const u=await client.query<AuthUser & {account_status:string}>(
-      `INSERT INTO users(email,plan,account_status) VALUES($1,'pro','active')
-       ON CONFLICT(email) DO UPDATE SET plan='pro',account_status=CASE WHEN users.account_status='disabled' THEN 'disabled' ELSE 'active' END,updated_at=now()
+      `INSERT INTO users(email,plan,account_status,analytics_excluded) VALUES($1,'pro','active',true)
+       ON CONFLICT(email) DO UPDATE SET
+         plan='pro',
+         analytics_excluded=true,
+         account_status=CASE WHEN users.account_status='disabled' THEN 'disabled' ELSE 'active' END,
+         updated_at=now()
        RETURNING id,email,plan,account_status`,[email]
     );
     if(u.rows[0].account_status==='disabled')throw new Link2AIError('AUTH_REQUIRED','This account is disabled.',403);
