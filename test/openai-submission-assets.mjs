@@ -22,7 +22,7 @@ assert.equal(OPENAI_SKILL_NAME,'read-public-links-with-lta');
 assert.equal(OPENAI_SKILL_URI,'skill://lta/read-public-links-with-lta/SKILL.md');
 assert.match(OPENAI_SKILL_DIGEST,/^sha256:[0-9a-f]{64}$/);
 assert.equal(skill.trim(),OPENAI_SKILL_MD.trim(),'Submission SKILL.md must exactly match the production MCP skill snapshot');
-assert.match(skill,/LTA supports exact public links from/i);
+assert.match(skill,/Through the ChatGPT distribution, LTA supports/i);
 assert.match(skill,/individual public Bluesky posts/i);
 assert.match(skill,/public GitHub Issues and pull requests/i);
 assert.match(skill,/Hacker News items and discussions/i);
