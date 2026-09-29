@@ -20,6 +20,7 @@ export interface JobRow {
   error_code: string | null;
   error_message: string | null;
   checkout_url: string | null;
+  client_source: string;
   preferred_region: string | null;
   attempted_regions: string[];
 }
