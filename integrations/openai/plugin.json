@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "link2ai",
   "version": "3.0.0",
-  "description": "Read supported public developer and discussion links when the source content is not reliably available to the AI.",
+  "description": "Check LTA source-format compatibility, estimate processing units, and view your LTA account usage.",
   "author": {
     "name": "Eason Systems",
     "url": "https://api-production-0383e.up.railway.app/"
