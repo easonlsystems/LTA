@@ -15,9 +15,9 @@ assert.equal((cases.match(/^### N\d+ /gm)||[]).length,3,'OpenAI remote MCP submi
 assert.doesNotMatch(cases,/<REVIEW_[A-Z0-9_]+>/,'OpenAI review cases must not contain placeholder fixture URLs');
 assert.match(cases,/https:\/\/github\.com\/gnembon\/scarpet\/issues\/408/,'OpenAI review must include the rights-eligible GitHub issue fixture');
 assert.match(cases,/https:\/\/github\.com\/gnembon\/scarpet\/pull\/422/,'OpenAI review must include the related rights-eligible pull request');
-assert.match(cases,/https:\/\/news\.ycombinator\.com\/item\?id=37137448/,'OpenAI Hacker News review fixture must be pinned');
-assert.match(cases,/https:\/\/github\.com\/nodejs\/node\/issues\/65470[\s\S]*https:\/\/github\.com\/nodejs\/node\/pull\/65472/,'OpenAI multi-source fixture must compare a compact related Node.js issue\/PR pair');
-assert.doesNotMatch(cases,/instagram\.com|youtube\.com|tiktok\.com|x\.com\/|twitter\.com/,'OpenAI review fixtures must not demonstrate excluded source paths');
+assert.match(cases,/CC0-1\.0/,'Review cases must explain the fixture rights basis');
+assert.match(cases,/nodejs\/node\/issues\/65470/,'Negative review must prove a non-allowlisted repository fails closed');
+assert.doesNotMatch(cases,/instagram\.com|youtube\.com|tiktok\.com|bsky\.app|news\.ycombinator\.com|x\.com\/|twitter\.com/,'OpenAI reviewer cases must stay inside the final GitHub-only submission boundary');
 
 assert.equal(mcp.mcpServers.link2ai.url,'https://api-production-0383e.up.railway.app/mcp/openai');
 assert.equal(OPENAI_SKILL_NAME,'read-public-links-with-lta');
