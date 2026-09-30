@@ -40,7 +40,7 @@ The ChatGPT distribution uses a dedicated OAuth resource audience for:
 
 `https://api-production-0383e.up.railway.app/mcp/openai`
 
-A token issued for the general LTA `/mcp` resource is not accepted by `/mcp/openai`. For compatibility with already-installed ChatGPT connectors whose runtime may still POST to legacy `/mcp`, an OpenAI-scoped `/mcp/openai` token presented there is routed only to the restricted six-tool OpenAI handler; it never gains access to the general `/mcp` tool surface.
+A token issued for the general LTA `/mcp` resource is not accepted by `/mcp/openai`. For compatibility with already-installed ChatGPT connectors whose runtime may still POST to legacy `/mcp`, an OpenAI-scoped `/mcp/openai` token presented there is routed only to the restricted five-tool OpenAI handler; it never gains access to the general `/mcp` tool surface.
 
 Normal users sign in to LTA with Google. OpenAI reviewers use the dedicated reviewer email/password flow exposed on the LTA sign-in page. Reviewer credentials are configured only in production environment variables and must be supplied privately in the submission portal. The reviewer flow must not require MFA or any out-of-band verification.
 
