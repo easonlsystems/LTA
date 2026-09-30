@@ -21,6 +21,7 @@ const linkResultOutputSchema=z.object({
   job_id:z.string().uuid().optional(),
   platform:z.string().optional(),
   source_url:z.string().url().optional(),
+  source_license_spdx:z.string().optional().describe('SPDX license detected for this source repository when the ChatGPT distribution requires a rights-eligible public content license.'),
   source_key:z.string().optional(),
   source_fetched_at:z.string().nullable().optional(),
   cache_expires_at:z.string().nullable().optional(),
@@ -237,6 +238,7 @@ export function chunkResult(result:ToolJobResult,offset=0,maxChars=MAX_CHARS):Re
     : undefined;
   return {
     status:result.status,job_id:result.job_id,platform:result.platform,source_url:result.source_url,
+    ...(result.source_license_spdx?{source_license_spdx:result.source_license_spdx}:{}),
     source_key:result.source_key,source_fetched_at:result.source_fetched_at,cache_expires_at:result.cache_expires_at,
     creator:result.creator,title:result.title,caption:result.caption,duration_seconds:result.duration_seconds,
     language:result.language,transcript_source:result.transcript_source,content_type:contentType,
@@ -567,7 +569,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
   const openaiProfile=profile==='openai';
   const redditReady=Boolean(e.REDDIT_CLIENT_ID?.trim()&&e.REDDIT_CLIENT_SECRET?.trim());
   const supportedSources=supportedSourcesForProfile(profile,redditReady);
-  const distributionNotice=openaiProfile?' This ChatGPT distribution is intentionally limited to Bluesky, GitHub Issue/PR, and Hacker News; other LTA source types remain available only in other distributions.':'';
+  const distributionNotice=openaiProfile?' This ChatGPT distribution reads GitHub Issues and pull requests only when the repository exposes a rights-eligible CC0-1.0, 0BSD, or Unlicense content license; other LTA source types remain available only in other distributions.':'';
   const audienceNotice=openaiProfile?' The ChatGPT distribution is general-audience only. Do not use LTA to retrieve pornographic or explicit sexual media, 18+/adult-only sources, or platform-marked sensitive media; those sources are blocked before processing units are charged.':'';
   const server=new McpServer({name:e.PUBLIC_BRAND_NAME,version:'1.12.0'},{
     ...(openaiProfile?{capabilities:{extensions:{'io.modelcontextprotocol/skills':{}}}}:{}),
