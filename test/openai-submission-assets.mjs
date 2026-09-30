@@ -40,7 +40,7 @@ assert.doesNotMatch(skill,/read-public-links-with-link2ai/i);
 assert.doesNotMatch(skill,/plan_info_url|checkout_url/i);
 
 assert.match(cases,/continuation_required/);
-assert.match(cases,/Failed reads consume 0 processing units/);
+assert.match(cases,/Failed or rights-ineligible reads consume 0 processing units/);
 assert.match(demo,/production, not localhost/i);
 assert.match(demo,/Do not show passwords, tokens, client secrets/i);
 assert.match(demo,/\/mcp\/openai/);
