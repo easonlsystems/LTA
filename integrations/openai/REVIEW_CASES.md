@@ -2,72 +2,73 @@
 
 Use the dedicated production reviewer account supplied privately in the OpenAI submission portal. No MFA, email confirmation, SMS confirmation, or private-network access may be required.
 
-The ChatGPT distribution is intentionally limited to individual public Bluesky posts, public GitHub Issues / pull requests, and Hacker News items / discussions. Other LTA distributions may support additional source types, but those source types are not available through the ChatGPT distribution. Failed reads consume 0 processing units. Profiles, feeds, timelines, broad crawling, private/login-only content, and paywall/DRM bypass remain unsupported.
+The ChatGPT distribution is intentionally limited to public GitHub Issues and pull requests from repositories whose GitHub-detected SPDX license is `CC0-1.0`, `0BSD`, or `Unlicense`. LTA verifies that repository license before creating or reusing a ChatGPT read job. Other LTA distributions may support additional source types and repository licenses, but those are not available through the ChatGPT distribution. Failed or rights-ineligible reads consume 0 processing units.
 
 ## Positive cases — exactly 5
 
-### P1 — Bluesky post
+### P1 — Read a licensed GitHub issue
 **Prompt**
-Use LTA to read this Bluesky post and summarize the post plus the main public replies: https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f
+Use LTA to read this GitHub issue and explain the reported keepalive bug, reproduction steps, and expected behavior: https://github.com/gnembon/scarpet/issues/408
 
 **Expected behavior**
-- Invoke `read_public_link` for the exact Bluesky post.
-- Return the post text and available public-thread context with exact source identity.
+- Invoke `read_public_link` for the exact issue.
+- Verify that GitHub reports the repository license as a ChatGPT-eligible SPDX license before delivering source content.
+- Return source-grounded context and `source_license_spdx`.
 - If continuation is required, continue with `get_transcript_result`.
-- Keep source completeness limitations explicit.
 
 **Expected result structure**
-A concise source-grounded summary of the post and available public replies.
+A concise explanation of the bug, reproduction steps, expected behavior, and the verified source license.
 
 **Fixture**
-`https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f` — public Bluesky post used by the LTA reviewer demo.
+`https://github.com/gnembon/scarpet/issues/408` — public issue in the CC0-1.0 `gnembon/scarpet` repository.
 
-### P2 — Hacker News discussion
+### P2 — Read the related licensed pull request
 **Prompt**
-Read this Hacker News discussion with LTA and summarize the strongest disagreements and the evidence each side gives: https://news.ycombinator.com/item?id=37137448
-
-**Expected behavior**
-- Invoke `read_public_link` for the exact Hacker News item.
-- Read the discussion returned through the Hacker News Firebase API path used by LTA.
-- Follow `next_offset` while `continuation_required=true` if the delivered result spans multiple chunks.
-- Do not treat a partial delivery as the complete source.
-
-**Expected result structure**
-A concise map of the main positions and the public comments supporting them.
-
-**Fixture**
-`https://news.ycombinator.com/item?id=37137448` — a compact Draw.io discussion with a clear disagreement about whether the project should be described as fully open source.
-
-### P3 — Find inside a GitHub pull request
-**Prompt**
-Use LTA to read this pull request, find where maxHeadersCount is discussed, and summarize the relevant change: https://github.com/nodejs/node/pull/65472
+Read this pull request with LTA and summarize the proposed keepalive fix plus the main reviewer concerns: https://github.com/gnembon/scarpet/pull/422
 
 **Expected behavior**
 - Invoke `read_public_link` for the exact pull request.
-- Use `find_in_link` on the processed result to locate the relevant discussion.
-- Treat search as a locator rather than proof that omitted text does not exist.
-- Attribute the summary to the pull request.
+- Verify the repository license before delivering content.
+- Include the pull-request body, available review discussion, and diff-derived context exposed by LTA.
+- Preserve source identity and source-completeness limitations.
 
 **Expected result structure**
-A concise explanation of the maxHeadersCount-related change grounded in the pull request and its discussion.
+A concise summary of the proposed fix and the main reviewer feedback.
 
 **Fixture**
-`https://github.com/nodejs/node/pull/65472` — a compact Node.js pull request for the maxHeadersCount documentation fix.
+`https://github.com/gnembon/scarpet/pull/422` — public CC0-1.0 pull request that references issue #408.
 
-### P4 — Multi-source GitHub comparison
+### P3 — Find inside the licensed pull request
 **Prompt**
-Compare this Node.js issue with the pull request that fixed it. Explain the reported problem, what changed in the fix, and how reviewer feedback affected the final result. Attribute each point to its source: https://github.com/nodejs/node/issues/65470 https://github.com/nodejs/node/pull/65472
+Use LTA on this pull request and find where schedule(0, ...) is discussed. Explain why the reviewer preferred it: https://github.com/gnembon/scarpet/pull/422
+
+**Expected behavior**
+- Invoke `read_public_link` for the exact pull request.
+- Use `find_in_link` on the processed result to locate the relevant review discussion.
+- Treat search as a locator rather than proof that omitted text does not exist.
+- Keep the answer attributed to the pull request.
+
+**Expected result structure**
+A concise explanation of the reviewer reasoning around `schedule(0, ...)`.
+
+**Fixture**
+`https://github.com/gnembon/scarpet/pull/422`.
+
+### P4 — Compare a licensed issue with its fix
+**Prompt**
+Compare this issue and pull request with LTA. Explain the reported failure, the proposed fix, and how review feedback changed the implementation: https://github.com/gnembon/scarpet/issues/408 https://github.com/gnembon/scarpet/pull/422
 
 **Expected behavior**
 - Invoke `read_public_links` so source identities remain separate.
-- Preserve each source's own source/completeness/continuation state inside tool state; do not narrate internal IDs in the normal user-facing answer.
-- Continue any source whose `continuation_required` value is true before making a claim that depends on omitted content.
+- Verify the repository license before delivering either source.
+- Continue any source whose `continuation_required` value is true before making claims that depend on omitted content.
+- Attribute the reported bug to the issue and the implementation/review details to the pull request.
 
 **Expected result structure**
-A comparison that clearly attributes the reported bug to the GitHub issue and the implemented/reviewed fix to the pull request.
+A source-attributed issue → fix → review comparison.
 
 **Fixture**
-`https://github.com/nodejs/node/issues/65470` and `https://github.com/nodejs/node/pull/65472` — a compact issue/PR pair describing the same maxHeadersCount documentation bug and its fix.
+`https://github.com/gnembon/scarpet/issues/408` and `https://github.com/gnembon/scarpet/pull/422`.
 
 ### P5 — Usage balance
 **Prompt**
@@ -77,7 +78,7 @@ How many LTA processing units do I have left?
 - Invoke `get_usage`.
 - Read only the authenticated review account's plan and unit balance.
 - Use `remaining_usage_units` as the authoritative remaining balance.
-- Do not expose internal auth or billing secrets.
+- Do not expose internal auth, concurrency, exemption, or billing secrets.
 
 **Expected result structure**
 Plan plus remaining processing units.
@@ -87,29 +88,32 @@ Dedicated production reviewer account.
 
 ## Negative cases — exactly 3
 
-### N1 — Broad profile/feed crawl
+### N1 — Repository license is not eligible for the ChatGPT distribution
 **Prompt**
-Use LTA to crawl every post from this Bluesky profile and summarize the account: https://bsky.app/profile/bsky.app
+Use LTA to read this GitHub issue: https://github.com/nodejs/node/issues/65470
 
 **Expected behavior**
-Do not perform broad crawling. Explain that the ChatGPT distribution of LTA reads supported exact public source URLs rather than profiles, feeds, timelines, or bulk collections.
+- LTA may identify the GitHub repository, but must fail closed before delivering the issue content because the repository license is not in the ChatGPT rights allowlist.
+- Return a clear unsupported/rights-not-verified result.
+- Consume 0 processing units.
+- Do not retry through another LTA source path.
 
 **Why the plugin must not complete the requested operation**
-Broad crawling is outside LTA's declared product scope and supported-source contract.
+The ChatGPT distribution only delivers GitHub repository content when the detected SPDX license is `CC0-1.0`, `0BSD`, or `Unlicense`.
 
 ### N2 — User explicitly forbids external fetching
 **Prompt**
-Do not use LTA or any external tool. Just answer from what I pasted here. URL for context only: https://news.ycombinator.com/item?id=37137448
+Do not use LTA or any external tool. Just answer from what I pasted here. URL for context only: https://github.com/gnembon/scarpet/issues/408
 
 **Expected behavior**
-Do not invoke LTA. Answer only from the supplied conversation content, or explain that the requested source-dependent answer cannot be verified without fetching.
+Do not invoke LTA. Answer only from supplied conversation content, or explain that the requested source-dependent answer cannot be verified without fetching.
 
 **Why the plugin must not complete the requested operation**
-The user's explicit instruction not to use external fetching must take precedence over LTA's fallback workflow.
+The user's explicit instruction not to use external fetching takes precedence over LTA's fallback workflow.
 
 ### N3 — URL is incidental
 **Prompt**
-Save this link for later: https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f
+Save this link for later: https://github.com/gnembon/scarpet/issues/408
 
 **Expected behavior**
 Do not invoke LTA merely because a supported URL appears in the conversation.
