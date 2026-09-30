@@ -5,6 +5,7 @@ const cases=await readFile(new URL('../integrations/openai/REVIEW_CASES.md',impo
 const demo=await readFile(new URL('../integrations/openai/DEMO_VIDEO.md',import.meta.url),'utf8');
 const release=await readFile(new URL('../integrations/openai/RELEASE_NOTES.md',import.meta.url),'utf8');
 const submission=await readFile(new URL('../integrations/openai/SUBMISSION.md',import.meta.url),'utf8');
+const rights=await readFile(new URL('../integrations/openai/RIGHTS_AUDIT.md',import.meta.url),'utf8');
 const mcp=JSON.parse(await readFile(new URL('../integrations/openai/mcp.json',import.meta.url),'utf8'));
 const skill=await readFile(new URL('../integrations/openai/skills/read-public-links/SKILL.md',import.meta.url),'utf8');
 const {OPENAI_SKILL_MD,OPENAI_SKILL_NAME,OPENAI_SKILL_URI,OPENAI_SKILL_DIGEST}=await import('../dist/src/mcp/openaiSkill.js');
@@ -12,8 +13,8 @@ const {OPENAI_SKILL_MD,OPENAI_SKILL_NAME,OPENAI_SKILL_URI,OPENAI_SKILL_DIGEST}=a
 assert.equal((cases.match(/^### P\d+ /gm)||[]).length,5,'OpenAI remote MCP submission requires exactly five positive cases');
 assert.equal((cases.match(/^### N\d+ /gm)||[]).length,3,'OpenAI remote MCP submission requires exactly three negative cases');
 assert.doesNotMatch(cases,/<REVIEW_[A-Z0-9_]+>/,'OpenAI review cases must not contain placeholder fixture URLs');
-assert.match(cases,/https:\/\/bsky\.app\/profile\/bsky\.app\/post\/3lydpzxb3uc2f/,'OpenAI review must demonstrate Bluesky value');
-assert.match(cases,/https:\/\/github\.com\/nodejs\/node\/pull\/65472/,'OpenAI review must demonstrate GitHub source search');
+assert.match(cases,/https:\/\/github\.com\/gnembon\/scarpet\/issues\/408/,'OpenAI review must include the rights-eligible GitHub issue fixture');
+assert.match(cases,/https:\/\/github\.com\/gnembon\/scarpet\/pull\/422/,'OpenAI review must include the related rights-eligible pull request');
 assert.match(cases,/https:\/\/news\.ycombinator\.com\/item\?id=37137448/,'OpenAI Hacker News review fixture must be pinned');
 assert.match(cases,/https:\/\/github\.com\/nodejs\/node\/issues\/65470[\s\S]*https:\/\/github\.com\/nodejs\/node\/pull\/65472/,'OpenAI multi-source fixture must compare a compact related Node.js issue\/PR pair');
 assert.doesNotMatch(cases,/instagram\.com|youtube\.com|tiktok\.com|x\.com\/|twitter\.com/,'OpenAI review fixtures must not demonstrate excluded source paths');
