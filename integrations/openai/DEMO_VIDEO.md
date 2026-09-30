@@ -1,38 +1,38 @@
-# LTA — OpenAI review demo video
+# LTA — OpenAI reviewer demo video
 
-OpenAI requires a demo video URL for final remote-MCP directory submission. This is a reviewer demo, not a marketing video.
+Record one continuous desktop capture against **production**, not localhost, after the exact submission commit is live on both API and worker and the production public certification passes.
 
-## Recording target
+## Before recording
+- Use the dedicated reviewer account.
+- Do not show passwords, tokens, client secrets, OAuth codes, internal IDs, server logs, Railway, GitHub Actions, or database/admin pages.
+- Confirm ChatGPT is connected to `https://api-production-0383e.up.railway.app/mcp/openai`.
+- Confirm the current Scan imports the six-tool OpenAI surface and the `read-public-links-with-lta` Skill.
+- Confirm the ChatGPT source description says GitHub Issue/PR reads require a rights-eligible `CC0-1.0`, `0BSD`, or `Unlicense` repository license.
 
-Record one continuous desktop capture, approximately 2–4 minutes, showing the production ChatGPT-specific LTA workflow end to end.
+## Recording flow — target 2–4 minutes
 
-## Required sequence
+1. Show the LTA public landing page briefly so the product identity and support/privacy links are visible.
 
-1. Show the LTA public website briefly.
-2. In ChatGPT, show LTA already installed/connected through the review configuration using the production `/mcp/openai` endpoint.
-3. Paste `https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f` and ask: “Use LTA to read this Bluesky post and summarize the post plus the main public replies.”
-4. Show LTA OAuth/reviewer authentication if the review connection requires it.
-5. Show the tool call returning the exact Bluesky source identity and source text.
-6. Paste `https://news.ycombinator.com/item?id=37137448` and ask: “Read this Hacker News discussion with LTA and summarize the strongest disagreements and the evidence each side gives.” If continuation is required, show `get_transcript_result` continuing the result.
-7. Paste `https://github.com/nodejs/node/pull/65472` and ask: “Use LTA to read this pull request, find where maxHeadersCount is discussed, and summarize the relevant change.” Show `find_in_link` when it is used.
-8. Ask “How many LTA processing units do I have left?” and show `get_usage`.
-9. End on a successful LTA answer for one of the supported ChatGPT sources.
+2. In ChatGPT, use:
+   `https://github.com/gnembon/scarpet/issues/408`
+   Ask LTA to explain the keepalive bug, reproduction steps, and expected behavior.
+   Show the successful source-grounded answer and the returned `source_license_spdx` evidence.
 
-## Recording rules
+3. Open:
+   `https://github.com/gnembon/scarpet/pull/422`
+   Ask for the proposed fix and the main reviewer concerns.
 
-- Use production, not localhost or a staging endpoint.
-- Use the ChatGPT-specific production MCP URL, not the general `/mcp` endpoint.
-- Do not show passwords, tokens, client secrets, cookies, Railway variables, or internal admin pages.
-- Do not edit the video to imply a successful action that did not occur.
-- Keep the source URLs visible enough for the reviewer to identify what was tested.
-- Do not expose server logs, OAuth diagnostics, provider/transport details, internal job ids, source keys, cache metadata, or raw error payloads in the user-facing answer.
-- Upload the final recording to a reviewer-accessible HTTPS URL and paste that URL into the OpenAI submission portal.
+4. On the same pull request, ask LTA to find where `schedule(0, ...)` is discussed and explain why the reviewer preferred it. This demonstrates `find_in_link` without exposing internal job IDs.
 
-## Exact review fixtures
+5. Ask LTA to compare:
+   - `https://github.com/gnembon/scarpet/issues/408`
+   - `https://github.com/gnembon/scarpet/pull/422`
+   Show clear source attribution between the report and the proposed/reviewed fix.
 
-- Bluesky: https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f
-- Hacker News: https://news.ycombinator.com/item?id=37137448
-- GitHub PR: https://github.com/nodejs/node/pull/65472
-- GitHub issue: https://github.com/nodejs/node/issues/65470
+6. Ask: `How many LTA processing units do I have left?`
+   Show the normal `get_usage` response without any purchase/checkout prompt.
 
-Use these exact URLs in the recording so the demo matches the submitted review cases.
+7. Optional short negative proof if recording time permits:
+   try `https://github.com/nodejs/node/issues/65470` and show that the ChatGPT distribution fails closed because its repository license is not in the rights allowlist and charges 0 units.
+
+End on a successful licensed-source answer. Do not include unrelated admin or infrastructure surfaces.
