@@ -32,7 +32,7 @@ assert.match(openaiSubmission,/exactly four tools/i);
 assert.match(openaiSubmission,/first-party account and planning companion/i);
 assert.match(openaiSubmission,/reviewer email\/password/i);
 assert.match(openaiSubmission,/must not require MFA/i);
-assert.match(openaiSubmission,/security schemes, output schemas, and accurate annotations/i);
+for(const tool of ['check_link_support','get_supported_sources','estimate_processing_units','get_usage'])assert.match(openaiSubmission,new RegExp('### '+tool));
 assert.match(openaiSubmission,/Only after every gate above passes should Scan Tools be run/i);
 
 assert.match(grokCatalog,/Connector Catalog/);
