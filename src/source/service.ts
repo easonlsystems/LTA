@@ -10,6 +10,7 @@ import { recordActivationEvent } from '../analytics/product.js';
 import { normalizeClientSource, type ClientSource } from './clientSource.js';
 import type { VisualAssetRef } from '../media/types.js';
 import { generalAudienceBlockReason } from '../safety/generalAudience.js';
+import { assertOpenAiSourceRights, type OpenAiRightsEvidence } from './openaiRights.js';
 
 export interface ToolJobResult {
   status: 'processing'|'completed'|'payment_required'|'failed';
@@ -42,6 +43,7 @@ export interface ToolJobResult {
   pages_extracted?:number|null;
   content_sections_truncated?:string[];
   visual_assets?:VisualAssetRef[];
+  source_license_spdx?:string;
   remaining_usage_units?:number;
   required_usage_units?:number;
   topup_path?:string;
@@ -198,6 +200,7 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
   let parsed;
   try{
     parsed=parseAllowedMediaUrl(url,profile);
+    await assertOpenAiSourceRights(parsed,profile);
   }catch(error){
     const err=asLink2AIError(error);
     await recordActivationEvent(userId,'read_requested',{
@@ -312,6 +315,12 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
   if(!r.rowCount)throw new Link2AIError('JOB_NOT_FOUND','Link-reading job not found.',404);
   const row=r.rows[0];
   assertPlatformAllowedForProfile(row.platform,profile);
+  let rightsEvidence:OpenAiRightsEvidence|null=null;
+  if(profile==='openai'){
+    const rightsUrl=String(row.normalized_url??row.source_url??'');
+    const rightsInput=parseAllowedMediaUrl(rightsUrl,profile);
+    rightsEvidence=await assertOpenAiSourceRights(rightsInput,profile);
+  }
   const provenanceEpoch=cacheProvenanceEpoch(String(row.platform));
   if(profile==='openai'&&row.status==='completed'&&provenanceEpoch){
     const sourceFetchedAt=row.source_fetched_at?new Date(row.source_fetched_at).getTime():NaN;
@@ -384,6 +393,7 @@ export async function getJobResult(userId:string,jobId:string,profile:Distributi
     }
     return {
       status:'completed',job_id:row.id,platform:row.platform,source_url:row.source_url,canonical_url:row.normalized_url,source_key:`${row.platform}:${row.canonical_media_id}`,
+      ...(rightsEvidence?.spdxId?{source_license_spdx:rightsEvidence.spdxId}:{}),
       source_fetched_at:row.source_fetched_at?new Date(row.source_fetched_at).toISOString():null,cache_expires_at:row.cache_expires_at?new Date(row.cache_expires_at).toISOString():null,
       title:row.title,creator:row.creator,
       caption:row.caption,duration_seconds:row.cache_duration??row.duration_seconds,language:row.cache_language??'und',
