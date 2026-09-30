@@ -28,7 +28,7 @@ assert.match(openaiSubmission,/Contains MCP/);
 assert.match(openaiSubmission,/Universal/);
 assert.match(openaiSubmission,/\.well-known\/openai-apps-challenge/);
 assert.match(openaiSubmission,/\/mcp\/openai/);
-assert.match(openaiSubmission,/Bluesky.*GitHub.*Hacker News/s);
+assert.match(openaiSubmission,/GitHub Issues \/ pull requests only when GitHub reports the repository SPDX license/s);
 assert.doesNotMatch(openaiSubmission,/Supported exact public sources:[\\s\\S]*YouTube|Supported exact public sources:[\\s\\S]*Instagram|Supported exact public sources:[\\s\\S]*TikTok|Supported exact public sources:[\\s\\S]*readable public HTTPS webpages|Supported exact public sources:[\\s\\S]*text-layer PDF/);
 assert.match(openaiSubmission,/reviewer email\/password/i);
 assert.match(openaiSubmission,/must not require MFA/i);
