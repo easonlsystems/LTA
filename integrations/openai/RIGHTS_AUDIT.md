@@ -1,101 +1,117 @@
-# OpenAI third-party access audit — 2026-09-30
+# OpenAI third-party rights audit — 2026-09-30
 
-Purpose: document the production retrieval paths permitted through `/mcp/openai` before the public Plugin Directory submission. This is an engineering compliance record, not a legal opinion.
+Purpose: document the source-access and content-rights boundary enforced through `/mcp/openai` before public Plugin Directory submission. This is an engineering compliance record, not legal advice.
 
-## OpenAI submission rule being enforced
+## OpenAI requirements being enforced
 
-OpenAI's current Plugin Guidelines require third-party access to use proper authorization and comply with the third party's terms, prohibit unofficial pass-through connectors, and prohibit bypassing third-party restrictions. The App Developer Terms also require the publisher to maintain the rights, licenses, and consents necessary for App Responses.
+OpenAI's current Plugin Guidelines require third-party access to use proper authorization and comply with the third party's terms, prohibit unauthorized scraping / pass-through access, and prohibit bypassing third-party restrictions.
 
-Because of that requirement, the ChatGPT distribution must fail closed for any source category that does not have a documented authorization/terms basis.
+OpenAI's App Developer Terms also require the publisher to maintain the rights, licenses, and consents necessary for App Responses. Because App Responses may be stored, copied, displayed, modified, distributed, and used by OpenAI and plugin users, API access permission alone is not treated as sufficient evidence for arbitrary third-party content.
+
+References:
+- https://developers.openai.com/plugins/plugin-guidelines
+- https://openai.com/policies/developer-apps-terms/
 
 ## Included in /mcp/openai
 
-### Bluesky — included
+### GitHub Issues / pull requests — only rights-eligible repositories
 
-Production path:
-- `https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread`
-
-Basis:
-- Bluesky's HTTP API reference states that most `app.bsky.*` GET endpoints are public and may be called without authentication against `https://public.api.bsky.app`.
-- LTA uses the documented public AppView endpoint for exact public posts; it does not scrape the Bluesky website.
-
-Reference:
-- https://docs.bsky.app/docs/api/app-bsky-feed-get-author-feed
-
-### GitHub Issues / pull requests — included
-
-Production path:
+Production source paths:
 - `https://api.github.com/repos/{owner}/{repo}/issues/{number}`
 - `https://api.github.com/repos/{owner}/{repo}/pulls/{number}`
-- documented GitHub issue/PR comments, reviews, review comments, and diff representations
+- documented GitHub issue comments, pull-request reviews, inline review comments, and diff representations used by LTA
 
-Basis:
-- GitHub Terms Section H expressly covers use of GitHub APIs, including API use through a third-party product.
-- GitHub's Registered Developer Agreement provides an API license for interoperability and integrations, subject to the applicable terms.
+Access basis:
+- GitHub Terms Section H expressly covers GitHub API use, including API use through a third-party product.
+- GitHub's public REST endpoints can be used to retrieve public repository resources subject to GitHub's Terms and rate limits.
 - LTA uses GitHub's API rather than scraping GitHub HTML.
+
+Content-rights basis:
+- GitHub Terms Section D states that public issues, comments, and contributions are User-Generated Content.
+- Section D.6 states that when a user adds Content to a repository containing notice of a license, that Content is licensed under the same repository license.
+- Section D.8 states that GitHub's Terms do not otherwise restrict lawful third-party access to or use of public repository contents.
+- LTA therefore requires GitHub's repository metadata to report one of the deliberately narrow licenses below before a ChatGPT read can be created, reused, or delivered:
+  - `CC0-1.0`
+  - `0BSD`
+  - `Unlicense`
+
+Why the allowlist is intentionally narrow:
+- These licenses are selected because they are designed to permit downstream reuse with minimal or no notice / attribution obligations.
+- Common licenses such as MIT and Apache-2.0 remain blocked in this submission because they introduce notice / attribution conditions that the current ChatGPT response contract does not yet enforce end to end.
+- Unknown, missing, or `NOASSERTION` licenses fail closed.
 
 References:
 - https://docs.github.com/en/site-policy/github-terms/github-terms-of-service
-- https://docs.github.com/en/site-policy/github-terms/github-registered-developer-agreement
+- https://docs.github.com/en/rest/issues/issues
+- https://docs.github.com/en/rest/pulls/pulls
 
-### Hacker News — included
-
-Production path:
-- `https://hacker-news.firebaseio.com/v0/item/{id}.json`
-
-Basis:
-- Y Combinator's official Hacker News API documentation states that public Hacker News data is made available through the Firebase-backed API and documents the `/v0/` item endpoints.
-- LTA uses that official public API for exact Hacker News items and their comment trees.
-
-Reference:
-- https://github.com/HackerNews/API
+Verified reviewer fixture:
+- repository: `gnembon/scarpet`
+- GitHub-detected SPDX license: `CC0-1.0`
+- issue: https://github.com/gnembon/scarpet/issues/408
+- pull request: https://github.com/gnembon/scarpet/pull/422
 
 ## Excluded from /mcp/openai
 
-The following remain supported where applicable in other LTA distributions, but are blocked before source processing when the distribution profile is `openai`:
-
+The following remain supported where applicable in other LTA distributions, but are blocked before ChatGPT source processing:
 - YouTube / Shorts
 - Instagram Reels / posts
 - TikTok videos / posts
 - X posts / media
 - Reddit
+- Bluesky
+- Hacker News
 - arbitrary public webpages / articles
 - direct public PDFs
+- GitHub repositories whose detected SPDX license is not `CC0-1.0`, `0BSD`, or `Unlicense`
 
-Reason: the current production retrieval paths for these categories do not have a sufficiently documented authorization/terms basis for the OpenAI submission attestation. Public accessibility by itself is not treated as authorization.
-
-Examples of why they are excluded:
-- YouTube arbitrary public-video caption/transcript access is not equivalent to the official caption-download authorization model.
-- Instagram/TikTok arbitrary public-link extraction is not equivalent to their embed or user-authorized display APIs.
-- X production media handling still has a non-API fallback.
-- Arbitrary webpage/PDF support cannot pre-establish authorization and terms compliance for every third-party host.
-- Reddit remains fail-closed unless approved OAuth Data API credentials are configured, and it is not part of this ChatGPT submission matrix.
+Reason: public accessibility or an official read API by itself is not treated as sufficient evidence that LTA can grant the downstream App Response rights required by OpenAI.
 
 ## Runtime enforcement
 
-`src/source/policy.ts` must keep the OpenAI allowlist limited to:
-- `bluesky`
-- `github`
-- `hackernews`
+The ChatGPT path has two separate fail-closed gates:
 
-The default/Claude distribution must retain its existing source matrix.
+1. `src/source/policy.ts`
+   - the OpenAI profile permits only the `github` platform;
+   - default / Claude source support is unchanged.
+
+2. `src/source/openaiRights.ts`
+   - resolves the GitHub repository from the exact Issue / PR URL;
+   - fetches GitHub repository metadata through the official API;
+   - requires `CC0-1.0`, `0BSD`, or `Unlicense`;
+   - returns rights evidence containing repository identity and SPDX id;
+   - fails closed on unsupported, unknown, or unverifiable licenses.
+
+`src/source/service.ts` applies the rights check:
+- before creating a new ChatGPT source job;
+- before same-user cache reuse;
+- again when `get_transcript_result` delivers an existing job, preventing old or cross-client cached content from bypassing the rights boundary.
+
+Successful ChatGPT results expose `source_license_spdx`.
+
+## Submission consistency requirements
 
 Tests must fail if:
-- an excluded platform becomes available through the OpenAI profile;
-- OpenAI submission/reviewer assets advertise excluded source categories;
-- the default/Claude matrix is accidentally narrowed;
-- the imported OpenAI Skill diverges from the runtime Skill snapshot;
-- the ChatGPT general-audience safety guidance from PRs #131/#133 is removed.
+- any non-GitHub platform becomes available through the OpenAI profile;
+- MIT, Apache-2.0, unknown, or missing-license GitHub repositories become ChatGPT-eligible;
+- the default / Claude source matrix is narrowed;
+- reviewer fixtures stop using a rights-eligible repository;
+- submission copy advertises excluded source categories;
+- the imported Skill diverges from the runtime Skill;
+- the general-audience safeguards from #131 / #133 are removed;
+- a rights-ineligible cached job can be delivered through ChatGPT.
 
 ## Pre-Scan gate
 
 Do not run the final OpenAI MCP Scan until all of the following are true:
-1. This allowlist is merged and the exact commit is live on both API and worker.
-2. Exact-revision CI/public certification is green.
-3. The production `/mcp/openai` tool descriptions advertise only the permitted source matrix.
-4. The production Skill advertises only the permitted source matrix and retains the general-audience rule.
-5. Reviewer cases and demo script contain only permitted source fixtures.
-6. Reviewer credentials, domain challenge, privacy, terms, and support endpoints are verified.
-7. The six Submit policy attestations are re-read against the then-current OpenAI wording and no unresolved contradiction remains.
+1. The GitHub-only rights gate is merged.
+2. The exact merged commit is live on both Railway API and worker.
+3. Exact-revision CI and public certification are green.
+4. The production `/mcp/openai` tool list and descriptions match this rights boundary.
+5. The production Skill matches this rights boundary.
+6. The five positive and three negative review cases match this rights boundary.
+7. Reviewer credentials, domain challenge, privacy, terms, and support endpoints are verified.
+8. The final demo is recorded against the exact production revision.
+9. The six Submit policy attestations are re-read against the then-current OpenAI wording and no unresolved contradiction remains.
 
-Any future OpenAI source expansion requires a fresh authorization/terms audit before the allowlist or submission assets are changed.
+Any future expansion of the ChatGPT source matrix requires a new rights / terms audit before the allowlist, Skill, review cases, or listing is changed.
