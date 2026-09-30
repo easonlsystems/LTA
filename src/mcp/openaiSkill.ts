@@ -31,7 +31,7 @@ When LTA is needed:
 11. Keep internal tool plumbing out of normal user-facing answers. Do not expose raw MCP payloads, server logs, OAuth or resource diagnostics, internal job IDs, source keys, cache metadata, raw error codes, retry flags, or stack traces unless the user explicitly asks for safe technical debugging.
 12. The ChatGPT distribution is general-audience only. Do not use LTA to retrieve pornographic or explicit sexual media, sources labeled 18+/adult-only, or platform-marked sensitive media. If LTA reports that a source is outside the general-audience scope, do not retry it through another LTA tool; explain the limitation and that 0 processing units were charged.
 
-Through the ChatGPT distribution, LTA supports individual public Bluesky posts, public GitHub Issues and pull requests, and Hacker News items and discussions. Other LTA distributions may support additional source types, but those source types are not available through the ChatGPT distribution.
+Through the ChatGPT distribution, LTA supports public GitHub Issues and pull requests only when GitHub reports that the repository uses a rights-eligible CC0-1.0, 0BSD, or Unlicense content license. Other LTA distributions may support additional source types and repository licenses, but those are not available through the ChatGPT distribution.
 
 Do not use LTA for profiles, feeds, timelines, broad crawling, private or login-gated content, paywalled or DRM-protected content, or when the user explicitly asks not to fetch external content.
 `;
