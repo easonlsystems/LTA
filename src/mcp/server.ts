@@ -567,7 +567,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
   const openaiProfile=profile==='openai';
   const redditReady=Boolean(e.REDDIT_CLIENT_ID?.trim()&&e.REDDIT_CLIENT_SECRET?.trim());
   const supportedSources=supportedSourcesForProfile(profile,redditReady);
-  const distributionNotice=openaiProfile?' This ChatGPT distribution uses the same supported-source matrix as LTA\'s default/Claude distribution; distribution-specific differences are limited to OAuth, tool surface, and user-facing behavior.':'';
+  const distributionNotice=openaiProfile?' This ChatGPT distribution is intentionally limited to Bluesky, GitHub Issue/PR, and Hacker News; other LTA source types remain available only in other distributions.':'';
   const audienceNotice=openaiProfile?' The ChatGPT distribution is general-audience only. Do not use LTA to retrieve pornographic or explicit sexual media, 18+/adult-only sources, or platform-marked sensitive media; those sources are blocked before processing units are charged.':'';
   const server=new McpServer({name:e.PUBLIC_BRAND_NAME,version:'1.12.0'},{
     ...(openaiProfile?{capabilities:{extensions:{'io.modelcontextprotocol/skills':{}}}}:{}),
