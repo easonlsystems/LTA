@@ -18,7 +18,7 @@ The general LTA `/mcp` endpoint is not the OpenAI submission endpoint.
 
 **Short description:** Read supported exact public links when the original source is not reliably available to the AI.
 
-**Long description:** Through its ChatGPT-specific distribution, LTA retrieves AI-readable source context from the same supported exact public-link categories as its default/Claude distribution, including YouTube / Shorts, Instagram Reels and supported public posts, TikTok, individual public X and Bluesky posts, GitHub Issues / pull requests, Hacker News discussions, readable public webpages / articles, and text-layer PDFs. Reddit exact public posts are available only when approved Reddit OAuth Data API credentials are configured. LTA preserves source identity, reports incomplete upstream results honestly, and paginates long results without treating delivery chunk size as a source-size limit.
+**Long description:** Through its ChatGPT-specific distribution, LTA retrieves AI-readable source context from individual public Bluesky posts, public GitHub Issues / pull requests, and Hacker News discussions. Other LTA distributions may support additional source types, but those source types are not available through the ChatGPT distribution. LTA preserves source identity, reports incomplete upstream results honestly, and paginates long results without treating delivery chunk size as a source-size limit.
 
 **Developer identity:** Use the verified publisher identity selected in the OpenAI submission portal.
 
@@ -54,21 +54,14 @@ Keep the submission-portal challenge token configured in production and verify t
 
 ## ChatGPT distribution source policy
 
-The ChatGPT distribution intentionally uses the same supported-source matrix as LTA's default/Claude distribution.
+The ChatGPT distribution is intentionally narrower than LTA's default/Claude distribution.
 
 Supported exact public sources:
-- YouTube videos and YouTube Shorts.
-- TikTok videos and supported public posts.
-- Instagram Reels and supported public posts.
-- Individual public X posts.
 - Individual public Bluesky posts.
 - Public GitHub Issues / pull requests and their public discussion.
 - Hacker News items / discussions.
-- Readable public HTTPS webpages / articles.
-- Direct public text-layer PDFs.
-- Individual public Reddit posts when approved Reddit OAuth Data API credentials are configured.
 
-The ChatGPT-specific endpoint may expose a smaller tool surface than the default/Claude distribution, but source availability must not be reduced because of that packaging difference. LTA still does not support profiles, feeds, timelines, bulk crawling, private/login-only content, paywall or DRM bypass, or visual-only understanding that is not represented in returned text.
+Other LTA source types remain available on other LTA distributions but are not available through `/mcp/openai`. LTA still does not support profiles, feeds, timelines, bulk crawling, private/login-only content, or paywall/DRM bypass.
 
 ## Tool review notes
 
@@ -128,17 +121,17 @@ The compatibility `get_video_transcript`, `get_video_time_range`, and `get_video
 
 ## Suggested review prompts
 
-1. **Instagram Reel**
-   - URL: https://www.instagram.com/reel/DdNnHPip4RD/
-   - Ask LTA to summarize the main points and specific claims from the Reel.
+1. **Bluesky post**
+   - URL: https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f
+   - Ask LTA to summarize the post and the available public replies.
 
-2. **YouTube**
-   - URL: https://www.youtube.com/watch?v=M7lc1UVf-VE
-   - Ask LTA to summarize what the video explains.
-
-3. **Hacker News discussion**
+2. **Hacker News discussion**
    - URL: https://news.ycombinator.com/item?id=37137448
    - Ask for the strongest disagreements and supporting reasons.
+
+3. **GitHub pull request search**
+   - URL: https://github.com/nodejs/node/pull/65472
+   - Ask LTA to find where `maxHeadersCount` is discussed and summarize the relevant change.
 
 4. **Multi-source GitHub comparison**
    - GitHub issue: https://github.com/nodejs/node/issues/65470
@@ -163,9 +156,10 @@ Negative review:
 - Reviewer login works from outside the developer's own network without MFA.
 - OpenAI challenge token is configured and externally readable.
 - Privacy / Terms / Support pages return 200.
-- The new reviewer demo uses only the ChatGPT-specific endpoint and demonstrates the same source matrix users receive through the default/Claude distribution.
-- The reviewer demo includes at least one high-value media source such as an Instagram Reel or YouTube video.
+- The new reviewer demo uses only the ChatGPT-specific endpoint and demonstrates only the source matrix available through the ChatGPT distribution.
+- The reviewer demo includes Bluesky, Hacker News, and GitHub examples from the final review cases.
 - Re-check the final publisher rights/compliance declarations against the deployed ChatGPT-specific source matrix before checking them.
+- Do not expand `/mcp/openai` to additional source types unless their production retrieval path has a documented authorization/terms basis and this checklist is re-audited.
 
 ## Final directory-only requirements
 
