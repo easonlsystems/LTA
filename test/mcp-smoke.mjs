@@ -215,7 +215,7 @@ try{
   assert.ok(listed.result.tools[7].outputSchema.properties.sections,'get_video_map must expose timeline sections');
 
   const openaiInitialized=await callOpenai({jsonrpc:'2.0',id:20,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'openai-audit',version:'1'}}});
-  assert.match(openaiInitialized.result.instructions??'',/intentionally limited to Bluesky, GitHub Issue\/PR, and Hacker News/i);
+  assert.match(openaiInitialized.result.instructions??'',/GitHub Issues and pull requests only when the repository exposes a rights-eligible CC0-1\.0, 0BSD, or Unlicense/i);
   assert.match(openaiInitialized.result.instructions??'',/provides AI-readable context from supported public links/i);
   assert.doesNotMatch(openaiInitialized.result.instructions??'',/use get_video_time_range|use get_video_map/i);
   assert.deepEqual(
@@ -229,10 +229,11 @@ try{
   const openaiResultTool=openaiListed.result.tools.find(tool=>tool.name==='get_transcript_result');
   assert.deepEqual(openaiResultTool.annotations,{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},'OpenAI result polling must remain closed-world; attached images use get_visual_assets');
   assert.doesNotMatch(JSON.stringify(openaiListed.result.tools),/get_video_transcript|get_video_time_range|get_video_map/);
-  assert.match(openaiListed.result.tools[0].description,/Bluesky, GitHub Issue\/PR, or Hacker News/i);
+  assert.match(openaiListed.result.tools[0].description,/GitHub Issue\/PR from repositories with a ChatGPT-eligible CC0-1\.0, 0BSD, or Unlicense content license/i);
   assert.match(openaiListed.result.tools[0].description,/Read one supported public URL/i);
   assert.doesNotMatch(openaiListed.result.tools[0].description,/YouTube|Instagram|TikTok|readable webpage|text-layer PDF/i);
   const openaiReadSchema=openaiListed.result.tools.find(tool=>tool.name==='read_public_link').outputSchema.properties;
+  assert.ok(openaiReadSchema.source_license_spdx,'OpenAI read results must expose the verified source repository license');
   for(const field of ['source_key','source_fetched_at','cache_expires_at','extracted_token_estimate','transcript_source','transcript','topup_path']){
     assert.equal(openaiReadSchema[field],undefined,`OpenAI read schema must omit internal/redundant field ${field}`);
   }
