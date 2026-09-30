@@ -18,7 +18,7 @@ The general LTA `/mcp` endpoint is not the OpenAI submission endpoint.
 
 **Short description:** Read supported exact public links when the original source is not reliably available to the AI.
 
-**Long description:** Through its ChatGPT-specific distribution, LTA retrieves AI-readable source context from individual public Bluesky posts, public GitHub Issues / pull requests, and Hacker News discussions. Other LTA distributions may support additional source types, but those source types are not available through the ChatGPT distribution. LTA preserves source identity, reports incomplete upstream results honestly, and paginates long results without treating delivery chunk size as a source-size limit.
+**Long description:** Through its ChatGPT-specific distribution, LTA reads exact public GitHub Issues and pull requests only when GitHub reports the repository license as `CC0-1.0`, `0BSD`, or `Unlicense`. LTA verifies that rights condition before creating, reusing, or delivering a ChatGPT read job, returns the verified SPDX identifier with successful results, preserves source identity and completeness, and paginates long results. Other LTA distributions may support additional source types and repository licenses, but those are not exposed through `/mcp/openai` in this submission.
 
 **Developer identity:** Use the verified publisher identity selected in the OpenAI submission portal.
 
@@ -57,15 +57,17 @@ Keep the submission-portal challenge token configured in production and verify t
 The ChatGPT distribution is intentionally narrower than LTA's default/Claude distribution.
 
 Supported exact public sources:
-- Individual public Bluesky posts.
-- Public GitHub Issues / pull requests and their public discussion.
-- Hacker News items / discussions.
+- Public GitHub Issues / pull requests only when GitHub reports the repository SPDX license as `CC0-1.0`, `0BSD`, or `Unlicense`.
 
-Other LTA source types remain available on other LTA distributions but are not available through `/mcp/openai`. LTA still does not support profiles, feeds, timelines, bulk crawling, private/login-only content, or paywall/DRM bypass.
+Before creating, reusing, or delivering a ChatGPT read job, LTA re-checks the repository license through GitHub's official API. Rights-ineligible and unverifiable repositories fail closed and consume 0 processing units.
+
+Other LTA source types and repository licenses remain available where applicable on other LTA distributions but are not available through `/mcp/openai`. Profiles, feeds, timelines, broad crawling, private/login-only content, and paywall/DRM bypass remain unsupported.
+
+See `RIGHTS_AUDIT.md` for the submission rights basis and fail-closed boundary.
 
 ## Tool review notes
 
-The ChatGPT-specific MCP endpoint exposes six tools.
+The ChatGPT-specific MCP endpoint exposes five tools.
 
 ### read_public_link
 Starts or reuses a LTA source-reading job for one allowed exact public URL.
@@ -91,15 +93,6 @@ Reads the current state/content of an existing user-owned job after the ChatGPT 
 - openWorldHint: false.
 - OAuth required: `link2ai:read`.
 
-### get_visual_assets
-Delivers attached images from an already processed supported social-post job as MCP image content blocks for direct model inspection.
-
-- readOnlyHint: true.
-- destructiveHint: false.
-- openWorldHint: true.
-- Does not re-read or re-charge the source.
-- OAuth required: `link2ai:read`.
-
 ### find_in_link
 Locates likely relevant text regions inside an existing permitted processed source job.
 
@@ -121,31 +114,32 @@ The compatibility `get_video_transcript`, `get_video_time_range`, and `get_video
 
 ## Suggested review prompts
 
-1. **Bluesky post**
-   - URL: https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f
-   - Ask LTA to summarize the post and the available public replies.
+1. **Licensed GitHub issue**
+   - URL: https://github.com/gnembon/scarpet/issues/408
+   - Ask LTA to explain the keepalive bug, reproduction steps, and expected behavior.
 
-2. **Hacker News discussion**
-   - URL: https://news.ycombinator.com/item?id=37137448
-   - Ask for the strongest disagreements and supporting reasons.
+2. **Licensed GitHub pull request**
+   - URL: https://github.com/gnembon/scarpet/pull/422
+   - Ask LTA to summarize the proposed fix and reviewer concerns.
 
-3. **GitHub pull request search**
-   - URL: https://github.com/nodejs/node/pull/65472
-   - Ask LTA to find where `maxHeadersCount` is discussed and summarize the relevant change.
+3. **Find inside the pull request**
+   - URL: https://github.com/gnembon/scarpet/pull/422
+   - Ask LTA to find where `schedule(0, ...)` is discussed and explain the reviewer reasoning.
 
-4. **Multi-source GitHub comparison**
-   - GitHub issue: https://github.com/nodejs/node/issues/65470
-   - GitHub pull request: https://github.com/nodejs/node/pull/65472
-   - Ask how the issue's reported bug maps to the pull request's fix and reviewer feedback, using `read_public_links` and preserving source attribution.
+4. **Multi-source comparison**
+   - URLs:
+     - https://github.com/gnembon/scarpet/issues/408
+     - https://github.com/gnembon/scarpet/pull/422
+   - Ask how the reported failure maps to the fix and how review feedback changed the implementation.
 
 5. **Usage**
    - Ask: "How many LTA processing units do I have left?"
    - Expected: `get_usage` returns `remaining_usage_units`.
 
 Negative review:
-- Ask LTA to crawl every post from a public profile/feed and verify that broad crawling is refused.
+- Try a GitHub Issue from a repository whose license is not in the rights allowlist and verify LTA fails closed with 0-unit charge.
 - Explicitly forbid LTA/external fetching and verify no LTA tool is invoked.
-- Include a supported URL only as incidental text (for example, "Save this link for later") and verify LTA is not invoked merely because a URL is present.
+- Include a supported URL only as incidental text and verify LTA is not invoked merely because a URL is present.
 
 ## Pre-submission gates
 
@@ -156,8 +150,8 @@ Negative review:
 - Reviewer login works from outside the developer's own network without MFA.
 - OpenAI challenge token is configured and externally readable.
 - Privacy / Terms / Support pages return 200.
-- The new reviewer demo uses only the ChatGPT-specific endpoint and demonstrates only the source matrix available through the ChatGPT distribution.
-- The reviewer demo includes Bluesky, Hacker News, and GitHub examples from the final review cases.
+- The new reviewer demo uses only the ChatGPT-specific endpoint and demonstrates only rights-eligible GitHub Issue/PR reads from the final review cases.
+- The demo shows `source_license_spdx` on a successful read and a fail-closed rights-ineligible example if time permits.
 - Re-check the final publisher rights/compliance declarations against the deployed ChatGPT-specific source matrix before checking them.
 - Do not expand `/mcp/openai` to additional source types unless their production retrieval path has a documented authorization/terms basis and this checklist is re-audited.
 
