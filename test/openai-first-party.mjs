@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 
 process.env.DATABASE_URL='postgres://127.0.0.1:1/link2ai';
 process.env.PUBLIC_BASE_URL='http://localhost:3000';
@@ -11,6 +12,15 @@ const [{createMcpHandler},{buildOpenAiFirstPartyServer},{pool},{OPENAI_FIRST_PAR
   import('../dist/src/db/pool.js'),
   import('../dist/src/mcp/openaiFirstPartySkill.js')
 ]);
+
+const [firstPartySource,apiSource]=await Promise.all([
+  readFile(new URL('../src/mcp/openaiFirstParty.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/api/main.ts',import.meta.url),'utf8')
+]);
+
+assert.doesNotMatch(firstPartySource,/source\/service|safeHttp|worker\/|provider|read_public_link|read_public_links|get_transcript_result|get_visual_assets|find_in_link|get_video_/,'OpenAI first-party surface must not depend on third-party source-reader paths');
+assert.match(apiSource,/openaiMcpHandler=createMcpHandler\(\(\)=>buildOpenAiFirstPartyServer\(\)\)/,'Production /mcp/openai must use the first-party builder');
+assert.doesNotMatch(apiSource,/openaiMcpHandler=createMcpHandler\(\(\)=>buildMcpServer\('openai'\)\)/,'Production /mcp/openai must not route to the legacy source-reading builder');
 
 const handler=createMcpHandler(()=>buildOpenAiFirstPartyServer());
 const authInfo={
