@@ -71,7 +71,7 @@ const linkResultOutputSchema=z.object({
   topup_path:z.string().optional().describe('LTA account path for adding units or reviewing the plan when status is payment_required. Tell the user to open LTA → Account to unblock the read.'),
 });
 
-const openaiLinkResultOutputSchema=linkResultOutputSchema.omit({topup_path:true,source_key:true,source_fetched_at:true,cache_expires_at:true,extracted_token_estimate:true,transcript_source:true,transcript:true});
+const openaiLinkResultOutputSchema=linkResultOutputSchema.omit({topup_path:true,source_key:true,source_fetched_at:true,cache_expires_at:true,extracted_token_estimate:true,transcript_source:true,transcript:true,visual_content_included:true,visual_assets_available:true,visual_assets_delivered:true,visual_assets_failed:true,visual_assets_next_offset:true,visual_video_assets_available:true});
 
 const batchLinkResultOutputSchema=z.object({
   status:z.literal('batch'),
@@ -364,6 +364,12 @@ function minimizeOpenAiLinkData(data:Record<string,unknown>):Record<string,unkno
     transcript_source:_transcriptSource,
     transcript:_legacyTranscript,
     topup_path:_topupPath,
+    visual_content_included:_visualContentIncluded,
+    visual_assets_available:_visualAssetsAvailable,
+    visual_assets_delivered:_visualAssetsDelivered,
+    visual_assets_failed:_visualAssetsFailed,
+    visual_assets_next_offset:_visualAssetsNextOffset,
+    visual_video_assets_available:_visualVideoAssetsAvailable,
     ...publicData
   }=data;
   return publicData;
@@ -585,7 +591,7 @@ export function buildMcpServer(profile:DistributionProfile='default'){
     _meta:{securitySchemes:LINK2AI_OAUTH_SECURITY},
     annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true}
   } as any;
-  const readPublicLink=async(args:Record<string,unknown>,ctx:any)=>{const {url,refresh}=args as {url:string;refresh?:boolean};return safeLinkToolCall(async()=>await startTranscriptJob(userIdFromContext(ctx),url,{refresh:Boolean(refresh),profile,clientSource:clientSourceFromContext(ctx,profile)}),0,MAX_CHARS,true,openaiProfile);};
+  const readPublicLink=async(args:Record<string,unknown>,ctx:any)=>{const {url,refresh}=args as {url:string;refresh?:boolean};return safeLinkToolCall(async()=>await startTranscriptJob(userIdFromContext(ctx),url,{refresh:Boolean(refresh),profile,clientSource:clientSourceFromContext(ctx,profile)}),0,MAX_CHARS,!openaiProfile,openaiProfile);};
 
   server.registerTool('read_public_link',readPublicLinkConfig,readPublicLink);
 
