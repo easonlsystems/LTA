@@ -8,7 +8,7 @@ import { normalizeWorkerRegion } from './regions.js';
 export interface JobRow {
   id: string;
   user_id: string;
-  platform: 'instagram'|'tiktok'|'youtube'|'x'|'reddit'|'bluesky'|'github'|'hackernews'|'pdf'|'web';
+  platform: 'instagram'|'tiktok'|'youtube'|'x'|'reddit'|'bluesky'|'github'|'hackernews'|'pdf'|'web'|'upload';
   source_url: string;
   normalized_url: string;
   canonical_media_id: string;
@@ -124,10 +124,20 @@ export async function recoverStaleJobs(): Promise<void> {
     `DELETE FROM billing_resume_intents b USING users u
      WHERE b.user_id=u.id AND u.account_status='disabled'`
   );
+  // User-uploaded audio is processed synchronously by the API and its temporary
+  // ChatGPT download URL is never persisted. If the API dies mid-transcription, fail
+  // the stale job instead of re-queuing it to a worker that cannot reconstruct the file.
+  await pool.query(
+    `UPDATE transcript_jobs
+     SET status='failed',error_code='TRANSCRIPTION_FAILED',
+         error_message='The uploaded audio transcription was interrupted. Attach the file again to retry.',
+         retryable=true,locked_at=NULL,locked_by=NULL,updated_at=now()
+     WHERE platform='upload' AND status='processing' AND locked_at < now() - interval '10 minutes'`
+  );
   await pool.query(
     `UPDATE transcript_jobs
      SET status='queued', locked_at=NULL, locked_by=NULL, next_attempt_at=now(), updated_at=now()
-     WHERE status='processing' AND locked_at < now() - interval '10 minutes'`
+     WHERE platform<>'upload' AND status='processing' AND locked_at < now() - interval '10 minutes'`
   );
   await pool.query('DELETE FROM quota_reservations WHERE expires_at <= now()');
   await pool.query('DELETE FROM transcript_cache WHERE expires_at <= now()');
