@@ -47,7 +47,7 @@ assert.match(demo,/37137448/,'Demo must show Hacker News support');
 assert.match(demo,/nodejs\/node\/pull\/65472/);
 assert.doesNotMatch(demo,/DdNnHPip4RD|M7lc1UVf-VE/,'Demo must not advertise excluded media paths');
 assert.match(release,/first public OpenAI Plugin Directory submission/i);
-assert.match(release,/intentionally limited to/i);
+assert.match(release,/CC0-1\.0/);
 assert.match(submission,/interface\.logo/);
 assert.match(submission,/interface\.composerIcon/);
 assert.match(submission,/demo video URL/i);
