@@ -6,7 +6,7 @@ Record one continuous desktop capture against **production**, not localhost, aft
 - Use the dedicated reviewer account.
 - Do not show passwords, tokens, client secrets, OAuth codes, internal IDs, server logs, Railway, GitHub Actions, or database/admin pages.
 - Confirm ChatGPT is connected to `https://api-production-0383e.up.railway.app/mcp/openai`.
-- Confirm the current Scan imports the six-tool OpenAI surface and the `read-public-links-with-lta` Skill.
+- Confirm the current Scan imports the five-tool OpenAI surface and the `read-public-links-with-lta` Skill.
 - Confirm the ChatGPT source description says GitHub Issue/PR reads require a rights-eligible `CC0-1.0`, `0BSD`, or `Unlicense` repository license.
 
 ## Recording flow — target 2–4 minutes
