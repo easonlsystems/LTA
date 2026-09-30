@@ -37,7 +37,7 @@ const errorSource=await readFile(new URL('../src/util/errors.ts',import.meta.url
 const ytdlpSource=await readFile(new URL('../src/resolvers/ytdlp.ts',import.meta.url),'utf8');
 assert.match(linkSource,/hacker-news\.firebaseio\.com\/v0\/item/,'Hacker News must use the official Firebase API path');
 assert.doesNotMatch(linkSource,/hn\.algolia\.com/,'OpenAI-ready core must not depend on the community Algolia HN adapter');
-assert.match(policySource,/OPENAI_ALLOWED_PLATFORMS=new Set<Platform>\(\['bluesky','github','hackernews'\]\)/,'ChatGPT submission must stay limited to the audited public API source matrix');
+assert.match(policySource,/OPENAI_ALLOWED_PLATFORMS=new Set<Platform>\(\['github'\]\)/,'ChatGPT submission must stay limited to the license-aware GitHub source matrix');
 assert.match(policySource,/profile!==['"]openai['"]\|\|OPENAI_ALLOWED_PLATFORMS\.has\(platform\)/,'OpenAI authorization gate must be profile-scoped so default\/Claude behavior is unchanged');
 assert.match(generalAudienceSource,/ADULT_HOST_RE/,'ChatGPT general-audience safeguard must block dedicated adult-content domains');
 assert.match(generalAudienceSource,/age_restricted_source/,'ChatGPT general-audience safeguard must honor age-restriction metadata');
