@@ -25,11 +25,12 @@ assert.equal(OPENAI_SKILL_URI,'skill://lta/read-public-links-with-lta/SKILL.md')
 assert.match(OPENAI_SKILL_DIGEST,/^sha256:[0-9a-f]{64}$/);
 assert.equal(skill.trim(),OPENAI_SKILL_MD.trim(),'Submission SKILL.md must exactly match the production MCP skill snapshot');
 assert.match(skill,/Through the ChatGPT distribution, LTA supports/i);
-assert.match(skill,/individual public Bluesky posts/i);
-assert.match(skill,/public GitHub Issues and pull requests/i);
-assert.match(skill,/Hacker News items and discussions/i);
-assert.doesNotMatch(skill,/YouTube and YouTube Shorts|Instagram Reels|TikTok videos|readable public HTTPS webpages|text-layer PDFs/i);
-assert.match(skill,/get_visual_assets/i);
+assert.match(skill,/public GitHub Issues and pull requests only/i);
+assert.match(skill,/CC0-1\.0/);
+assert.match(skill,/0BSD/);
+assert.match(skill,/Unlicense/);
+assert.doesNotMatch(skill,/YouTube and YouTube Shorts|Instagram Reels|TikTok videos|Bluesky|Hacker News|readable public HTTPS webpages|text-layer PDFs/i);
+assert.doesNotMatch(skill,/get_visual_assets|video frames/i,'ChatGPT skill must not advertise tools or media capabilities absent from the GitHub-only surface');
 assert.match(skill,/explicitly asks to use LTA/i);
 assert.match(skill,/do not spend LTA processing units/i);
 assert.match(skill,/server logs/i);
