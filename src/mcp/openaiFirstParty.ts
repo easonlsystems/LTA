@@ -1,6 +1,6 @@
 import { McpServer, type AuthInfo } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
-import { usageForTool } from '../source/service.js';
+import { getUsageSnapshot } from '../quota/service.js';
 import { parseMediaUrl, type Platform } from '../media/url.js';
 import { textUsageUnits, videoUsageUnits } from '../content/limits.js';
 import { env } from '../config/env.js';
@@ -305,7 +305,14 @@ export function buildOpenAiFirstPartyServer():McpServer{
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}
   } as any,async(_args:Record<string,unknown>,ctx:HandlerContext)=>{
     try{
-      return toolResponse(await usageForTool(userIdFromContext(ctx),'openai') as unknown as Record<string,unknown>);
+      const usage=await getUsageSnapshot(userIdFromContext(ctx));
+      return toolResponse({
+        plan:usage.plan,
+        used_usage_units:usage.used_usage_units,
+        limit_usage_units:usage.limit_usage_units,
+        remaining_usage_units:usage.remaining_usage_units,
+        period_end:usage.period_end
+      });
     }catch{
       return toolResponse({
         status:'failed',
