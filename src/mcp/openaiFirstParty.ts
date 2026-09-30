@@ -5,7 +5,7 @@ import { parseMediaUrl, type Platform } from '../media/url.js';
 import { textUsageUnits, videoUsageUnits } from '../content/limits.js';
 import { env } from '../config/env.js';
 import { generalAudienceBlockReason } from '../safety/generalAudience.js';
-import { OPENAI_SKILL_DESCRIPTION, OPENAI_SKILL_MD, OPENAI_SKILL_NAME, OPENAI_SKILL_URI, openAiSkillEntry } from './openaiSkill.js';
+import { OPENAI_FIRST_PARTY_SKILL_DESCRIPTION, OPENAI_FIRST_PARTY_SKILL_MD, OPENAI_FIRST_PARTY_SKILL_NAME, OPENAI_FIRST_PARTY_SKILL_URI, openAiFirstPartySkillEntry } from './openaiFirstPartySkill.js';
 
 const OAUTH_SECURITY=[{type:'oauth2' as const,scopes:['link2ai:read']}];
 
@@ -105,15 +105,15 @@ function registerCanonicalToolsList(server:McpServer):void{
 
 function registerSkill(server:McpServer):void{
   server.registerResource(
-    OPENAI_SKILL_NAME,
-    OPENAI_SKILL_URI,
+    OPENAI_FIRST_PARTY_SKILL_NAME,
+    OPENAI_FIRST_PARTY_SKILL_URI,
     {
       title:'Use LTA account and planning tools',
-      description:OPENAI_SKILL_DESCRIPTION,
+      description:OPENAI_FIRST_PARTY_SKILL_DESCRIPTION,
       mimeType:'text/markdown'
     },
     async uri=>({
-      contents:[{uri:uri.href,mimeType:'text/markdown',text:OPENAI_SKILL_MD}]
+      contents:[{uri:uri.href,mimeType:'text/markdown',text:OPENAI_FIRST_PARTY_SKILL_MD}]
     })
   );
 
@@ -141,7 +141,7 @@ function registerSkill(server:McpServer):void{
     },
     async params=>{
       if(params.cursor)return {skills:[]};
-      return {skills:[openAiSkillEntry()]};
+      return {skills:[openAiFirstPartySkillEntry()]};
     }
   );
 
@@ -152,8 +152,8 @@ function registerSkill(server:McpServer):void{
       result:z.object({skill:skillEntrySchema})
     },
     async params=>{
-      if(params.uri!==OPENAI_SKILL_URI)throw new Error('Unknown LTA skill URI.');
-      return {skill:openAiSkillEntry()};
+      if(params.uri!==OPENAI_FIRST_PARTY_SKILL_URI)throw new Error('Unknown LTA skill URI.');
+      return {skill:openAiFirstPartySkillEntry()};
     }
   );
 }
