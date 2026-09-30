@@ -8,7 +8,6 @@ import { supportedSourcesForProfile, parseAllowedMediaUrl, type DistributionProf
 import { safeGetBuffer } from '../util/safeHttp.js';
 import { imageMimeFromBytes } from '../media/imageMime.js';
 import { OPENAI_SKILL_DESCRIPTION, OPENAI_SKILL_MD, OPENAI_SKILL_NAME, OPENAI_SKILL_URI, openAiSkillEntry } from './openaiSkill.js';
-import { buildOpenAiFirstPartyServer } from './openaiFirstParty.js';
 
 const MAX_CHARS=50_000;
 const MAX_INLINE_VISUAL_ASSETS=3;
