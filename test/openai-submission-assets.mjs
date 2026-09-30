@@ -31,7 +31,7 @@ for(const tool of ['check_link_support','get_supported_sources','estimate_proces
 assert.match(skill,/does not fetch, scrape, proxy, relay, summarize, transcribe, or return content from third-party websites or APIs/i);
 assert.doesNotMatch(skill,/read_public_link|read_public_links|get_transcript_result|get_visual_assets|find_in_link|get_video_/);
 assert.match(skill,/general-audience only/i);
-assert.doesNotMatch(skill,/checkout|top-up link from ChatGPT/i);
+assert.match(skill,/Do not initiate, promote, or provide checkout, purchase, subscription, upgrade, top-up, or transaction links from ChatGPT/i);
 
 assert.match(demo,/production, not localhost/i);
 assert.match(demo,/exactly four tools/i);
