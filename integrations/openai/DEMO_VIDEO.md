@@ -1,39 +1,40 @@
 # LTA — OpenAI review demo video
 
-OpenAI requires a demo video URL for final remote-MCP directory submission. This is a reviewer demo, not a marketing video.
+OpenAI requires a reviewer-accessible demo video URL for final remote-MCP directory submission. This is a reviewer demo, not a marketing video.
 
 ## Recording target
 
-Record one continuous desktop capture, approximately 2–4 minutes, showing the production ChatGPT-specific LTA workflow end to end.
+Record one continuous desktop capture, approximately 2–4 minutes, showing the production ChatGPT-specific `/mcp/openai` workflow end to end.
 
 ## Required sequence
 
-1. Show the LTA public website briefly.
-2. In ChatGPT, show LTA already installed/connected through the review configuration using the production `/mcp/openai` endpoint.
-3. Paste `https://www.instagram.com/reel/DdNnHPip4RD/` and ask: “Use LTA to read this Instagram Reel and summarize the main points.”
-4. Show LTA OAuth/reviewer authentication if the review connection requires it.
-5. Show the tool call returning the exact Instagram source identity and transcript/source text. Do not invent visual-only details.
-6. Paste `https://www.youtube.com/watch?v=M7lc1UVf-VE` and ask: “Use LTA to read this YouTube video and summarize what it explains.” If processing is asynchronous, show `get_transcript_result` continuing the job.
-7. Paste `https://github.com/nodejs/node/pull/65472` and ask: “Read this pull request with LTA and summarize the change, the main reviewer concern, and how it was resolved.”
-8. Ask “How many LTA processing units do I have left?” and show `get_usage`.
-9. End on a successful LTA answer for one of the supported media sources.
+1. Show the LTA public website briefly and state that the broader LTA product can read supported public links in other distributions.
+2. In ChatGPT, show LTA installed/connected through the production `/mcp/openai` review configuration.
+3. Ask: `Does LTA recognize this kind of link? https://www.instagram.com/reel/DdNnHPip4RD/`
+4. Show `check_link_support` returning compatibility only, including `directory_content_access=false` and `network_request_made=false`.
+5. Ask: `What source types does LTA currently support?` and show `get_supported_sources`.
+6. Ask: `About how many LTA processing units would a 125-second video need?` and show `estimate_processing_units` returning 3.
+7. Ask: `Estimate the LTA processing units for 25,000 characters of text.` and show `estimate_processing_units` returning 3.
+8. Ask: `How many LTA processing units do I have left?` and show `get_usage`.
+9. Ask: `Use LTA to read and summarize this YouTube video: https://www.youtube.com/watch?v=M7lc1UVf-VE` and show that the directory plugin does not claim to read or retrieve the video contents.
 
 ## Recording rules
 
-- Use production, not localhost or a staging endpoint.
+- Use production, not localhost or staging.
 - Use the ChatGPT-specific production MCP URL, not the general `/mcp` endpoint.
+- The Scan must expose exactly four tools: `check_link_support`, `get_supported_sources`, `estimate_processing_units`, and `get_usage`.
+- The Scan must import only the `use-lta-account-and-source-planning` Skill.
 - Do not show passwords, tokens, client secrets, cookies, Railway variables, or internal admin pages.
-- Do not edit the video to imply a successful action that did not occur.
-- Keep the source URLs visible enough for the reviewer to identify what was tested.
-- Do not expose server logs, OAuth diagnostics, provider/transport details, internal job ids, source keys, cache metadata, or raw error payloads in the user-facing answer.
+- Do not edit the video to imply a capability that did not occur.
+- Do not show any result that claims the public-directory plugin read third-party source contents.
+- Do not expose server logs, OAuth diagnostics, database details, or raw internal errors.
 - Upload the final recording to a reviewer-accessible HTTPS URL and paste that URL into the OpenAI submission portal.
 
-## Exact review fixtures
+## Review fixtures
 
-- Instagram Reel: https://www.instagram.com/reel/DdNnHPip4RD/
-- YouTube: https://www.youtube.com/watch?v=M7lc1UVf-VE
-- GitHub PR: https://github.com/nodejs/node/pull/65472
-- Hacker News (optional extra positive demo): https://news.ycombinator.com/item?id=37137448
-- Bluesky (optional extra positive demo): https://bsky.app/profile/bsky.app/post/3lydpzxb3uc2f
+- Compatibility-only URL: https://www.instagram.com/reel/DdNnHPip4RD/
+- Negative content-read URL: https://www.youtube.com/watch?v=M7lc1UVf-VE
+- Video estimate: 125 seconds → 3 processing units
+- Text estimate: 25,000 characters → 3 processing units
 
-Use these exact URLs in the recording so the demo matches the submitted review cases.
+The external URLs are user-provided strings used only to demonstrate local compatibility parsing or a refusal boundary. The submitted MCP must not contact those sites during these steps.
