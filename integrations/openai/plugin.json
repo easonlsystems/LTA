@@ -1,6 +1,6 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
-  "name": "link2ai",
+  "name": "lta",
   "version": "3.0.0",
   "description": "Check LTA source-format compatibility, estimate processing units, and view your LTA account usage.",
   "author": {
