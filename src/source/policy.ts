@@ -3,7 +3,7 @@ import { Link2AIError } from '../util/errors.js';
 
 export type DistributionProfile='default'|'openai';
 
-const OPENAI_ALLOWED_PLATFORMS=new Set<Platform>(['bluesky','github','hackernews']);
+const OPENAI_ALLOWED_PLATFORMS=new Set<Platform>(['github']);
 
 export function platformAllowedForProfile(platform:Platform,profile:DistributionProfile):boolean{
   return profile!=='openai'||OPENAI_ALLOWED_PLATFORMS.has(platform);
@@ -27,6 +27,6 @@ export function parseAllowedMediaUrl(raw:string,profile:DistributionProfile):Par
 }
 
 export function supportedSourcesForProfile(profile:DistributionProfile,redditReady=false):string{
-  if(profile==='openai')return 'Bluesky, GitHub Issue/PR, or Hacker News';
+  if(profile==='openai')return 'GitHub Issue/PR from repositories with a ChatGPT-eligible CC0-1.0, 0BSD, or Unlicense content license';
   return `${redditReady?'Reddit, ':''}YouTube/Shorts, TikTok, Instagram, X, Bluesky, GitHub Issue/PR, Hacker News, readable webpage/article, or text-layer PDF`;
 }
