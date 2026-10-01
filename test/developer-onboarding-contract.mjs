@@ -16,11 +16,11 @@ for(const required of [
 
 assert.doesNotMatch(docs,/GET \/v1\/jobs\/\{id\}|GET \/v1\/usage|GET \/v1\/sources|202 processing|retry_after_seconds|source_completeness|truncation_reason|JavaScript|Python/,'developer page must not carry the full API reference');
 assert.match(main,/siteShell\(developerDocs\(base\)/);
-assert.doesNotMatch(main,/sim-answer sim-fail show/,'homepage comparison must not preload the completed failure state');
-assert.match(main,/id="sim-comparison-panels"[^>]*hidden/,'homepage comparison must stay closed before interaction');
-assert.match(main,/resetDemo\(false,false\)/,'initial homepage state must wait for the user to run the comparison');
+assert.match(main,/sim-answer sim-fail show/,'homepage proof should be visible before interaction');
+assert.match(main,/id="sim-comparison-panels" aria-live="polite">/,'homepage proof should start open');
+assert.match(main,/resetDemo\(false,true\)/,'initial homepage state should preload the recorded proof');
 assert.doesNotMatch(main,/Simulated Claude conversation/,'general homepage comparison must not imply LTA only works with Claude');
-assert.match(main,/Same AI assistant · LTA connected/);
+assert.match(main,/Same AI assistant · source delivered/);
 assert.match(main,/rapid-fire interview with entrepreneur Marcus Lemonis/,'homepage comparison should use the recorded real Instagram proof instead of generic filler');
 assert.match(billing,/data-api-key-id/,'one-time API key page must expose its non-secret key id for lifecycle management');
 assert.match(docs,/Use LTA through MCP or REST\./,'developer page should lead with the two supported integration paths');

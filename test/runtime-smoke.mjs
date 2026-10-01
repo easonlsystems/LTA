@@ -52,20 +52,24 @@ try{
     if(route==='/'){
       assert.match(body,/<nav class="home-nav" aria-label="Primary">/);
       assert.match(body,/class="activation-site signal-home"/);
-      assert.match(body,/Your AI got the link\.<\/span><em>LTA brings the source\.<\/em>/);
-      assert.match(body,/LIVE SOURCE RELAY/);
-      assert.match(body,/Add LTA to Claude/);
+      assert.match(body,/Your AI answered\.<\/span><em>Did it read the source\?<\/em>/);
+      assert.match(body,/A URL in the chat is not proof that the Reel, video, thread, or document reached the model/);
       assert.match(body,/RECORDED PUBLIC TEST/);
       assert.match(body,/Ddx6Q_MJNyg/);
-      assert.match(body,/Run comparison/);
-      for(const source of ['youtube','tiktok','instagram','x','bluesky','hn','pdf','web'])assert.match(body,new RegExp(`data-sim-source=\"${source}\"`),`homepage should expose ${source} simulation`);
-      assert.match(body,/class="signal-console" id="proof"/);
+      assert.match(body,/Replay proof/);
+      assert.match(body,/class="signal-console" id="proof" data-marketing-observe="proof_viewed"/);
+      assert.match(body,/Without LTA/);
+      assert.match(body,/With LTA/);
+      assert.match(body,/An answer is not proof the source arrived/);
+      assert.match(body,/You already have a workaround/);
+      assert.match(body,/That’s the problem/);
+      for(const phrase of ['Find the transcript.','Download the file.','Switch AI tools.','Read it yourself.'])assert.ok(body.includes(phrase),`homepage should expose workaround: ${phrase}`);
+      assert.match(body,/Add LTA to Claude/);
       assert.match(body,/href="\/sources"/);
       assert.match(body,/href="\/pricing"/);
       assert.match(body,/href="\/developers"/);
       assert.match(body,/href="\/developers">Developers<\/a>/);
-      assert.match(body,/href="\/developers">Developers<\/a>/);
-      assert.match(body,/src="\/home\.js\?v=signal-relay-v2" defer/);
+      assert.match(body,/src="\/home\.js\?v=research-reliability-v1" defer/);
       assert.doesNotMatch(body,/One missing layer/i);
       assert.doesNotMatch(body,/What do you want Claude to read\?/);
       assert.doesNotMatch(body,/Try the link Claude just failed to read\./);
@@ -101,22 +105,18 @@ try{
   }
   const ids={};
   for(const id of ['sim-source-name','sim-url','sim-left-state','sim-right-state','sim-left-answer','sim-right-answer','sim-tool','sim-conclusion','sim-run','sim-reset','sim-comparison-panels','source-preview-label','source-preview-title','source-preview-question','source-mini-result','source-open-sim','usecase-user','usecase-result','simulation'])ids[id]=new FakeElement(id);
-  ids['sim-conclusion'].hidden=true;
-  ids['sim-comparison-panels'].hidden=true;
-  const simTabs=['reddit','youtube','tiktok','instagram','x','bluesky','hn','pdf','web'].map(value=>new FakeElement('',{simSource:value}));
-  const simTab=(key)=>{const tab=simTabs.find(el=>el.dataset.simSource===key);assert.ok(tab,`missing simulation tab ${key}`);return tab;};
-  const sourceButtons=['reddit','youtube','github','x','web','pdf','instagram','tiktok','hn','bluesky'].map(value=>new FakeElement('',{sourceKey:value}));
-  const usecaseButtons=['reddit','youtube','github','research'].map(value=>new FakeElement('',{usecase:value}));
   const leftLines=[new FakeElement(),new FakeElement(),new FakeElement()];
   const rightLines=[new FakeElement(),new FakeElement(),new FakeElement()];
   const fakeDocument={
     querySelector(selector){if(selector.startsWith('#'))return ids[selector.slice(1)]??null;return null;},
     querySelectorAll(selector){
-      if(selector==='.sim-tab')return simTabs;
+      if(selector==='.sim-tab')return [];
       if(selector==='.sim-user-question')return [new FakeElement(),new FakeElement()];
-      if(selector==='.source-button')return sourceButtons;
-      if(selector==='.usecase-option')return usecaseButtons;
+      if(selector==='.sim-user-link')return [new FakeElement(),new FakeElement()];
+      if(selector==='.source-button')return [];
+      if(selector==='.usecase-option')return [];
       if(selector==='.reveal')return [];
+      if(selector==='[data-marketing-observe]')return [];
       if(selector==='#sim-left-thinking .sim-line')return leftLines;
       if(selector==='#sim-right-thinking .sim-line')return rightLines;
       if(selector==='#sim-left-thinking .sim-line,#sim-right-thinking .sim-line')return [...leftLines,...rightLines];
@@ -129,94 +129,40 @@ try{
   const timers=new Map();
   const queuedTimer=(fn,ms)=>{const id=nextTimerId++;timers.set(id,{fn,ms});return id;};
   const queuedClear=(id)=>{timers.delete(id);};
-  const runNextTimer=()=>{const entry=[...timers.entries()].sort((a,b)=>a[1].ms-b[1].ms||a[0]-b[0])[0];if(!entry)return false;timers.delete(entry[0]);entry[1].fn();return true;};
+  const runNextTimer=()=>{const entry=[...timers.entries()].sort((x,y)=>x[1].ms-y[1].ms||x[0]-y[0])[0];if(!entry)return false;timers.delete(entry[0]);entry[1].fn();return true;};
   const runAllTimers=()=>{let guard=0;while(runNextTimer()){if(++guard>100)throw new Error('timer loop');}};
-  assert.doesNotThrow(()=>new Function('document','window','setTimeout','clearTimeout',homeJs)(fakeDocument,fakeWindow,queuedTimer,queuedClear),'homepage interaction JS must execute');
-  // The comparison must stay closed until the visitor explicitly asks to see it.
-  assert.equal(ids['sim-left-state'].textContent,'Ready','simulation should initialize idle');
-  assert.equal(ids['sim-right-state'].textContent,'Ready','simulation should initialize idle');
-  assert.equal(ids['sim-comparison-panels'].hidden,true,'comparison panels must be hidden before interaction');
-  assert.equal(timers.size,0,'simulation must not autoplay');
-  runAllTimers();
-  assert.equal(ids['sim-left-state'].textContent,'Ready','idle comparison must remain closed');
-  assert.equal(ids['sim-right-state'].textContent,'Ready','idle comparison must remain closed');
-  // Tabs may change the example before reveal, but must not open the comparison themselves.
-  simTab('reddit').listeners.click();
-  assert.equal(ids['sim-comparison-panels'].hidden,true,'selecting a source must not reveal the comparison before the CTA');
-  assert.equal(ids['sim-right-state'].textContent,'Ready','Reddit availability should wait for the explicit comparison run');
-  // Reddit is intentionally unavailable without OAuth credentials. Pressing Run must reveal the paused state, never fake success.
-  ids['sim-run'].listeners.click();
-  assert.equal(ids['sim-comparison-panels'].hidden,false,'comparison CTA must reveal the panels');
-  assert.equal(ids['sim-run'].getAttribute('aria-expanded'),'true','comparison CTA must expose its expanded state');
-  runAllTimers();
-  assert.equal(ids['sim-right-state'].textContent,'Temporarily paused','Run must not bypass the Reddit availability gate');
-  assert.doesNotMatch(ids['sim-tool'].innerHTML,/Source loaded/);
-  assert.match(ids['sim-right-answer'].innerHTML,/paused on this deployment/);
-  assert.equal(ids['sim-conclusion'].hidden,true,'paused Reddit must not show the success conclusion');
-  simTab('youtube').listeners.click();
-  assert.equal(simTab('youtube').getAttribute('aria-selected'),'true','selected source tab must be announced');
-  assert.equal(simTab('instagram').getAttribute('aria-selected'),'false','previous source tab must no longer be announced as selected');
-  assert.equal(ids['sim-left-state'].textContent,'Link only','selecting a supported source must show its static limitation preview');
-  assert.equal(ids['sim-right-state'].textContent,'Source ready','selecting a supported source must show its static loaded preview');
-  assert.equal(timers.size,0,'source tabs must not enqueue an automatic run');
-  // A real Run starts only after the visitor explicitly presses the comparison button.
+  const fakeFetch=async()=>({ok:true,status:204});
+  assert.doesNotThrow(()=>new Function('document','window','setTimeout','clearTimeout','fetch',homeJs)(fakeDocument,fakeWindow,queuedTimer,queuedClear,fakeFetch),'homepage interaction JS must execute');
+
+  // The recorded Instagram proof is the first-use state: visible before interaction.
+  assert.equal(ids['sim-left-state'].textContent,'Blocked','proof should initialize with the native access failure visible');
+  assert.equal(ids['sim-right-state'].textContent,'Source loaded','proof should initialize with the LTA result visible');
+  assert.equal(ids['sim-comparison-panels'].hidden,false,'proof panels must be visible on first paint');
+  assert.equal(ids['sim-conclusion'].hidden,false,'proof conclusion must be visible on first paint');
+  assert.equal(ids['sim-run'].textContent,'Replay proof ↻','visible proof should offer replay, not require a first run');
+  assert.equal(timers.size,0,'proof-first state must not autoplay timers');
+  assert.match(ids['sim-right-answer'].innerHTML,/rapid-fire interview with entrepreneur Marcus Lemonis/,'initial proof should use the recorded Instagram result');
+  assert.match(ids['sim-left-answer'].innerHTML,/can’t directly access the Instagram Reel/,'initial proof should show the recorded native access limitation');
+
+  // Replay is optional theatre after the proof is already visible.
   ids['sim-run'].listeners.click();
   assert.equal(ids['sim-left-state'].textContent,'Trying source');
   assert.equal(ids['sim-right-state'].textContent,'Starting');
-  assert.ok(runNextTimer(),'first staged timer should exist');
+  assert.ok(runNextTimer(),'replay should stage the source-read sequence');
   assert.equal(ids['sim-right-state'].textContent,'Reading');
-  // Reset in the middle of a run must invalidate every stale callback.
+  runAllTimers();
+  assert.equal(ids['sim-left-state'].textContent,'Blocked','replay should finish on the source-access limitation');
+  assert.equal(ids['sim-right-state'].textContent,'Source loaded','replay should finish with source delivered');
+  assert.equal(ids['sim-conclusion'].hidden,false,'replay should return to the visible conclusion');
+  assert.match(ids['sim-right-answer'].innerHTML,/millionaire at 27/,'replay should preserve a concrete recorded source point');
+  assert.equal(ids['sim-run'].textContent,'Run again ↻','completed replay should remain replayable');
+
+  // Reset returns to the same proof-first preview, never an empty state.
   ids['sim-reset'].listeners.click();
-  runAllTimers();
-  assert.equal(ids['sim-left-state'].textContent,'Link only','mid-run Reset must defeat stale left callbacks');
-  assert.equal(ids['sim-right-state'].textContent,'Source ready','mid-run Reset must defeat stale right callbacks');
-  assert.equal(ids['sim-conclusion'].hidden,true,'mid-run Reset must keep conclusion hidden');
-  // Run again after Reset and complete the whole comparison.
-  ids['sim-run'].listeners.click();
-  runAllTimers();
-  assert.equal(ids['sim-left-state'].textContent,'Blocked','rerun after Reset must reach blocked state');
-  assert.equal(ids['sim-right-state'].textContent,'Source loaded','rerun after Reset must reach loaded state');
-  assert.equal(ids['sim-conclusion'].hidden,false,'rerun after Reset must reveal conclusion');
-  assert.ok(ids['sim-right-answer'].classList.contains('show'),'rerun after Reset must reveal the answer');
-  assert.equal(ids['sim-run'].textContent,'Run again ↻','completed comparison should offer a rerun');
-  assert.doesNotMatch(ids['sim-tool'].innerHTML,/\bready\b/i,'loaded tool state should not repeat ready');
-  assert.match(ids['sim-right-answer'].innerHTML,/AI agents are becoming capable faster/,'YouTube proof should read as source-specific');
-  simTab('instagram').listeners.click();
-  ids['sim-run'].listeners.click();
-  runAllTimers();
-  assert.match(ids['sim-right-answer'].innerHTML,/rapid-fire interview with entrepreneur Marcus Lemonis/,'Instagram With-LTA answer should reproduce the recorded real result');
-  assert.match(ids['sim-left-answer'].innerHTML,/can’t directly access the Instagram Reel/,'Instagram without-LTA side should explain the source-access limitation');
-  assert.match(ids['sim-left-answer'].innerHTML,/paste the caption or describe the clip/,'Instagram failure should give a realistic fallback');
-  assert.match(ids['sim-right-answer'].innerHTML,/millionaire at 27/,'Instagram With-LTA answer should preserve a concrete point from the recorded result');
-  assert.doesNotMatch(ids['sim-right-answer'].innerHTML,/Claude/,'comparison answer labels must remain AI-client neutral');
-  // Switching source during a run must invalidate old-source callbacks.
-  ids['sim-run'].listeners.click();
-  assert.ok(runNextTimer());
-  simTab('hn').listeners.click();
-  runAllTimers();
-  assert.match(ids['sim-url'].textContent,/news\.ycombinator\.com/,'source tabs must switch simulation content');
-  assert.equal(ids['sim-left-state'].textContent,'Link only','switching source must cancel the old run and show the new preview');
-  assert.equal(ids['sim-right-state'].textContent,'Source ready','switching source must not autoplay the new source');
-  assert.equal(timers.size,0,'switching source must leave no stale or automatic timers');
-  ids['sim-run'].listeners.click();
-  runAllTimers();
-  assert.equal(ids['sim-right-state'].textContent,'Source loaded','explicit Run must complete the newly selected source');
-  ids['sim-reset'].listeners.click();
-  assert.equal(ids['sim-left-state'].textContent,'Link only','final Reset must restore left preview');
-  assert.equal(ids['sim-right-state'].textContent,'Source ready','final Reset must restore right preview');
-  assert.match(ids['sim-tool'].innerHTML,/Source loaded/,'Reset must restore the meaningful tool preview');
-  assert.equal(ids['sim-run'].textContent,'Run comparison →','Reset should restore the initial comparison CTA');
-  // Every advertised supported source must have a runnable comparison, not a dead tab.
-  for(const source of ['tiktok','instagram','x','bluesky','hn','pdf','web']){
-    simTab(source).listeners.click();
-    assert.equal(ids['sim-left-state'].textContent,'Link only',source+' should initialize its left-side preview');
-    assert.equal(ids['sim-right-state'].textContent,'Source ready',source+' should initialize its right-side preview');
-    ids['sim-run'].listeners.click();
-    runAllTimers();
-    assert.equal(ids['sim-right-state'].textContent,'Source loaded',source+' comparison should load the LTA side');
-    assert.ok(ids['sim-right-answer'].classList.contains('show'),source+' comparison should reveal an answer');
-    ids['sim-reset'].listeners.click();
-  }
+  assert.equal(ids['sim-left-state'].textContent,'Blocked','reset should restore the visible native limitation');
+  assert.equal(ids['sim-right-state'].textContent,'Source loaded','reset should restore the visible source result');
+  assert.equal(ids['sim-conclusion'].hidden,false,'reset should keep the proof conclusion visible');
+  assert.equal(ids['sim-run'].textContent,'Replay proof ↻','reset should restore the proof replay CTA');
 
   const start=await fetch(`http://127.0.0.1:${port}/start?from=hero`,{headers:{host:'link2ai.example'},redirect:'manual'});
   assert.equal(start.status,302);
