@@ -50,12 +50,20 @@ assert.match(product,/visitor_id,utm_source,utm_campaign,utm_content/);
 
 assert.match(authRoutes,/linkWebsiteVisitorToUser\(req\.headers\.cookie,user\.id,false\)/);
 assert.match(authRoutes,/recordActivationEvent\(user\.id,'oauth_start'/);
+assert.match(authRoutes,/trackWebsiteEvent\(req,'oauth_authorize_seen'/);
+assert.match(authRoutes,/trackWebsiteEvent\(req,'oauth_login_required'/);
+assert.match(authRoutes,/trackWebsiteEvent\(req,'google_signin_start'/);
 assert.match(authService,/recordActivationEvent\(row\.user_id,'oauth_success'/);
 assert.match(authService,/recordActivationEvent\(row\.user_id,'connector_connected'/);
 assert.match(authService,/recordActivationEvent\(analyticsUserId,'oauth_fail'/);
 
 assert.match(main,/trackWebsiteEvent\(req,'landing_view','\/'\)/);
 assert.match(main,/trackWebsiteEvent\(req,'add_lta_click'/);
+assert.match(main,/trackWebsiteEvent\(req,'connect_page_view'/);
+assert.match(main,/trackWebsiteEvent\(req,'claude_handoff_click'/);
+assert.match(main,/Claude did not prefill the connector/);
+assert.match(main,/manual-mcp-url/);
+assert.match(main,/window\.open\(a\.href,'_blank','noopener'\);location\.assign\('\/connect\?started=1&from='/);
 assert.match(main,/\+ → Connectors → LTA/);
 assert.match(main,/>Open Claude /);
 assert.match(main,/event_name='second_read_success'/);
