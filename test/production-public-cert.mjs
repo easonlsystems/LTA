@@ -94,8 +94,9 @@ await eventually('production revision availability',async()=>{
   const {response,text}=await request('/home.js?v=click-to-reveal-cert');
   assert.equal(response.status,200);
   assert.match(response.headers.get('content-type')??'',/javascript/);
-  assert.match(text,/resetDemo\(false,false\)/,'production homepage JS must initialize the comparison closed');
-  assert.match(text,/state\.opened=true;const panels=q\('#sim-comparison-panels'\);if\(panels\)panels\.hidden=false/,'production homepage JS must reveal panels only from the comparison interaction');
+  assert.match(text,/resetDemo\(false,true\)/,'production homepage JS must initialize with the recorded proof visible');
+  assert.match(text,/const state=\{source:'instagram',[^}]*opened:true\}/,'production homepage JS must keep the proof-first state open');
+  assert.match(text,/trackMarketing\('proof_replay'\)/,'production homepage JS must distinguish optional proof replay from first proof view');
   assert.match(text,/rapid-fire interview with entrepreneur Marcus Lemonis/,'production homepage JS must preserve the recorded With-LTA Instagram result');
   assert.match(text,/can’t directly access the Instagram Reel/,'production without-LTA copy must explain the Reel access limitation');
   assert.match(text,/paste the caption or describe the clip/,'production failure copy must offer a realistic fallback');
