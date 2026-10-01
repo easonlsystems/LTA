@@ -184,6 +184,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.get('/auth/google/start',async(req,reply)=>{
     const q=req.query as any;
     const returnTo=safeReturnTo(q.return_to);
+    await trackWebsiteEvent(req,'google_signin_start','/signup');
     try{
       const result=await beginGoogleSignIn(returnTo);
       reply.header('Set-Cookie',googleFlowCookie(result.state,600));
@@ -343,11 +344,12 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     try{
       const request=parseAuthorizeRequest(req.query as any);
       analyticsProfile=request.resource===mcpResource('openai')?'openai':'default';
+      await trackWebsiteEvent(req,'oauth_authorize_seen','/oauth/authorize',{profile:analyticsProfile});
       // Never let an unauthenticated authorize request turn CIMD into an outbound
       // fetch primitive. Validate/fetch the client only after LTA sign-in exists.
       const user = await userFromSessionCookie(req.headers.cookie);
-      if (!user) return reply.redirect(`/signup?return_to=${encodeURIComponent(authorizeQuery(request))}`);
-      if (!user.email) return reply.redirect(`/signup?return_to=${encodeURIComponent(authorizeQuery(request))}`);
+      if (!user){await trackWebsiteEvent(req,'oauth_login_required','/oauth/authorize',{profile:analyticsProfile});return reply.redirect(`/signup?return_to=${encodeURIComponent(authorizeQuery(request))}`);}
+      if (!user.email){await trackWebsiteEvent(req,'oauth_login_required','/oauth/authorize',{profile:analyticsProfile});return reply.redirect(`/signup?return_to=${encodeURIComponent(authorizeQuery(request))}`);}
       analyticsUserId=user.id;
       await linkWebsiteVisitorToUser(req.headers.cookie,user.id,false);
       const csrf=csrfTokenFromSessionCookie(req.headers.cookie);
