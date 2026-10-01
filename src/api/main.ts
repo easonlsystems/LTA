@@ -742,7 +742,7 @@ app.get('/connect',async(req,reply)=>{
       <div class="a-progress" aria-label="Connection progress"><span class="active" id="connect-progress-1"></span><span id="connect-progress-2"></span><span id="connect-progress-3"></span></div>
       <section class="a-connect-panel" id="setup-phase" aria-labelledby="setup-title">
         <h2 id="setup-title">Open LTA in Claude.</h2>
-        <p>Claude should open the custom connector form with LTA prefilled. Confirm it there. If Claude does not prefill the connector, use the manual fallback below.</p>
+        <p>Claude should open the custom connector form with LTA prefilled. Confirm it there. Do not search Claude's Connectors Directory. If Claude does not prefill the connector, use the manual fallback below.</p>
         <a class="a-primary" id="claude-install" href="/connect/start" target="_blank" rel="noopener">Add LTA to Claude <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
         <div class="a-connect-facts"><span>Custom Connector, not Directory</span><span>Sign in only if asked</span><span>10 free units</span></div>
       </section>
