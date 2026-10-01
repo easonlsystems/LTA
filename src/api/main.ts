@@ -554,7 +554,7 @@ body:has(.signal-subpage) footer{width:min(calc(100vw - 80px),1320px);margin:0 a
 
 `;
 function claudeInstallUrl(){const u=new URL('https://claude.ai/customize/connectors');u.searchParams.set('modal','add-custom-connector');u.searchParams.set('connectorName',env().PUBLIC_BRAND_NAME);u.searchParams.set('connectorUrl',`${env().PUBLIC_BASE_URL}/mcp`);return u.toString();}
-function siteShell(body:string,title=env().PUBLIC_BRAND_NAME,path='/'){const supportEmail=env().SUPPORT_EMAIL?.trim();const description=`Make supported public links AI-readable. ${env().PUBLIC_BRAND_NAME} turns videos, social posts, discussions, webpages, developer threads and text-layer PDFs into usable source context for the AI you already use.`;const base=env().PUBLIC_BASE_URL.replace(/\/$/,'');const canonical=`${base}${path.startsWith('/')?path:`/${path}`}`;return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content"><title>${title}</title><meta name="description" content="${description}"><meta name="robots" content="index,follow"><meta name="theme-color" content="${path==='/'||path==='/connect'?'#101a1c':'#fbfaf8'}"><link rel="canonical" href="${canonical}"><meta property="og:type" content="website"><meta property="og:site_name" content="${env().PUBLIC_BRAND_NAME}"><meta property="og:title" content="${title}"><meta property="og:description" content="${description}"><meta property="og:url" content="${canonical}"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${description}"><link rel="icon" type="image/png" href="/lta-icon.png"><link rel="apple-touch-icon" href="/lta-icon.png"><script type="application/ld+json">${JSON.stringify({"@context":"https://schema.org","@type":"SoftwareApplication",name:env().PUBLIC_BRAND_NAME,applicationCategory:"ProductivityApplication",operatingSystem:"Web",url:base,description})}</script><style>${siteCss}${activationCss}</style></head><body data-path="${path}"><a class="skip-link" href="#main-content">Skip to content</a><div class="wrap"><nav class="${path==='/'?'home-nav':''}" aria-label="Primary"><a class="brand" href="/" aria-label="${env().PUBLIC_BRAND_NAME} home"><img src="/lta-icon.png" alt=""><span>${env().PUBLIC_BRAND_NAME}</span></a><div class="navlinks"><a class="hide-sm" href="/connect">How it works</a><a class="hide-sm" href="/sources">Sources</a><a class="hide-sm" href="/pricing">Pricing</a><a class="hide-sm" href="/developers">Developers</a><details class="mobile-menu"><summary aria-label="Open navigation">Menu</summary><div class="mobile-menu-panel"><a href="/connect">How it works</a><a href="/sources">Sources</a><a href="/pricing">Pricing</a><a href="/developers">Developers</a><a href="/support">Support</a><a href="/account">Account</a></div></details><a class="btn sm purple" data-install-handoff href="/start?from=nav" target="_blank" rel="noopener">Add LTA to Claude</a></div></nav><script>(()=>{document.addEventListener('click',e=>{const a=e.target?.closest?.('[data-install-handoff]');if(!a)return;try{sessionStorage.setItem('link2ai_connect_started',String(Date.now()))}catch{}setTimeout(()=>location.assign('/connect?started=1'),350)});const n=document.querySelector('nav');if(!n)return;const sync=()=>n.classList.toggle('scrolled',window.scrollY>10);sync();window.addEventListener('scroll',sync,{passive:true});})();</script>${body}<footer><span>© 2026 ${env().PUBLIC_BRAND_NAME} · A product by Eason Systems</span><span class="legal-links"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/status">Status</a> · <a href="/support">Support</a> · <a href="/account">Account</a>${supportEmail?` · <a href="mailto:${supportEmail}">${supportEmail}</a>`:''}</span></footer></div></body></html>`;}
+function siteShell(body:string,title=env().PUBLIC_BRAND_NAME,path='/'){const supportEmail=env().SUPPORT_EMAIL?.trim();const description=`Make supported public links AI-readable. ${env().PUBLIC_BRAND_NAME} turns videos, social posts, discussions, webpages, developer threads and text-layer PDFs into usable source context for the AI you already use.`;const base=env().PUBLIC_BASE_URL.replace(/\/$/,'');const canonical=`${base}${path.startsWith('/')?path:`/${path}`}`;return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content"><title>${title}</title><meta name="description" content="${description}"><meta name="robots" content="index,follow"><meta name="theme-color" content="${path==='/'||path==='/connect'?'#101a1c':'#fbfaf8'}"><link rel="canonical" href="${canonical}"><meta property="og:type" content="website"><meta property="og:site_name" content="${env().PUBLIC_BRAND_NAME}"><meta property="og:title" content="${title}"><meta property="og:description" content="${description}"><meta property="og:url" content="${canonical}"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${description}"><link rel="icon" type="image/png" href="/lta-icon.png"><link rel="apple-touch-icon" href="/lta-icon.png"><script type="application/ld+json">${JSON.stringify({"@context":"https://schema.org","@type":"SoftwareApplication",name:env().PUBLIC_BRAND_NAME,applicationCategory:"ProductivityApplication",operatingSystem:"Web",url:base,description})}</script><style>${siteCss}${activationCss}</style></head><body data-path="${path}"><a class="skip-link" href="#main-content">Skip to content</a><div class="wrap"><nav class="${path==='/'?'home-nav':''}" aria-label="Primary"><a class="brand" href="/" aria-label="${env().PUBLIC_BRAND_NAME} home"><img src="/lta-icon.png" alt=""><span>${env().PUBLIC_BRAND_NAME}</span></a><div class="navlinks"><a class="hide-sm" href="/connect">How it works</a><a class="hide-sm" href="/sources">Sources</a><a class="hide-sm" href="/pricing">Pricing</a><a class="hide-sm" href="/developers">Developers</a><details class="mobile-menu"><summary aria-label="Open navigation">Menu</summary><div class="mobile-menu-panel"><a href="/connect">How it works</a><a href="/sources">Sources</a><a href="/pricing">Pricing</a><a href="/developers">Developers</a><a href="/support">Support</a><a href="/account">Account</a></div></details><a class="btn sm purple" data-install-handoff href="/start?from=nav" target="_blank" rel="noopener">Add LTA to Claude</a></div></nav><script>(()=>{document.addEventListener('click',e=>{const a=e.target?.closest?.('[data-install-handoff]');if(!a||e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();const started=Date.now();try{sessionStorage.setItem('link2ai_connect_started',String(started))}catch{}let from='other';try{from=new URL(a.href,location.href).searchParams.get('from')||'other'}catch{}window.open(a.href,'_blank','noopener');location.assign('/connect?started=1&from='+encodeURIComponent(from))});const n=document.querySelector('nav');if(!n)return;const sync=()=>n.classList.toggle('scrolled',window.scrollY>10);sync();window.addEventListener('scroll',sync,{passive:true});})();</script>${body}<footer><span>© 2026 ${env().PUBLIC_BRAND_NAME} · A product by Eason Systems</span><span class="legal-links"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/status">Status</a> · <a href="/support">Support</a> · <a href="/account">Account</a>${supportEmail?` · <a href="mailto:${supportEmail}">${supportEmail}</a>`:''}</span></footer></div></body></html>`;}
 
 app.get('/start',async(req,reply)=>{
   const fromRaw=String((req.query as {from?:string})?.from??'unknown').toLowerCase();
@@ -562,6 +562,7 @@ app.get('/start',async(req,reply)=>{
   await trackWebsiteEvent(req,'cta_start','/',{from});
   await trackWebsiteEvent(req,'connect_install_click','/',{from});
   await trackWebsiteEvent(req,'add_lta_click','/',{from});
+  await trackWebsiteEvent(req,'claude_handoff_click','/',{from});
   const current=await userFromSessionCookie(req.headers.cookie).catch(()=>null);
   if(current?.id){
     await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude',from}});
@@ -572,6 +573,7 @@ app.get('/start',async(req,reply)=>{
 app.get('/connect/start',async(req,reply)=>{
   await trackWebsiteEvent(req,'connect_install_click','/connect');
   await trackWebsiteEvent(req,'add_lta_click','/connect',{from:'connect'});
+  await trackWebsiteEvent(req,'claude_handoff_click','/connect',{from:'connect'});
   const current=await userFromSessionCookie(req.headers.cookie).catch(()=>null);
   if(current?.id){
     await recordActivationEvent(current.id,'connect_cta_click',{distributionProfile:'default',metadata:{host:'claude',from:'connect'}});
@@ -716,6 +718,9 @@ app.get('/home.js',async(_req,reply)=>reply.header('Cache-Control','no-cache, ma
 
 app.get('/connect',async(req,reply)=>{
   await trackWebsiteVisit(req,reply,'/connect');
+  const connectQuery=req.query as {from?:string;started?:string};
+  const connectFrom=String(connectQuery?.from??'unknown').slice(0,48);
+  await trackWebsiteEvent(req,'connect_page_view','/connect',{from:connectFrom,started:String(connectQuery?.started??'')==='1'});
   const mcpUrl=env().PUBLIC_BASE_URL.replace(/\/$/,'')+'/mcp';
   return reply.type('text/html').send(siteShell(`<main id="main-content" class="activation-connect">
     <div class="a-connect-shell">
@@ -724,7 +729,7 @@ app.get('/connect',async(req,reply)=>{
       <div class="a-progress" aria-label="Connection progress"><span class="active" id="connect-progress-1"></span><span id="connect-progress-2"></span><span id="connect-progress-3"></span></div>
       <section class="a-connect-panel" id="setup-phase" aria-labelledby="setup-title">
         <h2 id="setup-title">Open LTA in Claude.</h2>
-        <p>Confirm the prefilled connector. Do not search Claude's Connectors Directory. There is no MCP URL to type and no API key.</p>
+        <p>Claude should open the custom connector form with LTA prefilled. Confirm it there. If Claude does not prefill the connector, use the manual fallback below.</p>
         <a class="a-primary" id="claude-install" href="/connect/start" target="_blank" rel="noopener">Add LTA to Claude <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
         <div class="a-connect-facts"><span>Custom Connector, not Directory</span><span>Sign in only if asked</span><span>10 free units</span></div>
       </section>
@@ -747,6 +752,7 @@ app.get('/connect',async(req,reply)=>{
       </section>
       <noscript><p class="a-live-state">After connecting, return to Claude, choose + → Connectors → LTA, then paste a supported public link. First test: https://www.instagram.com/reel/Ddx6Q_MJNyg/ — “Summarize this Instagram Reel and list the main claims.”</p><style>.a-test-row button{display:none}</style></noscript>
       <div class="a-fallback">
+        <details><summary>Claude did not prefill the connector?</summary><p>In Claude open Customize → Connectors → + → Add custom connector. Name it <strong>LTA</strong> and use this MCP URL:</p><div class="a-test-row"><code id="manual-mcp-url">${mcpUrl}</code><button type="button" data-copy="manual-mcp-url">Copy MCP URL</button></div><p>No API key is required. Claude will open LTA authorization when it connects.</p></details>
         <details><summary>Connected, but Claude does not use LTA?</summary><p>In Claude choose + → Connectors → LTA. If needed, open Tool access and select Tools already loaded so LTA is available from the start of the chat.</p><img loading="lazy" decoding="async" src="/guide/claude-tool-access.png" alt="Claude Tool access menu showing the Tools already loaded option" style="display:block;max-width:100%;border-radius:9px"></details>
         <details><summary>Using Grok or another Remote MCP client?</summary><p>Use this MCP URL with OAuth in a compatible client. Claude's direct button already prefills it.</p><code>${mcpUrl}</code></details>
         <details><summary>Which links and units work?</summary><p>Public supported links include YouTube, TikTok, Instagram, X, Bluesky, GitHub Issues and PRs, Hacker News, readable webpages and text-layer PDFs. Video uses 1 unit per started processed minute, so a 19-minute video needs 19 units; text is about 1 unit per 2,500 estimated tokens. LTA does not yet analyze visual-only frames. Failed or unsupported reads use 0 units.</p><p><a href="/sources">See source limits →</a> · <a href="/pricing">See plans →</a> · <a href="/support">Get help →</a></p></details>
@@ -1131,6 +1137,25 @@ app.get('/founder',async(req,reply)=>{
       GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 12`,[founderEmail])
   ]);
 
+  const activationDiagnosticsResult=await pool.query<{
+    connect_page_view:string;claude_handoff_click:string;oauth_authorize_seen:string;
+    oauth_login_required:string;google_signin_start:string;google_signin_complete:string;
+  }>(`WITH epoch AS (SELECT started_at FROM analytics_epochs WHERE key='website_v2_activation')
+    SELECT
+      COUNT(DISTINCT e.visitor_id) FILTER(WHERE e.event_name='connect_page_view')::text AS connect_page_view,
+      COUNT(DISTINCT e.visitor_id) FILTER(WHERE e.event_name='claude_handoff_click')::text AS claude_handoff_click,
+      COUNT(DISTINCT e.visitor_id) FILTER(WHERE e.event_name='oauth_authorize_seen')::text AS oauth_authorize_seen,
+      COUNT(DISTINCT e.visitor_id) FILTER(WHERE e.event_name='oauth_login_required')::text AS oauth_login_required,
+      COUNT(DISTINCT e.visitor_id) FILTER(WHERE e.event_name='google_signin_start')::text AS google_signin_start,
+      COUNT(DISTINCT e.visitor_id) FILTER(WHERE e.event_name='google_signin_complete')::text AS google_signin_complete
+    FROM website_events e
+    JOIN website_visitors v ON v.visitor_id=e.visitor_id
+    LEFT JOIN users u ON u.id=v.user_id
+    CROSS JOIN epoch ep
+    WHERE e.created_at>=ep.started_at
+      AND COALESCE(lower(u.email),'')<>$1
+      AND COALESCE(u.analytics_excluded,false)=false`,[founderEmail]);
+
   const productFunnelResult=await pool.query<{
     add_lta_click:string;oauth_start:string;connector_connected:string;
     read_requested:string;first_read_success:string;second_read_success:string;
@@ -1198,6 +1223,13 @@ app.get('/founder',async(req,reply)=>{
   const activation=activationResult.rows[0];
   const activationVisitors=founderNum(activation?.activation_visitors),ctaStarts=founderNum(activation?.cta_starts),signupViews=founderNum(activation?.signup_views),signupSubmits=founderNum(activation?.signup_submits),signupFailures=founderNum(activation?.signup_failures),externalSignups=founderNum(activation?.external_signups),connectClicks=founderNum(activation?.connect_clicks),externalConnected=founderNum(activation?.external_connected),externalActivated=founderNum(activation?.external_activated),externalPaid=founderNum(activation?.external_paid);
   const activationStarted=founderTime(activation?.activation_started_at);
+  const activationDiagnostics=activationDiagnosticsResult.rows[0];
+  const diagnosticConnectPage=founderNum(activationDiagnostics?.connect_page_view);
+  const diagnosticClaudeHandoff=founderNum(activationDiagnostics?.claude_handoff_click);
+  const diagnosticOauthSeen=founderNum(activationDiagnostics?.oauth_authorize_seen);
+  const diagnosticOauthLoginRequired=founderNum(activationDiagnostics?.oauth_login_required);
+  const diagnosticGoogleStart=founderNum(activationDiagnostics?.google_signin_start);
+  const diagnosticGoogleComplete=founderNum(activationDiagnostics?.google_signin_complete);
   const productFunnel=productFunnelResult.rows[0];
   const productAddLta=founderNum(productFunnel?.add_lta_click);
   const productOauthStart=founderNum(productFunnel?.oauth_start);
@@ -1259,6 +1291,8 @@ app.get('/founder',async(req,reply)=>{
     <section class="fd-panel"><div class="fd-panel-head"><div><h2>使用者</h2><div class="fd-note">${totalMatched} 個帳號 · 點進去再看詳細資料</div></div><form method="get" action="/founder" class="fd-tools"><input class="fd-input" type="search" name="q" value="${searchValue}" placeholder="搜尋 Email"><button class="btn alt sm" type="submit">搜尋</button>${q?'<a class="btn alt sm" href="/founder">清除</a>':''}</form></div><div class="fd-scroll"><table class="fd-table"><thead><tr><th>Email</th><th>方案</th><th>AI</th><th>成功 read</th><th>使用量</th><th>最後活動</th><th></th></tr></thead><tbody>${accountRows}</tbody></table></div><div class="fd-panel-head"><span class="fd-label">每頁 100 筆</span><div class="fd-nav">${prev}${next}</div></div></section>
     <details class="fd-panel"><summary style="cursor:pointer;padding:18px;font-weight:800">進階診斷（平常不用看）</summary>
       <div style="padding:0 18px 18px">
+        <div class="fd-label" style="margin:8px 0">Activation handoff diagnostics</div>
+        <div class="fd-funnel activation"><div class="fd-step"><b>${diagnosticConnectPage}</b><span>Connect guide</span></div><div class="fd-step"><b>${diagnosticClaudeHandoff}</b><span>Claude handoff</span></div><div class="fd-step"><b>${diagnosticOauthSeen}</b><span>OAuth reached</span></div><div class="fd-step"><b>${diagnosticOauthLoginRequired}</b><span>Login required</span></div><div class="fd-step"><b>${diagnosticGoogleStart}</b><span>Google sign-in start</span></div><div class="fd-step"><b>${diagnosticGoogleComplete}</b><span>Google sign-in complete</span></div></div>
         <div class="fd-label" style="margin:8px 0">Activation funnel</div>
         <div class="fd-funnel activation"><div class="fd-step"><b>${productAddLta}</b><span>Add LTA</span></div><div class="fd-step"><b>${productOauthStart}</b><span>OAuth start</span></div><div class="fd-step"><b>${productConnectorConnected}</b><span>Connected</span></div><div class="fd-step"><b>${productReadRequested}</b><span>Read requested</span></div><div class="fd-step"><b>${productFirstReadSuccess}</b><span>First read</span></div><div class="fd-step"><b>${productSecondReadSuccess}</b><span>Second distinct source</span></div></div>
         <div class="fd-label" style="margin:18px 0 8px">UTM campaign → activation</div>
