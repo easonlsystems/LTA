@@ -9,6 +9,7 @@ import { registerAuthRoutes } from '../auth/routes.js';
 import { registerBillingRoutes } from '../billing/routes.js';
 import { authInfoFromBearer, beginFounderStepUp, clearFounderStepUpCookie, createFounderStepUpCookie, csrfTokenFromSessionCookie, diagnoseBearerAuth, hasFounderStepUp, invalidateFounderStepUpChallenges, mcpResource, userFromSessionCookie, verifyCsrfToken, verifyFounderStepUp } from '../auth/service.js';
 import { buildMcpServer } from '../mcp/server.js';
+import { buildOpenAiFirstPartyServer } from '../mcp/openaiFirstParty.js';
 import { readinessIssues } from '../config/readiness.js';
 import { browserSameOriginOk, publicHostAllowlist } from '../config/publicUrl.js';
 import { getUsageSnapshot } from '../quota/service.js';
@@ -50,7 +51,7 @@ app.addHook('onSend',async(request,reply,payload)=>{
 
 const mcpHandler=createMcpHandler(()=>buildMcpServer());
 const nodeMcp=toNodeHandler(mcpHandler,{onerror:(err)=>logErrorEvent('mcp_adapter_error',err,{distribution_profile:'default'})});
-const openaiMcpHandler=createMcpHandler(()=>buildMcpServer('openai'));
+const openaiMcpHandler=createMcpHandler(()=>buildOpenAiFirstPartyServer());
 const nodeOpenaiMcp=toNodeHandler(openaiMcpHandler,{onerror:(err)=>logErrorEvent('mcp_adapter_error',err,{distribution_profile:'openai'})});
 
 app.all('/mcp',async(request,reply)=>{

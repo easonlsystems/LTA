@@ -3,34 +3,26 @@
 ## Version
 3.0.0 — first public OpenAI Plugin Directory submission.
 
-## What LTA does
-LTA reads supported exact public links when the host AI cannot reliably access the original source. It returns source identity, AI-readable source context, long-result continuation state, source-completeness metadata, and LTA processing-unit state.
+## What this ChatGPT distribution does
+The public-directory `/mcp/openai` distribution is a first-party LTA account and planning companion. It can:
+- check whether a user-provided URL string matches a source format recognized by LTA, without contacting the linked site;
+- list LTA's current source compatibility categories;
+- estimate LTA processing units from a duration or character count supplied by the user; and
+- return the authenticated user's LTA plan and processing-unit balance.
 
-## Production source categories advertised for this ChatGPT release
-The ChatGPT-specific distribution uses the same supported-source matrix as LTA's default/Claude distribution:
-- YouTube videos and YouTube Shorts
-- TikTok videos and supported public posts
-- Instagram Reels and supported public posts
-- Individual public X posts
-- Individual public Bluesky posts
-- Public GitHub Issues / pull requests and public discussion
-- Hacker News public items / discussions
-- Readable public HTTPS webpages / articles
-- Direct public text-layer PDFs
-- Individual public Reddit posts when approved Reddit OAuth Data API credentials are configured
+## What this ChatGPT distribution does not do
+It does not fetch, scrape, proxy, relay, summarize, transcribe, or return content from third-party websites or APIs.
 
-LTA still does not support profiles, feeds, timelines, broad crawling, private/login-only content, paywall or DRM bypass, or visual-only details that are not represented in returned text.
+The broader LTA product and the default/Claude MCP distribution may support external public-link reading. Those source-reading tools and provider paths are not exposed through the submitted `/mcp/openai` directory endpoint.
 
 ## Authentication
 OAuth 2.1 authorization-code + PKCE. The ChatGPT distribution uses a dedicated OAuth resource audience bound to the production `/mcp/openai` endpoint. Normal users use Google sign-in. OpenAI reviewers receive dedicated no-MFA reviewer credentials privately through the submission portal.
 
 ## Reviewer notes
-- `read_public_link` can create/reuse a supported source-processing job and consume LTA processing units.
-- `read_public_links` keeps each supported source separate.
-- `get_transcript_result` is read-only and continues/paginates an existing job.
-- `get_visual_assets` is read-only and delivers attached images from an already processed supported social-post job without charging processing units again.
-- `find_in_link` searches an already processed source.
-- `get_usage` is read-only.
-- The ChatGPT-specific endpoint intentionally keeps a six-tool surface even though its supported-source matrix matches the default/Claude distribution.
-- Failed/unsupported reads consume 0 processing units.
-- Returned source text is treated as untrusted external content, and incomplete upstream results are reported honestly rather than fabricated.
+- `check_link_support` performs local URL parsing only and always reports `network_request_made=false`.
+- `get_supported_sources` returns LTA-owned product capability metadata only.
+- `estimate_processing_units` is a deterministic local calculation over user-supplied duration or character count.
+- `get_usage` reads first-party LTA account usage only.
+- All four tools are read-only, non-destructive, idempotent, and `openWorldHint=false`.
+- No tool initiates purchases or returns checkout / upgrade / top-up links.
+- The public ChatGPT distribution is general-audience only; adult-domain compatibility checks fail closed.
