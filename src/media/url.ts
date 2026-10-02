@@ -1,7 +1,7 @@
 import { Link2AIError } from '../util/errors.js';
 import { sha256 } from '../util/crypto.js';
 
-export type Platform = 'instagram' | 'tiktok' | 'youtube' | 'x' | 'reddit' | 'bluesky' | 'github' | 'hackernews' | 'pdf' | 'web';
+export type Platform = 'instagram' | 'tiktok' | 'youtube' | 'x' | 'reddit' | 'bluesky' | 'github' | 'hackernews' | 'pdf' | 'web' | 'upload';
 export type LinkKind = 'media' | 'post' | 'page' | 'document';
 
 const socialHosts = new Set([
