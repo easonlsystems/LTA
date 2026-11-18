@@ -1,4 +1,5 @@
 import { McpServer, type AuthInfo } from '@modelcontextprotocol/server';
+import { timelineCoverageVerified } from '../media/timeline.js';
 import * as z from 'zod/v4';
 import { getJobResult, startTranscriptJob, usageForTool, type ToolJobResult } from '../source/service.js';
 import { normalizeClientSource } from '../source/clientSource.js';
@@ -228,8 +229,8 @@ export function chunkResult(result:ToolJobResult,offset=0,maxChars=MAX_CHARS):Re
       ? undefined
       : 'Images, visual layout, attached media and other non-text details were not available as model-readable image blocks in this result.';
   const sourceTruncated=Boolean(result.truncated);
-  const timelineCoverageVerified=contentType!=='video'||Boolean(result.segments?.length);
-  const sourceCompleteness=sourceTruncated?'partial':timelineCoverageVerified?'complete':'unverified';
+  const timelineVerified=contentType!=='video'||timelineCoverageVerified(result.duration_seconds,result.segments);
+  const sourceCompleteness=sourceTruncated?'partial':timelineVerified?'complete':'unverified';
   const continuationRequired=next!==null;
   const contentComplete=sourceCompleteness==='complete'&&!continuationRequired;
   const continuationNotice=continuationRequired
@@ -244,7 +245,7 @@ export function chunkResult(result:ToolJobResult,offset=0,maxChars=MAX_CHARS):Re
     truncated:sourceTruncated,truncation_reason:result.truncation_reason,
     source_completeness:sourceCompleteness,content_complete:contentComplete,
     delivery_complete:!continuationRequired,continuation_required:continuationRequired,
-    remaining_characters:Math.max(0,result.transcript.length-chunk.end),timeline_coverage_verified:timelineCoverageVerified,
+    remaining_characters:Math.max(0,result.transcript.length-chunk.end),timeline_coverage_verified:timelineVerified,
     extracted_token_estimate:result.extracted_token_estimate??0,usage_units:result.usage_units??0,
     items_available:result.items_available,items_extracted:result.items_extracted,
     pages_available:result.pages_available,pages_extracted:result.pages_extracted,

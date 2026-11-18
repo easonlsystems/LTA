@@ -41,7 +41,8 @@ function mapYtDlpError(stderr: string): Link2AIError {
   if (s.includes('unsupported url')) {
     return new Link2AIError('UNSUPPORTED_URL', 'This social video URL is not supported.', 400);
   }
-  return new Link2AIError('EXTRACTION_FAILED', 'Link2AI could not read this video from the platform.', 502, true, { extractor: stderr.slice(-1200) });
+  if(s.includes('requested format is not available'))return new Link2AIError('EXTRACTION_FAILED','The platform did not offer a matching media format.',502,false,{cause_code:'ytdlp_format_unavailable'});
+  return new Link2AIError('EXTRACTION_FAILED', 'Link2AI could not read this video from the platform.', 502, true, {cause_code:'ytdlp_extraction_failed', extractor: stderr.slice(-1200) });
 }
 
 function preferredExtractionError(first:unknown,second:unknown):unknown{
@@ -177,13 +178,13 @@ export class YtDlpResolver implements MediaResolver {
     let result;
     try {
       result = await ytdlp([
-        '--js-runtimes','node','--no-playlist','--no-warnings','-f','bestaudio[acodec!=none]/best[acodec!=none]',
+        '--js-runtimes','node','--no-playlist','--no-warnings','-f','bestaudio/best',
         '--max-filesize', String(env().MAX_DOWNLOAD_BYTES), '-o', template, input.normalizedUrl
       ], ctx);
     } catch (firstError) {
       try {
         result = await ytdlp([
-          '--impersonate','chrome','--js-runtimes','node','--no-playlist','--no-warnings','-f','bestaudio[acodec!=none]/best[acodec!=none]',
+          '--impersonate','chrome','--js-runtimes','node','--no-playlist','--no-warnings','-f','bestaudio/best',
           '--max-filesize', String(env().MAX_DOWNLOAD_BYTES), '-o', template, input.normalizedUrl
         ], ctx);
       } catch (secondError) {

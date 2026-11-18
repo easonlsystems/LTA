@@ -39,11 +39,11 @@ export async function runProcess(
       const out = Buffer.concat(stdout).toString('utf8');
       const err = Buffer.concat(stderr).toString('utf8');
       if (killedForSize) {
-        reject(new Link2AIError('EXTRACTION_FAILED', 'Process output exceeded the safety limit.', 502, false));
+        reject(new Link2AIError('EXTRACTION_FAILED', 'Process output exceeded the safety limit.', 502, false,{cause_code:'process_output_limit'}));
         return;
       }
       if (timedOut) {
-        reject(new Link2AIError('EXTRACTION_FAILED', 'Media processing timed out.', 504, true));
+        reject(new Link2AIError('EXTRACTION_FAILED', 'Media processing timed out.', 504, true,{cause_code:'process_timeout'}));
         return;
       }
       resolve({ stdout: out, stderr: err, code: code ?? -1 });

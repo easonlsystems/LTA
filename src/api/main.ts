@@ -1011,8 +1011,8 @@ app.get('/founder',async(req,reply)=>{
       COALESCE((SELECT SUM(l.seconds) FROM usage_ledger l JOIN users u ON u.id=l.user_id WHERE u.analytics_excluded=false AND l.created_at>now()-interval '7 days'),0)::text AS seconds_7d,
       (SELECT COUNT(*) FROM transcript_jobs j JOIN users u ON u.id=j.user_id WHERE u.analytics_excluded=false AND j.status='failed' AND j.created_at>now()-interval '24 hours')::text AS failed_24h,
       (SELECT COUNT(*) FROM transcript_jobs j JOIN users u ON u.id=j.user_id WHERE u.analytics_excluded=false AND j.status='failed' AND j.created_at>now()-interval '7 days')::text AS failed_7d`),
-    pool.query<{user_id:string;email:string|null;platform:string;client_source:string;status:string;duration_seconds:number|null;error_code:string|null;created_at:string}>(
-      `SELECT j.user_id,u.email,j.platform,j.client_source,j.status,j.duration_seconds,j.error_code,j.created_at
+    pool.query<{user_id:string;email:string|null;platform:string;client_source:string;status:string;duration_seconds:number|null;error_code:string|null;error_cause_code:string|null;attempts:number;created_at:string}>(
+      `SELECT j.user_id,u.email,j.platform,j.client_source,j.status,j.duration_seconds,j.error_code,j.error_cause_code,j.attempts,j.created_at
        FROM transcript_jobs j LEFT JOIN users u ON u.id=j.user_id
        ORDER BY j.created_at DESC LIMIT 20`
     ),
@@ -1277,7 +1277,7 @@ app.get('/founder',async(req,reply)=>{
   const renderedAt=founderTime(new Date().toISOString());
   const trackingStarted=founderTime(a?.tracking_started_at);
   const trackingLast=founderTime(a?.tracking_last_at);
-  const recentJobs=recentJobsResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td class="fd-email"><a href="/founder/user/${founderEscape(row.user_id)}">${founderEscape(row.email??'匿名')}</a></td><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderEscape(row.platform)}</td><td><span class="fd-status ${row.status==='completed'?'ok':row.status==='failed'?'bad':'wait'}">${founderEscape(founderJobStatusLabel(row.status))}</span></td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)} 分鐘`:'—'}</td><td>${founderEscape(founderErrorLabel(row.error_code))}</td></tr>`).join('')||'<tr><td colspan="7">目前還沒有讀取紀錄。</td></tr>';
+  const recentJobs=recentJobsResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td class="fd-email"><a href="/founder/user/${founderEscape(row.user_id)}">${founderEscape(row.email??'匿名')}</a></td><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderEscape(row.platform)}</td><td><span class="fd-status ${row.status==='completed'?'ok':row.status==='failed'?'bad':'wait'}">${founderEscape(founderJobStatusLabel(row.status))}</span></td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)} 分鐘`:'—'}</td><td>${founderEscape(founderErrorLabel(row.error_code))}${row.error_cause_code?` · ${founderEscape(row.error_cause_code)}`:``}${row.attempts>1?` · ${row.attempts} attempts`:``}</td></tr>`).join('')||'<tr><td colspan="7">目前還沒有讀取紀錄。</td></tr>';
   const platforms=platformResult.rows.map(row=>`<span class="fd-chip">${founderEscape(row.platform)} · ${founderNum(row.count)}</span>`).join('')||'<span class="fd-chip">目前還沒有成功連結</span>';
   const successful24h=founderNum(m?.links_24h),successful7d=founderNum(m?.links_7d),failed24h=founderNum(m?.failed_24h),failed7d=founderNum(m?.failed_7d);
   const attempts7d=successful7d+failed7d;
@@ -1358,7 +1358,7 @@ app.get('/founder/user/:id',async(req,reply)=>{
       COALESCE((SELECT SUM(seconds) FROM usage_ledger WHERE user_id=$1),0)::text seconds,
       (SELECT COUNT(*) FROM transcript_jobs WHERE user_id=$1 AND status='failed')::text failed,
       (SELECT MAX(created_at) FROM transcript_jobs WHERE user_id=$1) last_job`,[targetId]),
-    pool.query<{id:string;platform:string;client_source:string;status:string;duration_seconds:number|null;error_code:string|null;created_at:string}>(`SELECT id,platform,client_source,status,duration_seconds,error_code,created_at FROM transcript_jobs WHERE user_id=$1 ORDER BY created_at DESC LIMIT 30`,[targetId]),
+    pool.query<{id:string;platform:string;client_source:string;status:string;duration_seconds:number|null;error_code:string|null;error_cause_code:string|null;attempts:number;created_at:string}>(`SELECT id,platform,client_source,status,duration_seconds,error_code,error_cause_code,attempts,created_at FROM transcript_jobs WHERE user_id=$1 ORDER BY created_at DESC LIMIT 30`,[targetId]),
     pool.query<{client_source:string;accesses:string;cache_reuses:string;billed_seconds:string}>(`WITH access AS (
       SELECT client_source,COUNT(*)::bigint accesses,COUNT(*) FILTER(WHERE reused)::bigint cache_reuses
       FROM source_access_events WHERE user_id=$1 GROUP BY client_source
@@ -1378,7 +1378,7 @@ app.get('/founder/user/:id',async(req,reply)=>{
   ]);
   const a=allTimeResult.rows[0];
   const flash=String((req.query as {saved?:string;error?:string})?.saved??'')==='1'?'<div class="fd-okflash">已儲存。</div>':String((req.query as {error?:string})?.error??'')?`<div class="fd-badflash">${founderEscape((req.query as {error?:string}).error)}</div>`:'';
-  const jobRows=jobsResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderEscape(row.platform)}</td><td>${founderEscape(founderJobStatusLabel(row.status))}</td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)} 分鐘`:'—'}</td><td>${founderEscape(row.error_code??'—')}</td><td class="fd-email">${founderEscape(row.id)}</td></tr>`).join('')||'<tr><td colspan="7">目前還沒有工作紀錄。</td></tr>';
+  const jobRows=jobsResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderEscape(row.platform)}</td><td>${founderEscape(founderJobStatusLabel(row.status))}</td><td>${row.duration_seconds?`${Math.ceil(row.duration_seconds/60)} 分鐘`:'—'}</td><td>${founderEscape(row.error_code??'—')}${row.error_cause_code?` · ${founderEscape(row.error_cause_code)}`:''}${row.attempts>1?` · ${row.attempts} attempts`:''}</td><td class="fd-email">${founderEscape(row.id)}</td></tr>`).join('')||'<tr><td colspan="7">目前還沒有工作紀錄。</td></tr>';
   const clientUsageRows=clientUsageResult.rows.map(row=>`<tr><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderNum(row.accesses)}</td><td>${founderNum(row.cache_reuses)}</td><td>${founderUnits(row.billed_seconds)}</td></tr>`).join('')||'<tr><td colspan="4">本帳號尚無可歸因的使用紀錄。</td></tr>';
   const accessRows=accessResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(clientSourceLabel(row.client_source))}</td><td>${founderEscape(row.platform)}</td><td>${row.reused?'沿用已處理內容':'重新處理來源'}</td><td>${founderEscape(row.status?founderJobStatusLabel(row.status):'—')}</td><td class="fd-email">${founderEscape(row.job_id??'—')}</td></tr>`).join('')||'<tr><td colspan="6">目前還沒有使用入口紀錄。</td></tr>';
   const auditRows=auditResult.rows.map(row=>`<tr><td>${founderTime(row.created_at)}</td><td>${founderEscape(founderActionLabel(row.action))}</td><td class="fd-muted">${founderEscape(JSON.stringify(row.after_state??{}))}</td></tr>`).join('')||'<tr><td colspan="3">目前還沒有 Founder 調整紀錄。</td></tr>';

@@ -182,6 +182,30 @@ export async function finalizeQuota(userId: string, jobId: string): Promise<void
   } finally { client.release(); }
 }
 
+export async function completeWithQuota(userId:string,jobId:string,cacheId:string,durationSeconds:number,cacheHit=false):Promise<void>{
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const {period}=await getUserAndPeriod(client,userId);
+    const reservation=await client.query<{seconds:number}>('SELECT seconds FROM quota_reservations WHERE user_id=$1 AND job_id=$2 FOR UPDATE',[userId,jobId]);
+    if(reservation.rowCount){
+      await client.query(`INSERT INTO usage_ledger(user_id,job_id,seconds,videos,billing_period_start,billing_period_end)
+        VALUES($1,$2,$3,1,$4,$5) ON CONFLICT(job_id) DO NOTHING`,
+        [userId,jobId,reservation.rows[0].seconds,period.start,period.end]);
+      await client.query('DELETE FROM quota_reservations WHERE job_id=$1',[jobId]);
+    }else{
+      const existing=await client.query('SELECT 1 FROM usage_ledger WHERE user_id=$1 AND job_id=$2',[userId,jobId]);
+      if(!existing.rowCount)throw new Link2AIError('INTERNAL_ERROR','Quota reservation disappeared before completion.',500);
+    }
+    await client.query(`UPDATE transcript_jobs SET status='completed',transcript_cache_id=$3,duration_seconds=$4,
+      error_code=NULL,error_message=NULL,error_cause_code=NULL,retryable=false,locked_at=NULL,locked_by=NULL,
+      analytics_cache_hit=$5,completed_at=now(),updated_at=now() WHERE id=$1 AND user_id=$2`,
+      [jobId,userId,cacheId,durationSeconds,cacheHit]);
+    await client.query('COMMIT');
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}
+  finally{client.release();}
+}
+
 export async function releaseQuota(jobId: string): Promise<void> {
   await pool.query('DELETE FROM quota_reservations WHERE job_id=$1', [jobId]);
 }

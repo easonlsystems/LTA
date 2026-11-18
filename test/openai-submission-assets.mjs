@@ -21,7 +21,7 @@ assert.equal(mcp.mcpServers.link2ai.url,'https://api-production-0383e.up.railway
 assert.equal(OPENAI_SKILL_NAME,'read-public-links-with-lta');
 assert.equal(OPENAI_SKILL_URI,'skill://lta/read-public-links-with-lta/SKILL.md');
 assert.match(OPENAI_SKILL_DIGEST,/^sha256:[0-9a-f]{64}$/);
-assert.equal(skill.trim(),OPENAI_SKILL_MD.trim(),'Submission SKILL.md must exactly match the production MCP skill snapshot');
+assert.equal(skill.replace(/\r\n/g,'\n').trim(),OPENAI_SKILL_MD.replace(/\r\n/g,'\n').trim(),'Submission SKILL.md must exactly match the production MCP skill snapshot');
 assert.match(skill,/LTA supports exact public links from/i);
 assert.match(skill,/YouTube and YouTube Shorts/i);
 assert.match(skill,/Instagram Reels/i);
