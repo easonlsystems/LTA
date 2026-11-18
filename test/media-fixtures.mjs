@@ -13,6 +13,7 @@ process.env.APP_SECRET='01234567890123456789012345678901';
 process.env.GROQ_API_KEY='fixture-key';
 process.env.OPENAI_API_KEY='fixture-key';
 process.env.FFMPEG_BIN=ffmpeg.path;
+process.env.FFPROBE_BIN=ffprobe.path;
 process.env.PATH=`${path.dirname(ffprobe.path)}${path.delimiter}${process.env.PATH??''}`;
 const {validateAudioStream,normalizeAudioForAsr,probeMediaDurationSeconds}=await import('../dist/src/media/audio.js');
 const {runProviderChain}=await import('../dist/src/resolvers/providerChain.js');

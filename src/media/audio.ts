@@ -30,6 +30,7 @@ export async function validateAudioStream(inputPath:string):Promise<void>{
 }
 
 function ffprobeBin(ffmpegBin:string):string{
+  if(env().FFPROBE_BIN)return env().FFPROBE_BIN!;
   const base=path.basename(ffmpegBin);
   return base==='ffmpeg'?path.join(path.dirname(ffmpegBin),'ffprobe'):'ffprobe';
 }
