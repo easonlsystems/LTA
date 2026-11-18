@@ -177,13 +177,13 @@ export class YtDlpResolver implements MediaResolver {
     let result;
     try {
       result = await ytdlp([
-        '--js-runtimes','node','--no-playlist','--no-warnings','-f','bestaudio[acodec!=none]/best[acodec!=none]',
+        '--js-runtimes','node','--no-playlist','--no-warnings','-x','--audio-format','mp3','--audio-quality','24K','-f','bestaudio/best',
         '--max-filesize', String(env().MAX_DOWNLOAD_BYTES), '-o', template, input.normalizedUrl
       ], ctx);
     } catch (firstError) {
       try {
         result = await ytdlp([
-          '--impersonate','chrome','--js-runtimes','node','--no-playlist','--no-warnings','-f','bestaudio[acodec!=none]/best[acodec!=none]',
+          '--impersonate','chrome','--js-runtimes','node','--no-playlist','--no-warnings','-x','--audio-format','mp3','--audio-quality','24K','-f','bestaudio/best',
           '--max-filesize', String(env().MAX_DOWNLOAD_BYTES), '-o', template, input.normalizedUrl
         ], ctx);
       } catch (secondError) {
