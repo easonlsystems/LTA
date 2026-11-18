@@ -18,14 +18,14 @@ import { estimateTokens, textUsageUnits, videoUsageUnits } from '../content/limi
 import { regionalFallbackTarget } from './regions.js';
 import { recordProviderOutcome } from '../resolvers/providerTelemetry.js';
 import { generalAudienceBlockReason } from '../safety/generalAudience.js';
-import { timelineCoverageVerified } from '../media/timeline.js';
 
 const resolver=new ResolverOrchestrator();
 
 export function videoCompleteness(text:string,durationSeconds:number,segments?:Array<{start?:number;end:number}>){
   const coverage=segments?.reduce((max,segment)=>Number.isFinite(segment.end)?Math.max(max,segment.end):max,0)??0;
-  const gapUnverified=Boolean(segments?.length&&segments.every(s=>Number.isFinite(s.start))&&!timelineCoverageVerified(durationSeconds,segments as Array<{start:number;end:number}>));
-  const truncated=durationSeconds>0&&coverage>0&&(coverage<durationSeconds-Math.min(30,Math.max(2,durationSeconds*0.1))||gapUnverified);
+  // A delayed first spoken cue or a silent gap does not prove the transcript is truncated.
+  // Timeline verification is reported separately to the client.
+  const truncated=durationSeconds>0&&coverage>0&&coverage<durationSeconds-Math.min(30,Math.max(2,durationSeconds*0.1));
   return {truncated,extractedTokenEstimate:estimateTokens(text),usageUnits:videoUsageUnits(durationSeconds),...(truncated?{truncationReason:'caption_timeline_incomplete',contentSectionsTruncated:['caption_timeline']}: {})};
 }
 

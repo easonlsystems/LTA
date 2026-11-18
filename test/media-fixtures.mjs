@@ -18,7 +18,7 @@ process.env.PATH=`${path.dirname(ffprobe.path)}${path.delimiter}${process.env.PA
 const {validateAudioStream,normalizeAudioForAsr,probeMediaDurationSeconds}=await import('../dist/src/media/audio.js');
 const {runProviderChain}=await import('../dist/src/resolvers/providerChain.js');
 const {timelineCoverageVerified}=await import('../dist/src/media/timeline.js');
-const {videoTranscriptQuality}=await import('../dist/src/worker/processor.js');
+const {videoTranscriptQuality,videoCompleteness}=await import('../dist/src/worker/processor.js');
 const {transcribeAudio}=await import('../dist/src/transcription/router.js');
 const {pool}=await import('../dist/src/db/pool.js');
 const {parseMediaUrl}=await import('../dist/src/media/url.js');
@@ -81,6 +81,8 @@ try{
   assert.equal(timelineCoverageVerified(27,[]),false);
   assert.equal(timelineCoverageVerified(27,[{start:0,end:27}]),true);
   assert.equal(timelineCoverageVerified(100,[{start:0,end:10},{start:80,end:100}]),false);
+  assert.equal(videoCompleteness('A valid spoken caption',1344,[{start:10.349,end:1340.639}]).truncated,false,'a quiet introduction must not force a full ASR fallback');
+  assert.equal(timelineCoverageVerified(1344,[{start:10.349,end:1340.639}]),false,'that introduction still leaves timeline coverage unverified');
   const unverifiedRest=publicPayload({status:'completed',job_id:'fixture',platform:'instagram',duration_seconds:27,transcript:'Hello world',transcript_source:'asr',segments:[],usage_units:1});
   assert.equal(unverifiedRest.source_completeness,'unverified');
   assert.equal(unverifiedRest.timeline_coverage_verified,false);
