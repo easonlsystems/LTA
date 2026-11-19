@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {parseMediaUrl} from '../dist/src/media/url.js';
 import {isPublicAddress,orderPublicAddresses,pinnedLookup,remoteHttpError} from '../dist/src/util/safeHttp.js';
-import {parseBlueskyThread} from '../dist/src/content/linkText.js';
+import {canonicalBlueskyPost,parseBlueskyThread} from '../dist/src/content/linkText.js';
 import {textUsageUnits,videoUsageUnits,estimateTokens} from '../dist/src/content/limits.js';
 
 const cases=[
@@ -64,6 +64,10 @@ for(const [status,code,retryable] of [[404,'MEDIA_NOT_FOUND',false],[410,'MEDIA_
 }
 assert.equal(remoteHttpError(403,{'retry-after':'60'}).code,'RATE_LIMITED');
 const blueskyInput=parseMediaUrl('https://bsky.app/profile/bsky.app/post/3mnzpiackwk25');
+const blueskyCanonical=canonicalBlueskyPost(blueskyInput,{did:'did:plc:z72i7hdynmk6r22z27h6tvur'});
+assert.equal(blueskyCanonical.canonicalMediaId,'did:plc:z72i7hdynmk6r22z27h6tvur/3mnzpiackwk25');
+assert.equal(blueskyCanonical.canonicalMediaId,parseMediaUrl(blueskyCanonical.normalizedUrl).canonicalMediaId,'handle and DID URLs must share a worker cache key');
+assert.throws(()=>canonicalBlueskyPost(blueskyInput,{did:'bad-identity'}));
 const blueskyPayload={thread:{post:{uri:'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3mnzpiackwk25',author:{did:'did:plc:z72i7hdynmk6r22z27h6tvur',handle:'bsky.app'},record:{text:'A public Bluesky post with readable text and a handle that resolves to a DID.'},replyCount:0}}};
 assert.equal(parseBlueskyThread(blueskyInput,blueskyPayload).platform,'bluesky');
 assert.throws(()=>parseBlueskyThread(blueskyInput,{thread:{post:{...blueskyPayload.thread.post,uri:'at://did:plc:other/app.bsky.feed.post/3mnzpiackwk25'}}}));

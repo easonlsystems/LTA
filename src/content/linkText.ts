@@ -364,6 +364,24 @@ export function parseBlueskyThread(input:ParsedMediaUrl,payload:unknown,budget?:
   return complete({platform:'bluesky',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title:clipExternalText(`Bluesky post by ${display||handle}`,METADATA_LIMITS.title),creator:clipExternalText(handle?`@${handle}`:display,METADATA_LIMITS.creator),caption:clipExternalText(text,METADATA_LIMITS.description),language:jsonString(record?.langs instanceof Array?record.langs[0]:undefined)||'und',text:cleanText(sections.filter(Boolean).join('\n\n')),source:'post'},'social',{itemsAvailable:repliesAvailable,itemsExtracted:replies.count,truncated:repliesTruncated,contentSectionsTruncated:repliesTruncated?['upstream_replies']:undefined},budget);
 }
 
+export function canonicalBlueskyPost(input:ParsedMediaUrl,payload:unknown):ParsedMediaUrl{
+  if(input.platform!=='bluesky')return input;
+  const [actor,rkey]=input.canonicalMediaId.split('/');
+  if(actor.startsWith('did:'))return input;
+  const did=jsonString(jsonObject(payload)?.did);
+  if(!/^did:(?:plc|web):[A-Za-z0-9:._%-]+$/.test(did))
+    throw new Link2AIError('EXTRACTION_FAILED','Bluesky did not resolve this public profile to a valid identity.',502,true,{cause_code:'bluesky_handle_resolution_invalid'});
+  const normalizedUrl=`https://bsky.app/profile/${encodeURIComponent(did)}/post/${rkey}`;
+  return {...input,canonicalMediaId:`${did}/${rkey}`,normalizedUrl,sourceUrl:normalizedUrl};
+}
+
+export async function resolveBlueskyPost(input:ParsedMediaUrl):Promise<ParsedMediaUrl>{
+  if(input.platform!=='bluesky'||input.canonicalMediaId.startsWith('did:'))return input;
+  const [actor]=input.canonicalMediaId.split('/');
+  const data=await safeJson(`https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(actor)}`,'Bluesky identity',API_PAGE_BYTES);
+  return canonicalBlueskyPost(input,data);
+}
+
 async function fetchBlueskyPost(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
   const [actor,rkey]=input.canonicalMediaId.split('/');
   const uri=`at://${actor}/app.bsky.feed.post/${rkey}`;

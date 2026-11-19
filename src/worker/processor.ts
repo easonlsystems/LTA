@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { parseMediaUrl } from '../media/url.js';
-import { extractTextLink, resolveRedditSharePost } from '../content/linkText.js';
+import { extractTextLink, resolveBlueskyPost, resolveRedditSharePost } from '../content/linkText.js';
 import { fetchBestCaption } from '../media/captions.js';
 import { ResolverOrchestrator } from '../resolvers/orchestrator.js';
 import { resolveYouTubeTranscriptFallback } from '../resolvers/youtubeTranscript.js';
@@ -77,6 +77,10 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       parsed=await resolveRedditSharePost(parsed);
       await setJobMetadata(job.id,parsed.canonicalMediaId,0);
       logEvent('reddit_share_resolved',{job_id:job.id,platform:'reddit',canonical_media_id:parsed.canonicalMediaId});
+    }
+    if(parsed.platform==='bluesky'){
+      parsed=await resolveBlueskyPost(parsed);
+      await setJobMetadata(job.id,parsed.canonicalMediaId,0);
     }
 
     // X status URLs do not encode media kind in the URL. Inspect X's structured embed
