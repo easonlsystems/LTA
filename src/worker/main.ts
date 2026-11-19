@@ -21,9 +21,10 @@ const health=http.createServer(async(req,res)=>{
   if(req.url!=='/healthz'&&req.url!=='/readyz'){res.statusCode=404;res.end('not found');return;}
   res.setHeader('content-type','application/json');
   if(req.url==='/healthz'){
-    res.statusCode=200;
-    res.end(JSON.stringify({ok:true,service:'link2ai-worker',active_jobs:activeJobs,worker_concurrency:env().WORKER_CONCURRENCY}));
-    return;
+    try{
+      if(!await schemaReady()||readinessIssues('worker').length){res.statusCode=503;res.end(JSON.stringify({ok:false}));return;}
+    }catch{res.statusCode=503;res.end(JSON.stringify({ok:false}));return;}
+    res.statusCode=200;res.end(JSON.stringify({ok:true,service:'link2ai-worker',active_jobs:activeJobs,worker_concurrency:env().WORKER_CONCURRENCY}));return;
   }
   try{
     if(!await schemaReady()){res.statusCode=503;res.end(JSON.stringify({ready:false}));return;}

@@ -122,6 +122,9 @@ app.all('/mcp/openai',async(request,reply)=>{
 });
 
 app.get('/healthz',async(_req,reply)=>{
+  try{
+    if(!await schemaReady()||readinessIssues('api').length)return reply.code(503).send({ok:false,service:'link2ai-api'});
+  }catch{return reply.code(503).send({ok:false,service:'link2ai-api'});}
   return reply.send({ok:true,service:'link2ai-api',version:'1.1.0',revision:process.env.RAILWAY_GIT_COMMIT_SHA??process.env.GIT_COMMIT_SHA??null});
 });
 
