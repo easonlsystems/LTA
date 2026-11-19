@@ -6,7 +6,7 @@
   },
   "deploy": {
     "preDeployCommand": "npm run db:migrate:prod",
-    "healthcheckPath": "/healthz",
+    "healthcheckPath": "/readyz",
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10

@@ -19,15 +19,15 @@
     "cert:production:authenticated": "node test/production-authenticated-cert.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/fastify": "2.0.0",
-    "@modelcontextprotocol/node": "2.0.0",
-    "@modelcontextprotocol/server": "2.0.0",
+    "@modelcontextprotocol/fastify": "2.0.1",
+    "@modelcontextprotocol/node": "2.1.2",
+    "@modelcontextprotocol/server": "2.4.0",
     "@simplewebauthn/browser": "14.0.0",
     "@simplewebauthn/server": "14.0.2",
-    "fastify": "5.12.4",
+    "fastify": "5.12.8",
     "pdfjs-dist": "5.4.149",
     "pg": "8.23.0",
-    "zod": "4.5.4"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
@@ -38,6 +38,6 @@
     "typescript": "7.0.2"
   },
   "overrides": {
-    "zod": "4.5.4"
+    "zod": "4.6.7"
   }
 }

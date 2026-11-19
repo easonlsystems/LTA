@@ -9,6 +9,7 @@ Object.assign(process.env,{
 const {extractGalleryVisualAssets}=await import('../dist/src/content/linkText.js');
 const {imageMimeFromBytes}=await import('../dist/src/media/imageMime.js');
 const {loadVisualImagePage}=await import('../dist/src/mcp/server.js');
+const {publicPayload}=await import('../dist/src/api/publicApi.js');
 
 assert.equal(imageMimeFromBytes(Buffer.from('<html>expired signed URL</html>')),
   null,'an expired CDN URL must not count as a delivered image');
@@ -19,6 +20,11 @@ assert.equal(imageMimeFromBytes(Buffer.concat([Buffer.from('RIFF'),Buffer.alloc(
 assert.equal(imageMimeFromBytes(Buffer.from([0xff,0xd8])),null,'truncated image header must not count');
 
 const visualJob={visual_assets:[{kind:'image',url:'https://cdn.example.com/signed.jpg',mimeType:'image/jpeg'}]};
+const restVisual=publicPayload({status:'completed',job_id:'visual-test',platform:'instagram',transcript_source:'post',transcript:'A post with an attached image.',visual_assets:visualJob.visual_assets});
+assert.equal(restVisual.content_complete,false,'REST must not claim to deliver attached image content');
+assert.equal(restVisual.source_completeness,'complete','source extraction state must match MCP even when REST cannot deliver visuals');
+assert.equal(restVisual.delivery_complete,false);
+assert.match(restVisual.limitation_notice,/visual media/);
 const expired=await loadVisualImagePage(visualJob,0,1,async()=>({
   bytes:Buffer.from('<html>expired</html>'),contentType:'image/jpeg',finalUrl:'https://cdn.example.com/signed.jpg'
 }));

@@ -6,6 +6,7 @@ import { claimNextJob, deferJob, recoverStaleJobs } from './jobs.js';
 import { workerRegionRuntime } from './regions.js';
 import { processJob } from './processor.js';
 import { readinessIssues } from '../config/readiness.js';
+import { schemaReady } from '../config/schemaReadiness.js';
 import { assertWorkerRuntime } from './preflight.js';
 import { cleanupStaleTempDirs } from './tempCleanup.js';
 import { logErrorEvent, logEvent } from '../util/log.js';
@@ -20,12 +21,13 @@ const health=http.createServer(async(req,res)=>{
   if(req.url!=='/healthz'&&req.url!=='/readyz'){res.statusCode=404;res.end('not found');return;}
   res.setHeader('content-type','application/json');
   if(req.url==='/healthz'){
-    res.statusCode=200;
-    res.end(JSON.stringify({ok:true,service:'link2ai-worker',active_jobs:activeJobs,worker_concurrency:env().WORKER_CONCURRENCY}));
-    return;
+    try{
+      if(!await schemaReady()||readinessIssues('worker').length){res.statusCode=503;res.end(JSON.stringify({ok:false}));return;}
+    }catch{res.statusCode=503;res.end(JSON.stringify({ok:false}));return;}
+    res.statusCode=200;res.end(JSON.stringify({ok:true,service:'link2ai-worker',active_jobs:activeJobs,worker_concurrency:env().WORKER_CONCURRENCY}));return;
   }
   try{
-    await pool.query('SELECT 1');
+    if(!await schemaReady()){res.statusCode=503;res.end(JSON.stringify({ready:false}));return;}
     const issues=readinessIssues('worker');
     if(issues.length)logEvent('worker_readiness_failed',{issue_count:issues.length});
     res.statusCode=issues.length?503:200;res.end(JSON.stringify({ready:issues.length===0}));

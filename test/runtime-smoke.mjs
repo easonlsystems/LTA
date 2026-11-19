@@ -39,8 +39,10 @@ try{
     catch{await new Promise(resolve=>setTimeout(resolve,100));}
   }
   assert.ok(health,`API did not start: ${output}`);
-  assert.equal(health.status,200);
-  assert.equal((await health.json()).ok,true);
+  assert.equal(health.status,503,'healthcheck must reject an unavailable database or incompatible schema');
+  assert.equal((await health.json()).ok,false);
+  const initialReady=await fetch(`http://127.0.0.1:${port}/readyz`,{headers:{host:'link2ai.example'}});
+  assert.equal(initialReady.status,503);
 
   // Public routes should include /status (may return 503 if db unavailable)
   for(const route of ['/','/examples','/use-cases','/sources','/pricing','/connect','/support','/privacy','/terms']){

@@ -10,6 +10,7 @@ import { registerBillingRoutes } from '../billing/routes.js';
 import { authInfoFromBearer, beginFounderStepUp, clearFounderStepUpCookie, createFounderStepUpCookie, csrfTokenFromSessionCookie, diagnoseBearerAuth, hasFounderStepUp, invalidateFounderStepUpChallenges, mcpResource, userFromSessionCookie, verifyCsrfToken, verifyFounderStepUp } from '../auth/service.js';
 import { buildMcpServer } from '../mcp/server.js';
 import { readinessIssues } from '../config/readiness.js';
+import { schemaReady } from '../config/schemaReadiness.js';
 import { browserSameOriginOk, publicHostAllowlist } from '../config/publicUrl.js';
 import { getUsageSnapshot } from '../quota/service.js';
 import { trackWebsiteEvent, trackWebsiteVisit } from '../analytics/visitors.js';
@@ -121,11 +122,14 @@ app.all('/mcp/openai',async(request,reply)=>{
 });
 
 app.get('/healthz',async(_req,reply)=>{
+  try{
+    if(!await schemaReady()||readinessIssues('api').length)return reply.code(503).send({ok:false,service:'link2ai-api'});
+  }catch{return reply.code(503).send({ok:false,service:'link2ai-api'});}
   return reply.send({ok:true,service:'link2ai-api',version:'1.1.0',revision:process.env.RAILWAY_GIT_COMMIT_SHA??process.env.GIT_COMMIT_SHA??null});
 });
 
 app.get('/readyz',async(_req,reply)=>{
-  try{await pool.query('SELECT 1');}catch{return reply.code(503).send({ready:false});}
+  try{if(!await schemaReady())return reply.code(503).send({ready:false});}catch{return reply.code(503).send({ready:false});}
   const issues=readinessIssues('api');
   if(issues.length){logEvent('api_readiness_failed',{issue_count:issues.length});return reply.code(503).send({ready:false});}
   return {ready:true};

@@ -336,8 +336,15 @@ function collectBlueskyReplies(replies:unknown,out:BlueskyRendered,depth=0):void
 export function parseBlueskyThread(input:ParsedMediaUrl,payload:unknown,budget?:TextExtractionBudget):LinkTextPayload{
   const root=jsonObject(payload);const thread=jsonObject(root?.thread);const post=jsonObject(thread?.post);
   const [actor,rkey]=input.canonicalMediaId.split('/');
-  if(jsonString(post?.uri)!==`at://${actor}/app.bsky.feed.post/${rkey}`)throw new Link2AIError('EXTRACTION_FAILED','Bluesky returned a different post than requested.',502,true);
   const record=jsonObject(post?.record);const author=jsonObject(post?.author);
+  const returnedUri=jsonString(post?.uri);
+  const returnedActor=returnedUri.match(/^at:\/\/([^/]+)\/app\.bsky\.feed\.post\/([^/]+)$/);
+  const authorDid=jsonString(author?.did);
+  const authorHandle=jsonString(author?.handle).toLowerCase();
+  if(!returnedActor||returnedActor[2]!==rkey||returnedActor[1]!==authorDid||
+    (actor.toLowerCase()!==authorDid.toLowerCase()&&actor.toLowerCase()!==authorHandle)){
+    throw new Link2AIError('EXTRACTION_FAILED','Bluesky returned a different post than requested.',502,true);
+  }
   const text=cleanText(jsonString(record?.text));
   if(!text)throw new Link2AIError('EXTRACTION_FAILED','This Bluesky post did not expose readable public text.',422,false);
   const display=jsonString(author?.displayName).trim();const handle=jsonString(author?.handle).trim();
@@ -355,6 +362,24 @@ export function parseBlueskyThread(input:ParsedMediaUrl,payload:unknown,budget?:
   if(replies.lines.length)sections.push(`Public replies (${replies.lines.length} entries):\n${replies.lines.join('\n')}`);
   const repliesAvailable=jsonNumber(post?.replyCount);const repliesTruncated=repliesAvailable!==undefined&&replies.count<repliesAvailable;
   return complete({platform:'bluesky',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title:clipExternalText(`Bluesky post by ${display||handle}`,METADATA_LIMITS.title),creator:clipExternalText(handle?`@${handle}`:display,METADATA_LIMITS.creator),caption:clipExternalText(text,METADATA_LIMITS.description),language:jsonString(record?.langs instanceof Array?record.langs[0]:undefined)||'und',text:cleanText(sections.filter(Boolean).join('\n\n')),source:'post'},'social',{itemsAvailable:repliesAvailable,itemsExtracted:replies.count,truncated:repliesTruncated,contentSectionsTruncated:repliesTruncated?['upstream_replies']:undefined},budget);
+}
+
+export function canonicalBlueskyPost(input:ParsedMediaUrl,payload:unknown):ParsedMediaUrl{
+  if(input.platform!=='bluesky')return input;
+  const [actor,rkey]=input.canonicalMediaId.split('/');
+  if(actor.startsWith('did:'))return input;
+  const did=jsonString(jsonObject(payload)?.did);
+  if(!/^did:(?:plc|web):[A-Za-z0-9:._%-]+$/.test(did))
+    throw new Link2AIError('EXTRACTION_FAILED','Bluesky did not resolve this public profile to a valid identity.',502,true,{cause_code:'bluesky_handle_resolution_invalid'});
+  const normalizedUrl=`https://bsky.app/profile/${encodeURIComponent(did)}/post/${rkey}`;
+  return {...input,canonicalMediaId:`${did}/${rkey}`,normalizedUrl,sourceUrl:normalizedUrl};
+}
+
+export async function resolveBlueskyPost(input:ParsedMediaUrl):Promise<ParsedMediaUrl>{
+  if(input.platform!=='bluesky'||input.canonicalMediaId.startsWith('did:'))return input;
+  const [actor]=input.canonicalMediaId.split('/');
+  const data=await safeJson(`https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(actor)}`,'Bluesky identity',API_PAGE_BYTES);
+  return canonicalBlueskyPost(input,data);
 }
 
 async function fetchBlueskyPost(input:ParsedMediaUrl,budget?:TextExtractionBudget):Promise<LinkTextPayload>{
