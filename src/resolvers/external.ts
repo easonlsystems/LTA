@@ -8,6 +8,21 @@ import { Link2AIError } from '../util/errors.js';
 import type { MediaResolver, ResolveContext } from './base.js';
 import { validateResolvedMediaIdentity } from './identity.js';
 
+function captionTracks(value:unknown):MediaMetadata['subtitles']{
+  if(!value||typeof value!=='object'||Array.isArray(value))return {};
+  const out:MediaMetadata['subtitles']={};
+  for(const [language,tracks] of Object.entries(value).slice(0,30)){
+    if(!Array.isArray(tracks))continue;
+    out[language]=tracks.slice(0,8).flatMap(item=>{
+      if(!item||typeof item!=='object')return [];
+      const track=item as Record<string,unknown>;
+      const url=clipExternalText(track.url,METADATA_LIMITS.subtitleUrl);
+      return url?[{url,ext:clipExternalText(track.ext,METADATA_LIMITS.subtitleExt),name:clipExternalText(track.name,METADATA_LIMITS.subtitleName)}]:[];
+    });
+  }
+  return out;
+}
+
 async function readLimitedJson(response:Response,maxBytes=2_000_000):Promise<any>{
   if(!response.body)throw new Link2AIError('EXTRACTION_FAILED','External extractor returned an empty response.',502,true);
   const declared=Number(response.headers.get('content-length')??0);
@@ -64,7 +79,7 @@ export class ExternalProviderResolver implements MediaResolver {
     const data = await readLimitedJson(response) as Partial<MediaMetadata>;
     const duration=Math.round(Number(data.durationSeconds));
     const canonicalMediaId=clipExternalText(data.canonicalMediaId,METADATA_LIMITS.canonicalId)??'';
-    if (!Number.isFinite(duration)||duration<=0||!canonicalMediaId) throw new Link2AIError('EXTRACTION_FAILED', 'External extractor returned incomplete metadata.', 502, true);
+    if (!canonicalMediaId) throw new Link2AIError('EXTRACTION_FAILED', 'External extractor returned incomplete metadata.', 502, true,{cause_code:'external_metadata_missing_id'});
     const webpageUrl=clipExternalText(data.webpageUrl,METADATA_LIMITS.subtitleUrl);
     validateResolvedMediaIdentity(input,canonicalMediaId,webpageUrl);
     return {
@@ -76,9 +91,9 @@ export class ExternalProviderResolver implements MediaResolver {
       title: clipExternalText(data.title,METADATA_LIMITS.title),
       creator: clipExternalText(data.creator,METADATA_LIMITS.creator),
       description: clipExternalText(data.description,METADATA_LIMITS.description),
-      durationSeconds: duration,
-      subtitles: data.subtitles && typeof data.subtitles==='object' ? data.subtitles : {},
-      automaticCaptions: data.automaticCaptions && typeof data.automaticCaptions==='object' ? data.automaticCaptions : {}
+      durationSeconds: Number.isFinite(duration)&&duration>0?duration:0,
+      subtitles: captionTracks(data.subtitles),
+      automaticCaptions: captionTracks(data.automaticCaptions)
     };
   }
 

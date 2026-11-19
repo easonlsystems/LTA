@@ -3,8 +3,12 @@ import { authenticateApiKey } from './apiKeys.js';
 import { getJobResult, startTranscriptJob, usageForTool, type ToolJobResult } from '../source/service.js';
 import { supportedSourcesForProfile } from '../source/policy.js';
 import { asLink2AIError } from '../util/errors.js';
+import { timelineCoverageVerified } from '../media/timeline.js';
 
-function publicPayload(result:ToolJobResult){
+export function publicPayload(result:ToolJobResult){
+  const video=result.transcript_source==='caption'||result.transcript_source==='asr';
+  const timelineVerified=!video||timelineCoverageVerified(result.duration_seconds,result.segments);
+  const completeness=result.status==='completed'?(result.truncated?'partial':timelineVerified?'complete':'unverified'):undefined;
   return {
     id:result.job_id,
     job_id:result.job_id,
@@ -32,7 +36,13 @@ function publicPayload(result:ToolJobResult){
       visual_video_assets_available:(result.visual_assets??[]).filter(asset=>asset.kind==='video').length
     }:undefined,
     evidence:result.status==='completed'?(result.segments??[]):undefined,
-    source_completeness:result.status==='completed'?(result.truncated?'partial':'complete'):undefined,
+    source_completeness:completeness,
+    content_complete:completeness==='complete',
+    delivery_complete:result.status==='completed',
+    continuation_required:false,
+    timeline_coverage_verified:video?timelineVerified:undefined,
+    content_scope:video?'spoken_and_caption_text':undefined,
+    limitation_notice:video?'Video frames and visual-only information were not analyzed.':undefined,
     truncation_reason:result.truncation_reason??undefined,
     content_sections_truncated:result.content_sections_truncated??undefined,
     units_used:result.status==='completed'?result.usage_units??0:0,

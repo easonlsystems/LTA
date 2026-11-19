@@ -44,7 +44,7 @@ export class OpenAICompatibleTranscriber implements TranscriptionProvider {
     }
     const data = await response.json() as Record<string, unknown>;
     const transcript = String(data.text ?? '').trim();
-    if (!transcript) throw new Link2AIError('TRANSCRIPTION_FAILED', `${this.name} returned an empty transcript.`, 502, true);
+    if (!transcript) throw new Link2AIError('TRANSCRIPTION_FAILED', `${this.name} returned an empty transcript.`, 502, false,{cause_code:'asr_empty_result'});
     const segments: TranscriptSegment[] = Array.isArray(data.segments)
       ? data.segments.flatMap((s: unknown) => {
           if (!s || typeof s !== 'object') return [];

@@ -7,6 +7,9 @@ import { YtDlpResolver } from './ytdlp.js';
 import { runProviderChain, type ProviderAttempt } from './providerChain.js';
 import { shouldTryExternalFallback } from './fallback.js';
 import { XSyndicationResolver } from './xSyndication.js';
+import { normalizeAudioForAsr, probeMediaDurationSeconds, validateAudioStream } from '../media/audio.js';
+
+export interface ResolvedAudio {path:string;durationSeconds:number}
 
 function shouldFailoverFromXSyndicationAudio(error:unknown):boolean{
   const code=asLink2AIError(error).code;
@@ -24,11 +27,16 @@ export class ResolverOrchestrator {
     }];
   }
 
-  private externalAudioAttempt(input:ParsedMediaUrl,outputDir:string):ProviderAttempt<string>[]{
+  private externalAudioAttempt(input:ParsedMediaUrl,outputDir:string):ProviderAttempt<ResolvedAudio>[]{
     if(!env().MEDIA_PROVIDER_URL)return [];
     return [{
       name:'external',
-      run:()=>new ExternalProviderResolver(input.platform).downloadAudio(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS})
+      run:async()=>{
+        const file=await new ExternalProviderResolver(input.platform).downloadAudio(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS});
+        await validateAudioStream(file);
+        const durationSeconds=await probeMediaDurationSeconds(file);
+        return {path:await normalizeAudioForAsr(file,outputDir),durationSeconds};
+      }
     }];
   }
 
@@ -66,24 +74,30 @@ export class ResolverOrchestrator {
     return await runProviderChain({platform:input.platform,operation:'metadata',attempts});
   }
 
-  async audio(input:ParsedMediaUrl,outputDir:string):Promise<string>{
-    const attempts:ProviderAttempt<string>[]=input.platform==='x'
+  async audio(input:ParsedMediaUrl,outputDir:string):Promise<ResolvedAudio>{
+    const usable=async(download:()=>Promise<string>):Promise<ResolvedAudio>=>{
+      const file=await download();
+      await validateAudioStream(file);
+      const durationSeconds=await probeMediaDurationSeconds(file);
+      return {path:await normalizeAudioForAsr(file,outputDir),durationSeconds};
+    };
+    const attempts:ProviderAttempt<ResolvedAudio>[]=input.platform==='x'
       ?[
           {
             name:'x_syndication',
-            run:()=>this.xSyndication.downloadAudio(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS}),
+            run:()=>usable(()=>this.xSyndication.downloadAudio(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS})),
             shouldFailover:shouldFailoverFromXSyndicationAudio
           },
           {
             name:'ytdlp',
-            run:()=>new YtDlpResolver('x').downloadAudio(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS})
+            run:()=>usable(()=>new YtDlpResolver('x').downloadAudio(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS}))
           },
           ...this.externalAudioAttempt(input,outputDir)
         ]
       :[
           {
             name:'ytdlp',
-            run:()=>new YtDlpResolver(input.platform).downloadAudio(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS})
+            run:()=>usable(()=>new YtDlpResolver(input.platform).downloadAudio(input,outputDir,{timeoutMs:env().AUDIO_EXTRACTION_TIMEOUT_MS}))
           },
           ...this.externalAudioAttempt(input,outputDir)
         ];

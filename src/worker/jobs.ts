@@ -167,20 +167,20 @@ export async function recoverStaleJobs(): Promise<void> {
   `);
 }
 
-export async function markRetry(job: JobRow, errorCode: string, message: string): Promise<void> {
+export async function markRetry(job: JobRow, errorCode: string, message: string, causeCode?:string): Promise<void> {
   const delay = Math.min(120, 5 * 2 ** Math.max(0, job.attempts - 1));
   await pool.query(
-    `UPDATE transcript_jobs SET status='queued', error_code=$2, error_message=$3, retryable=true,
+    `UPDATE transcript_jobs SET status='queued', error_code=$2, error_message=$3, error_cause_code=$5, retryable=true,
       locked_at=NULL, locked_by=NULL, next_attempt_at=now() + ($4 || ' seconds')::interval, updated_at=now()
-     WHERE id=$1`, [job.id, errorCode, message, delay]
+     WHERE id=$1`, [job.id, errorCode, message, delay,causeCode??null]
   );
 }
 
-export async function markFailed(jobId: string, errorCode: string, message: string, retryable=false): Promise<void> {
+export async function markFailed(jobId: string, errorCode: string, message: string, retryable=false,causeCode?:string): Promise<void> {
   await pool.query(
-    `UPDATE transcript_jobs SET status='failed', error_code=$2, error_message=$3, retryable=$4,
+    `UPDATE transcript_jobs SET status='failed', error_code=$2, error_message=$3, retryable=$4,error_cause_code=$5,
       locked_at=NULL, locked_by=NULL, updated_at=now() WHERE id=$1`,
-    [jobId, errorCode, message, retryable]
+    [jobId, errorCode, message, retryable,causeCode??null]
   );
 }
 
@@ -195,7 +195,7 @@ export async function markAwaitingPayment(jobId: string, errorCode: string, mess
 export async function markCompleted(jobId: string, cacheId: string, durationSeconds: number, cacheHit=false): Promise<void> {
   await pool.query(
     `UPDATE transcript_jobs SET status='completed', transcript_cache_id=$2, duration_seconds=$3,
-      error_code=NULL, error_message=NULL, retryable=false, locked_at=NULL, locked_by=NULL,
+      error_code=NULL, error_message=NULL,error_cause_code=NULL, retryable=false, locked_at=NULL, locked_by=NULL,
       analytics_cache_hit=$4, completed_at=now(), updated_at=now() WHERE id=$1`,
     [jobId, cacheId, durationSeconds, cacheHit]
   );

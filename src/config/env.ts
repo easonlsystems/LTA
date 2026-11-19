@@ -15,6 +15,7 @@ const schema = z.object({
   APP_SECRET: z.string().min(32),
   YTDLP_BIN: z.string().default('yt-dlp'),
   FFMPEG_BIN: z.string().default('ffmpeg'),
+  FFPROBE_BIN: z.string().optional(),
   MEDIA_PROVIDER_URL: z.string().url().optional().or(z.literal('')),
   MEDIA_PROVIDER_API_KEY: z.string().optional(),
   MAX_DOWNLOAD_BYTES: z.coerce.number().int().positive().default(262_144_000),

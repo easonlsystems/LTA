@@ -87,7 +87,7 @@ assert.match(mcp,/topup_path:z\.string\(\)/);
 assert.match(quota,/analytics_reserved_usage_units/);
 assert.match(jobs,/analytics_cache_hit=\$4/);
 assert.match(processor,/markCompleted\(job\.id,userExisting\.id,[^\n]*true\)/);
-assert.match(processor,/markCompleted\(job\.id,existing\.id,[^\n]*true\)/);
+assert.match(processor,/completeWithQuota\(job\.user_id,job\.id,existing\.id,[^\n]*true\)/);
 assert.match(processor,/if\(reserved\)\{await releaseQuota\(job\.id\)/);
 assert.match(source,/status:'failed'[\s\S]*usage_units:0/);
 

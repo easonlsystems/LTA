@@ -4,12 +4,11 @@ import path from 'node:path';
 import { parseMediaUrl } from '../media/url.js';
 import { extractTextLink, resolveRedditSharePost } from '../content/linkText.js';
 import { fetchBestCaption } from '../media/captions.js';
-import { normalizeAudioForAsr, probeMediaDurationSeconds } from '../media/audio.js';
 import { ResolverOrchestrator } from '../resolvers/orchestrator.js';
 import { resolveYouTubeTranscriptFallback } from '../resolvers/youtubeTranscript.js';
 import type { MediaMetadata, TranscriptSegment } from '../media/types.js';
 import { transcribeAudio } from '../transcription/router.js';
-import { availableUsageUnits, reserveQuota, finalizeQuota, releaseQuota } from '../quota/service.js';
+import { availableUsageUnits, reserveQuota, completeWithQuota, releaseQuota } from '../quota/service.js';
 import { saveCache, findCache, findUserCompletedCache } from './cache.js';
 import { asLink2AIError, Link2AIError } from '../util/errors.js';
 import { logEvent, logErrorEvent } from '../util/log.js';
@@ -22,14 +21,17 @@ import { generalAudienceBlockReason } from '../safety/generalAudience.js';
 
 const resolver=new ResolverOrchestrator();
 
-export function videoCompleteness(text:string,durationSeconds:number,segments?:Array<{end:number}>){
-  const coverage=segments?.reduce((max,segment)=>Number.isFinite(segment.end)?Math.max(max,segment.end):max,0)??durationSeconds;
-  const truncated=durationSeconds>0&&coverage>0&&coverage<durationSeconds-30&&coverage/durationSeconds<0.9;
+export function videoCompleteness(text:string,durationSeconds:number,segments?:Array<{start?:number;end:number}>){
+  const coverage=segments?.reduce((max,segment)=>Number.isFinite(segment.end)?Math.max(max,segment.end):max,0)??0;
+  // A delayed first spoken cue or a silent gap does not prove the transcript is truncated.
+  // Timeline verification is reported separately to the client.
+  const truncated=durationSeconds>0&&coverage>0&&coverage<durationSeconds-Math.min(30,Math.max(2,durationSeconds*0.1));
   return {truncated,extractedTokenEstimate:estimateTokens(text),usageUnits:videoUsageUnits(durationSeconds),...(truncated?{truncationReason:'caption_timeline_incomplete',contentSectionsTruncated:['caption_timeline']}: {})};
 }
 
 export function videoTranscriptQuality(text:string,durationSeconds:number):{ok:boolean;signalChars:number;minimumSignalChars:number}{
-  const signalChars=(text.match(/[\p{L}\p{N}]/gu)??[]).length;
+  const withoutMarkers=text.replace(/\[(?:music|instrumental|applause|silence|laughter|noise|sound effects?)(?:[^\]]*)\]/giu,'').trim();
+  const signalChars=(withoutMarkers.match(/[\p{L}\p{N}]/gu)??[]).length;
   // This is intentionally very lenient. Normal speech is hundreds of characters
   // per minute; this only catches obviously empty/broken transcripts that happen
   // to span the full timeline.
@@ -38,14 +40,6 @@ export function videoTranscriptQuality(text:string,durationSeconds:number):{ok:b
 }
 function cachedUsageUnits(cache:{usage_units:number;source:string;transcript:string;duration_seconds:number}):number{
   return cache.usage_units>0?cache.usage_units:(cache.source==='post'||cache.source==='page'?textUsageUnits(estimateTokens(cache.transcript)):videoUsageUnits(cache.duration_seconds));
-}
-
-function captionDurationSeconds(segments:Array<{start:number;end:number;text:string}>):number{
-  let maxEnd=0;
-  for(const segment of segments){
-    if(Number.isFinite(segment.end)&&segment.end>maxEnd)maxEnd=segment.end;
-  }
-  return maxEnd>0?Math.ceil(maxEnd):0;
 }
 
 function enforceChatGptGeneralAudience(job:JobRow,input:{
@@ -117,8 +111,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       if(existing){
         enforceChatGptCache(job,existing);
         await reserveQuota(job.user_id,job.id,cachedUsageUnits(existing));reserved=true;
-        await finalizeQuota(job.user_id,job.id);reserved=false;
-        await markCompleted(job.id,existing.id,0,true);
+        await completeWithQuota(job.user_id,job.id,existing.id,0,true);reserved=false;
         logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'cache',content_kind:parsed.kind,duration_seconds:0,processing_ms:Date.now()-startedAt});
         return;
       }
@@ -140,8 +133,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       if(afterClaimCache){
         enforceChatGptCache(job,afterClaimCache);
         await reserveQuota(job.user_id,job.id,cachedUsageUnits(afterClaimCache));reserved=true;
-        await finalizeQuota(job.user_id,job.id);reserved=false;
-        await markCompleted(job.id,afterClaimCache.id,0,true);
+        await completeWithQuota(job.user_id,job.id,afterClaimCache.id,0,true);reserved=false;
         logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'cache_after_claim',content_kind:parsed.kind,duration_seconds:0,processing_ms:Date.now()-startedAt});
         return;
       }
@@ -154,8 +146,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
         title:content.title,creator:content.creator,caption:content.caption,durationSeconds:0,
         language:content.language,transcript:content.text,segments:[],source:content.source,visualAssets:content.visualAssets,completeness:content.completeness
       });
-      await finalizeQuota(job.user_id,job.id);reserved=false;
-      await markCompleted(job.id,cache.id,0);
+      await completeWithQuota(job.user_id,job.id,cache.id,0);reserved=false;
       logEvent('job_completed',{job_id:job.id,platform:job.platform,source:content.source,content_kind:parsed.kind,duration_seconds:0,characters:content.text.length,extracted_token_estimate:content.completeness.extractedTokenEstimate,usage_units:content.completeness.usageUnits,truncated:content.completeness.truncated,truncation_reason:content.completeness.truncationReason??null,items_extracted:content.completeness.itemsExtracted??null,pages_extracted:content.completeness.pagesExtracted??null,processing_ms:Date.now()-startedAt});
       return;
     }
@@ -232,8 +223,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       enforceChatGptCache(job,existing);
       await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);
       reserved=true;
-      await finalizeQuota(job.user_id,job.id); reserved=false;
-      await markCompleted(job.id,existing.id,metadata.durationSeconds,true);
+      await completeWithQuota(job.user_id,job.id,existing.id,metadata.durationSeconds,true);reserved=false;
       logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'cache',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,processing_ms:Date.now()-startedAt});
       return;
     }
@@ -261,17 +251,13 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       if(metadata.durationSeconds<=0)await applyDuration(afterClaimCache.duration_seconds);
       enforceChatGptCache(job,afterClaimCache);
       if(!reserved){await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);reserved=true;}
-      await finalizeQuota(job.user_id,job.id); reserved=false;
-      await markCompleted(job.id,afterClaimCache.id,metadata.durationSeconds,true);
+      await completeWithQuota(job.user_id,job.id,afterClaimCache.id,metadata.durationSeconds,true);reserved=false;
       logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'cache_after_claim',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,processing_ms:Date.now()-startedAt});
       return;
     }
 
     const caption=directCaption??await fetchBestCaption(metadata.subtitles,metadata.automaticCaptions,job.language,metadata.originalLanguage);
-    if(caption?.transcript&&metadata.durationSeconds<=0){
-      const captionDuration=captionDurationSeconds(caption.segments);
-      if(captionDuration>0)await applyDuration(captionDuration);
-    }
+    // Caption timestamps describe the caption track, not the media's actual ending.
 
     if(caption?.transcript&&metadata.durationSeconds>0){
       enforceChatGptGeneralAudience(job,{sourceUrl:metadata.webpageUrl,title:metadata.title,description:metadata.description,text:caption.transcript});
@@ -284,8 +270,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
           title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
           language:caption.language,transcript:caption.transcript,segments:caption.segments,source:'caption',completeness
         });
-        await finalizeQuota(job.user_id,job.id); reserved=false;
-        await markCompleted(job.id,cache.id,metadata.durationSeconds);
+        await completeWithQuota(job.user_id,job.id,cache.id,metadata.durationSeconds);reserved=false;
         logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'caption',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,extracted_token_estimate:estimateTokens(caption.transcript),usage_units:videoUsageUnits(metadata.durationSeconds),truncated:false,processing_ms:Date.now()-startedAt});
         return;
       }
@@ -304,11 +289,13 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     // yt-dlp metadata. Probe the actual downloaded media before quota reservation. This
     // prevents both false failures and under-counting / max-duration bypasses.
     if(metadata.durationSeconds<=0){
-      const probedDuration=await probeMediaDurationSeconds(audio);
-      await applyDuration(probedDuration);
+      await applyDuration(audio.durationSeconds);
       logEvent('resolver_duration_recovered',{job_id:job.id,platform:job.platform,duration_seconds:metadata.durationSeconds,source:'ffprobe'});
+    }else if(audio.durationSeconds>metadata.durationSeconds){
+      await applyDuration(audio.durationSeconds);
+      logEvent('resolver_duration_corrected',{job_id:job.id,platform:job.platform,duration_seconds:metadata.durationSeconds,source:'ffprobe'});
     }
-    if(!reserved){await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);reserved=true;}
+    await reserveQuota(job.user_id,job.id,videoUsageUnits(metadata.durationSeconds),metadata.durationSeconds);reserved=true;
 
     // If captions existed but had no usable timing, the audio probe supplied the missing
     // duration. Prefer those captions now instead of spending an ASR request.
@@ -321,8 +308,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
           title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
           language:caption.language,transcript:caption.transcript,segments:caption.segments,source:'caption',completeness
         });
-        await finalizeQuota(job.user_id,job.id); reserved=false;
-        await markCompleted(job.id,cache.id,metadata.durationSeconds);
+        await completeWithQuota(job.user_id,job.id,cache.id,metadata.durationSeconds);reserved=false;
         logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'caption_after_duration_probe',resolver:metadata.resolver??'unknown',duration_seconds:metadata.durationSeconds,truncated:false,processing_ms:Date.now()-startedAt});
         return;
       }
@@ -333,17 +319,21 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       });
     }
 
-    const preparedAudio=await normalizeAudioForAsr(audio,tmpDir);
-    const asr=await transcribeAudio(preparedAudio,job.language);
+    const asr=await transcribeAudio(audio.path,job.language,candidate=>{
+      const completeness=videoCompleteness(candidate.transcript,metadata.durationSeconds,candidate.segments);
+      const quality=videoTranscriptQuality(candidate.transcript,metadata.durationSeconds);
+      if(completeness.truncated)throw new Link2AIError('EXTRACTION_FAILED','The ASR timeline was incomplete.',502,false,{cause_code:'asr_timeline_incomplete'});
+      if(!quality.ok)throw new Link2AIError('EXTRACTION_FAILED','The ASR transcript was too sparse.',502,false,{cause_code:'transcript_too_sparse'});
+    });
     const asrCompleteness=videoCompleteness(asr.transcript,metadata.durationSeconds,asr.segments);
     const asrQuality=videoTranscriptQuality(asr.transcript,metadata.durationSeconds);
     if(asrCompleteness.truncated){
-      throw new Link2AIError('EXTRACTION_FAILED','The full video timeline could not be transcribed reliably. No processing units were charged.',502,true,{
+      throw new Link2AIError('EXTRACTION_FAILED','The full video timeline could not be transcribed reliably. No processing units were charged.',502,false,{
         cause_code:'asr_timeline_incomplete',truncation_reason:asrCompleteness.truncationReason
       });
     }
     if(!asrQuality.ok){
-      throw new Link2AIError('EXTRACTION_FAILED','The extracted transcript was too sparse to treat as a reliable read. No processing units were charged.',502,true,{
+      throw new Link2AIError('EXTRACTION_FAILED','The extracted transcript was too sparse to treat as a reliable read. No processing units were charged.',502,false,{
         cause_code:'transcript_too_sparse',signal_chars:asrQuality.signalChars,minimum_signal_chars:asrQuality.minimumSignalChars
       });
     }
@@ -353,8 +343,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       title:metadata.title,creator:metadata.creator,caption:metadata.description,durationSeconds:metadata.durationSeconds,
       language:asr.language,transcript:asr.transcript,segments:asr.segments,source:'asr',completeness:asrCompleteness
     });
-    await finalizeQuota(job.user_id,job.id); reserved=false;
-    await markCompleted(job.id,cache.id,metadata.durationSeconds);
+    await completeWithQuota(job.user_id,job.id,cache.id,metadata.durationSeconds);reserved=false;
     logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'asr',resolver:metadata.resolver??'unknown',transcription_provider:asr.provider,duration_seconds:metadata.durationSeconds,extracted_token_estimate:estimateTokens(asr.transcript),usage_units:videoUsageUnits(metadata.durationSeconds),truncated:false,processing_ms:Date.now()-startedAt});
   }catch(e){
     const err=asLink2AIError(e);
@@ -374,8 +363,8 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
       const requiredUnits=typeof requiredUnitsRaw==='number'&&Number.isFinite(requiredUnitsRaw)?requiredUnitsRaw:undefined;
       await markAwaitingPayment(job.id,err.code,err.message,null,requiredUnits);return;
     }
-    if(err.retryable&&job.attempts<3){await markRetry(job,err.code,err.message);return;}
-    await markFailed(job.id,err.code,err.message,err.retryable);
+    if(err.retryable&&job.attempts<3){await markRetry(job,err.code,err.message,causeCode);return;}
+    await markFailed(job.id,err.code,err.message,err.retryable,causeCode);
   }finally{
     clearInterval(heartbeat);
     if(mediaClaim)await releaseMediaClaim(job.id).catch(()=>{});
