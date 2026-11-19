@@ -336,8 +336,15 @@ function collectBlueskyReplies(replies:unknown,out:BlueskyRendered,depth=0):void
 export function parseBlueskyThread(input:ParsedMediaUrl,payload:unknown,budget?:TextExtractionBudget):LinkTextPayload{
   const root=jsonObject(payload);const thread=jsonObject(root?.thread);const post=jsonObject(thread?.post);
   const [actor,rkey]=input.canonicalMediaId.split('/');
-  if(jsonString(post?.uri)!==`at://${actor}/app.bsky.feed.post/${rkey}`)throw new Link2AIError('EXTRACTION_FAILED','Bluesky returned a different post than requested.',502,true);
   const record=jsonObject(post?.record);const author=jsonObject(post?.author);
+  const returnedUri=jsonString(post?.uri);
+  const returnedActor=returnedUri.match(/^at:\/\/([^/]+)\/app\.bsky\.feed\.post\/([^/]+)$/);
+  const authorDid=jsonString(author?.did);
+  const authorHandle=jsonString(author?.handle).toLowerCase();
+  if(!returnedActor||returnedActor[2]!==rkey||returnedActor[1]!==authorDid||
+    (actor.toLowerCase()!==authorDid.toLowerCase()&&actor.toLowerCase()!==authorHandle)){
+    throw new Link2AIError('EXTRACTION_FAILED','Bluesky returned a different post than requested.',502,true);
+  }
   const text=cleanText(jsonString(record?.text));
   if(!text)throw new Link2AIError('EXTRACTION_FAILED','This Bluesky post did not expose readable public text.',422,false);
   const display=jsonString(author?.displayName).trim();const handle=jsonString(author?.handle).trim();

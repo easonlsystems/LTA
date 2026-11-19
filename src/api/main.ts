@@ -10,6 +10,7 @@ import { registerBillingRoutes } from '../billing/routes.js';
 import { authInfoFromBearer, beginFounderStepUp, clearFounderStepUpCookie, createFounderStepUpCookie, csrfTokenFromSessionCookie, diagnoseBearerAuth, hasFounderStepUp, invalidateFounderStepUpChallenges, mcpResource, userFromSessionCookie, verifyCsrfToken, verifyFounderStepUp } from '../auth/service.js';
 import { buildMcpServer } from '../mcp/server.js';
 import { readinessIssues } from '../config/readiness.js';
+import { schemaReady } from '../config/schemaReadiness.js';
 import { browserSameOriginOk, publicHostAllowlist } from '../config/publicUrl.js';
 import { getUsageSnapshot } from '../quota/service.js';
 import { trackWebsiteEvent, trackWebsiteVisit } from '../analytics/visitors.js';
@@ -125,7 +126,7 @@ app.get('/healthz',async(_req,reply)=>{
 });
 
 app.get('/readyz',async(_req,reply)=>{
-  try{await pool.query('SELECT 1');}catch{return reply.code(503).send({ready:false});}
+  try{if(!await schemaReady())return reply.code(503).send({ready:false});}catch{return reply.code(503).send({ready:false});}
   const issues=readinessIssues('api');
   if(issues.length){logEvent('api_readiness_failed',{issue_count:issues.length});return reply.code(503).send({ready:false});}
   return {ready:true};

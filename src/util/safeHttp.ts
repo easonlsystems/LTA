@@ -53,6 +53,16 @@ export function pinnedLookup(address:string,family:4|6){
   };
 }
 
+export function remoteHttpError(status:number,headers:IncomingHttpHeaders={}):Link2AIError{
+  const details={cause_code:`remote_http_${status}`};
+  if(status===404||status===410)return new Link2AIError('MEDIA_NOT_FOUND','The public source was not found or is no longer available.',404,false,details);
+  if(status===429||(status===403&&(headers['retry-after']||headers['x-ratelimit-remaining']==='0')))
+    return new Link2AIError('RATE_LIMITED','The source temporarily rate-limited this request.',429,true,details);
+  if(status===401)return new Link2AIError('LOGIN_REQUIRED','The source requires authentication.',401,false,details);
+  if(status===403)return new Link2AIError('PLATFORM_BLOCKED','The source denied public access.',403,false,details);
+  return new Link2AIError('EXTRACTION_FAILED',`Remote content request returned HTTP ${status}.`,status>=500?502:422,status>=500,details);
+}
+
 async function resolvePublic(hostname:string,timeoutMs:number):Promise<Array<{address:string;family:4|6}>>{
   let addresses:Array<{address:string;family:number}>;
   let timer:ReturnType<typeof setTimeout>|undefined;
@@ -126,7 +136,7 @@ export async function safeGetBuffer(rawUrl:string,opts:{maxBytes:number;timeoutM
       const loc=result.headers.location;if(!loc)throw new Link2AIError('EXTRACTION_FAILED','Remote content redirect was incomplete.',502);
       current=new URL(loc,url).toString();continue;
     }
-    if(result.status<200||result.status>=300)throw new Link2AIError('EXTRACTION_FAILED',`Remote content request returned HTTP ${result.status}.`,502,true);
+    if(result.status<200||result.status>=300)throw remoteHttpError(result.status,result.headers);
     const ct=Array.isArray(result.headers['content-type'])?result.headers['content-type'][0]??null:result.headers['content-type']??null;
     return {bytes:result.bytes,contentType:ct,finalUrl:current};
   }

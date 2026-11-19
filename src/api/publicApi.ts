@@ -8,6 +8,8 @@ import { timelineCoverageVerified } from '../media/timeline.js';
 export function publicPayload(result:ToolJobResult){
   const video=result.transcript_source==='caption'||result.transcript_source==='asr';
   const timelineVerified=!video||timelineCoverageVerified(result.duration_seconds,result.segments);
+  const visualAssets=result.visual_assets??[];
+  const visualUnavailable=result.status==='completed'&&visualAssets.length>0;
   const completeness=result.status==='completed'?(result.truncated?'partial':timelineVerified?'complete':'unverified'):undefined;
   return {
     id:result.job_id,
@@ -37,12 +39,12 @@ export function publicPayload(result:ToolJobResult){
     }:undefined,
     evidence:result.status==='completed'?(result.segments??[]):undefined,
     source_completeness:completeness,
-    content_complete:completeness==='complete',
-    delivery_complete:result.status==='completed',
+    content_complete:completeness==='complete'&&!visualUnavailable,
+    delivery_complete:result.status==='completed'&&!visualUnavailable,
     continuation_required:false,
     timeline_coverage_verified:video?timelineVerified:undefined,
     content_scope:video?'spoken_and_caption_text':undefined,
-    limitation_notice:video?'Video frames and visual-only information were not analyzed.':undefined,
+    limitation_notice:video?'Video frames and visual-only information were not analyzed.':visualUnavailable?'Attached visual media is unavailable through this REST response. Use an MCP client with image delivery where supported.':undefined,
     truncation_reason:result.truncation_reason??undefined,
     content_sections_truncated:result.content_sections_truncated??undefined,
     units_used:result.status==='completed'?result.usage_units??0:0,

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {parseMediaUrl} from '../dist/src/media/url.js';
-import {isPublicAddress,orderPublicAddresses,pinnedLookup} from '../dist/src/util/safeHttp.js';
+import {isPublicAddress,orderPublicAddresses,pinnedLookup,remoteHttpError} from '../dist/src/util/safeHttp.js';
+import {parseBlueskyThread} from '../dist/src/content/linkText.js';
 import {textUsageUnits,videoUsageUnits,estimateTokens} from '../dist/src/content/limits.js';
 
 const cases=[
@@ -56,6 +58,15 @@ for(const publicIp of ['1.1.1.1','8.8.8.8','2606:4700:4700::1111'])assert.equal(
 const ordered=orderPublicAddresses([{address:'2606:4700:4700::1111',family:6},{address:'1.1.1.1',family:4}]);
 assert.equal(ordered[0].family,4,'IPv4 should be preferred in current Railway environment');
 const lookup=pinnedLookup('1.1.1.1',4);
+assert.equal(JSON.parse(readFileSync(new URL('../railway.json',import.meta.url))).deploy.healthcheckPath,'/readyz','Railway must gate deploy on DB, schema and role-specific credentials');
+for(const [status,code,retryable] of [[404,'MEDIA_NOT_FOUND',false],[410,'MEDIA_NOT_FOUND',false],[401,'LOGIN_REQUIRED',false],[403,'PLATFORM_BLOCKED',false],[429,'RATE_LIMITED',true],[500,'EXTRACTION_FAILED',true]]){
+  const error=remoteHttpError(status);assert.equal(error.code,code);assert.equal(error.retryable,retryable);
+}
+assert.equal(remoteHttpError(403,{'retry-after':'60'}).code,'RATE_LIMITED');
+const blueskyInput=parseMediaUrl('https://bsky.app/profile/bsky.app/post/3mnzpiackwk25');
+const blueskyPayload={thread:{post:{uri:'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3mnzpiackwk25',author:{did:'did:plc:z72i7hdynmk6r22z27h6tvur',handle:'bsky.app'},record:{text:'A public Bluesky post with readable text and a handle that resolves to a DID.'},replyCount:0}}};
+assert.equal(parseBlueskyThread(blueskyInput,blueskyPayload).platform,'bluesky');
+assert.throws(()=>parseBlueskyThread(blueskyInput,{thread:{post:{...blueskyPayload.thread.post,uri:'at://did:plc:other/app.bsky.feed.post/3mnzpiackwk25'}}}));
 await new Promise((resolve,reject)=>lookup('example.com',{all:true},(err,addresses)=>{try{assert.ifError(err);assert.deepEqual(addresses,[{address:'1.1.1.1',family:4}]);resolve();}catch(e){reject(e);}}));
 await new Promise((resolve,reject)=>lookup('example.com',{all:false},(err,address,family)=>{try{assert.ifError(err);assert.equal(address,'1.1.1.1');assert.equal(family,4);resolve();}catch(e){reject(e);}}));
 
