@@ -191,8 +191,9 @@ async function reviveAffordableAwaitingQuotaJob(userId:string,jobId:string):Prom
   );
 }
 
-export async function startTranscriptJob(userId:string,url:string,options:{refresh?:boolean;profile?:DistributionProfile;clientSource?:ClientSource|string}={}):Promise<ToolJobResult>{
+export async function startTranscriptJob(userId:string,url:string,options:{refresh?:boolean;profile?:DistributionProfile;clientSource?:ClientSource|string;inlineWaitMs?:number}={}):Promise<ToolJobResult>{
   const profile=options.profile??'default';
+  const inlineWaitMs=options.inlineWaitMs??env().MCP_INLINE_WAIT_MS;
   const clientSource=normalizeClientSource(options.clientSource??(profile==='openai'?'chatgpt':'mcp'));
   const accessId=await beginSourceAccessEvent(userId,url,clientSource);
   let parsed;
@@ -233,7 +234,7 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
     if(active.rowCount){
       await reviveAffordableAwaitingQuotaJob(userId,active.rows[0].id);
       await attachSourceAccessEvent(accessId,{jobId:active.rows[0].id,platform:parsed.platform,sourceKey,reused:true});
-      return await waitForJob(userId,active.rows[0].id,env().MCP_INLINE_WAIT_MS,profile);
+      return await waitForJob(userId,active.rows[0].id,inlineWaitMs,profile);
     }
 
     // A model may call the same read tool more than once while answering. Reuse a still-cached successful result
@@ -273,7 +274,7 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
       if(concurrent.rowCount){
         await reviveAffordableAwaitingQuotaJob(userId,concurrent.rows[0].id);
         await attachSourceAccessEvent(accessId,{jobId:concurrent.rows[0].id,platform:parsed.platform,sourceKey,reused:true});
-        return await waitForJob(userId,concurrent.rows[0].id,env().MCP_INLINE_WAIT_MS,profile);
+        return await waitForJob(userId,concurrent.rows[0].id,inlineWaitMs,profile);
       }
       throw new Link2AIError('INTERNAL_ERROR','Could not create transcript job.',500,true);
     }
@@ -282,7 +283,7 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
 
     // The worker owns every queued job, including a shared-cache hit. Completing it
     // here would race a worker that claims the row immediately after the insert.
-    return await waitForJob(userId,jobId,env().MCP_INLINE_WAIT_MS,profile);
+    return await waitForJob(userId,jobId,inlineWaitMs,profile);
   }catch(error){
     const err=asLink2AIError(error);
     await failSourceAccessEvent(accessId,err.code);
