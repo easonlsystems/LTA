@@ -5,6 +5,8 @@ import { supportedSourcesForProfile } from '../source/policy.js';
 import { asLink2AIError } from '../util/errors.js';
 import { timelineCoverageVerified } from '../media/timeline.js';
 
+export const PUBLIC_API_INLINE_WAIT_MS=10_000;
+
 export function publicPayload(result:ToolJobResult){
   const video=result.transcript_source==='caption'||result.transcript_source==='asr';
   const timelineVerified=!video||timelineCoverageVerified(result.duration_seconds,result.segments);
@@ -85,7 +87,7 @@ export async function registerPublicApiRoutes(app:FastifyInstance):Promise<void>
     const url=String(body.url??'').trim();
     if(!url)return reply.code(400).send(errorPayload('invalid_request','url is required.'));
     try{
-      const result=await startTranscriptJob(auth.userId,url,{refresh:body.refresh===true,profile:'default',clientSource:'rest_api'});
+      const result=await startTranscriptJob(auth.userId,url,{refresh:body.refresh===true,profile:'default',clientSource:'rest_api',inlineWaitMs:PUBLIC_API_INLINE_WAIT_MS});
       return sendResult(reply,result);
     }catch(error){
       const err=asLink2AIError(error);
