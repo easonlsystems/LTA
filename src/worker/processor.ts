@@ -21,6 +21,10 @@ import { generalAudienceBlockReason } from '../safety/generalAudience.js';
 
 const resolver=new ResolverOrchestrator();
 
+export function shouldReuseCache(job:Pick<JobRow,'platform'|'force_refresh'>):boolean{
+  return job.platform!=='x'&&!job.force_refresh;
+}
+
 export function videoCompleteness(text:string,durationSeconds:number,segments?:Array<{start?:number;end:number}>){
   const coverage=segments?.reduce((max,segment)=>Number.isFinite(segment.end)?Math.max(max,segment.end):max,0)??0;
   // A delayed first spoken cue or a silent gap does not prove the transcript is truncated.
@@ -71,7 +75,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
   const heartbeat=setInterval(()=>void heartbeatJob(job.id).catch(()=>{}),60_000);
   try{
     let parsed=parseMediaUrl(job.normalized_url);
-    const reuseCache=job.platform!=='x';
+    const reuseCache=shouldReuseCache(job);
     let prefetchedMetadata:MediaMetadata|undefined;
     if(parsed.platform==='reddit'&&parsed.canonicalMediaId.startsWith('share_')){
       parsed=await resolveRedditSharePost(parsed);

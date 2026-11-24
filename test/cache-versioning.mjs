@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
 Object.assign(process.env,{DATABASE_URL:'postgres://127.0.0.1:1/link2ai',PUBLIC_BASE_URL:'https://launch.example',APP_SECRET:'01234567890123456789012345678901'});
-const [{pool},{saveCache,findCache}]=await Promise.all([
+const [{pool},{saveCache,findCache,findUserCompletedCache}]=await Promise.all([
   import('../dist/src/db/pool.js'),import('../dist/src/worker/cache.js')
 ]);
 const migration=await readFile(new URL('../sql/012_immutable_transcript_cache.sql',import.meta.url),'utf8');
@@ -21,6 +21,7 @@ pool.query=async(sql,params)=>{
     rows.push(row);return {rowCount:1,rows:[row]};
   }
   if(statement.includes('SELECT * FROM transcript_cache'))return {rowCount:rows.length?1:0,rows:rows.length?[rows.at(-1)]:[]};
+  if(statement.includes('SELECT c.* FROM transcript_jobs'))return {rowCount:rows.length?1:0,rows:rows.length?[rows.at(-1)]:[]};
   throw new Error(`Unexpected SQL: ${statement}`);
 };
 const payload=text=>({platform:'web',canonicalMediaId:'web_same',sourceUrl:'https://example.org/article',durationSeconds:0,language:'und',transcript:text,segments:[],source:'page',completeness:{truncated:false,extractedTokenEstimate:10,usageUnits:1}});
@@ -30,5 +31,8 @@ try{
   assert.notEqual(second.id,first.id,'refresh must create a new cache version');
   assert.equal(rows.find(row=>row.id===first.id)?.transcript,'Original article text','a completed job pinned to the first cache id must keep its result');
   assert.equal((await findCache('web','web_same','und'))?.id,second.id,'new reads should use the latest cache version');
+  const partialSocial=await saveCache({platform:'instagram',canonicalMediaId:'post_partial',sourceUrl:'https://www.instagram.com/p/partial/',durationSeconds:0,language:'und',transcript:'Useful text from the public page',segments:[],source:'post',visualAssets:[],completeness:{truncated:true,truncationReason:'attached_media_unavailable',extractedTokenEstimate:10,usageUnits:1}});
+  assert.equal(await findCache('instagram','post_partial','und'),null,'other users must not inherit an image post with missing media');
+  assert.equal((await findUserCompletedCache('owner','instagram','post_partial'))?.id,partialSocial.id,'the owner must reuse an already-charged partial post');
   console.log('cache versioning tests PASS');
 }finally{pool.query=originalQuery;await pool.end();}

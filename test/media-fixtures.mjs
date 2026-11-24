@@ -18,7 +18,7 @@ process.env.PATH=`${path.dirname(ffprobe.path)}${path.delimiter}${process.env.PA
 const {validateAudioStream,normalizeAudioForAsr,probeMediaDurationSeconds}=await import('../dist/src/media/audio.js');
 const {runProviderChain}=await import('../dist/src/resolvers/providerChain.js');
 const {timelineCoverageVerified}=await import('../dist/src/media/timeline.js');
-const {videoTranscriptQuality,videoCompleteness}=await import('../dist/src/worker/processor.js');
+const {videoTranscriptQuality,videoCompleteness,shouldReuseCache}=await import('../dist/src/worker/processor.js');
 const {transcribeAudio}=await import('../dist/src/transcription/router.js');
 const {pool}=await import('../dist/src/db/pool.js');
 const {parseMediaUrl}=await import('../dist/src/media/url.js');
@@ -117,6 +117,9 @@ try{
   assert.match(unverifiedMcp.limitation_notice,/visual frame passthrough is not included/);
   assert.equal(videoTranscriptQuality('[Instrumental music]',27).ok,false);
   assert.equal(videoTranscriptQuality('Hello world',27).ok,true);
+  assert.equal(shouldReuseCache({platform:'youtube',force_refresh:false}),true);
+  assert.equal(shouldReuseCache({platform:'youtube',force_refresh:true}),false,'refresh must bypass prior video transcript caches');
+  assert.equal(shouldReuseCache({platform:'x',force_refresh:false}),false,'X must retain its intentional cache bypass');
   const partialPdf=await parsePdfBuffer(parseMediaUrl('https://example.com/mixed.pdf'),twoPagePdf(),'application/pdf');
   assert.equal(partialPdf.completeness.pagesAvailable,2);
   assert.equal(partialPdf.completeness.pagesExtracted,1);
@@ -125,6 +128,9 @@ try{
   const pdfRest=publicPayload({status:'completed',job_id:'pdf-fixture',platform:'pdf',transcript:partialPdf.text,truncated:partialPdf.completeness.truncated,usage_units:partialPdf.completeness.usageUnits});
   assert.equal(pdfRest.source_completeness,'partial');
   assert.equal(pdfRest.content_complete,false);
+  const pdfMcp=chunkResult({status:'completed',job_id:'pdf-fixture',platform:'pdf',transcript:partialPdf.text,truncated:partialPdf.completeness.truncated,truncation_reason:partialPdf.completeness.truncationReason,content_sections_truncated:partialPdf.completeness.contentSectionsTruncated,usage_units:partialPdf.completeness.usageUnits});
+  assert.equal(pdfMcp.source_completeness,'partial');
+  assert.equal(pdfMcp.content_complete,false);
   const originalFetch=globalThis.fetch;
   try{
     const asrProviders=[];
