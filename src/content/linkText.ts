@@ -524,7 +524,13 @@ export async function parsePdfBuffer(input:ParsedMediaUrl,bytes:Buffer,contentTy
     }
     const text=cleanText(pages.join('\n\n'));if(!text)throw new Link2AIError('EXTRACTION_FAILED','This PDF has no readable text layer; OCR is not enabled.',422,false);
     const metadata=await document.getMetadata().catch(()=>({info:{}} as any));const info=jsonObject(metadata.info);const title=clipExternalText(jsonString(info?.Title),METADATA_LIMITS.title);
-    const pagesAvailable=document.numPages;await document.destroy();return complete({platform:'pdf',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title,caption:`${pagesAvailable} pages`,language:'und',text,source:'page'},'pdf',{pagesAvailable,pagesExtracted:pages.length,truncated:false},budget);
+    const pagesAvailable=document.numPages;
+    const pagesWithoutText=pages.length<pagesAvailable;
+    await document.destroy();
+    return complete({platform:'pdf',canonicalMediaId:input.canonicalMediaId,sourceUrl:input.normalizedUrl,title,caption:`${pagesAvailable} pages`,language:'und',text,source:'page'},'pdf',{
+      pagesAvailable,pagesExtracted:pages.length,truncated:pagesWithoutText,
+      ...(pagesWithoutText?{truncationReason:'pdf_pages_without_text_layer',contentSectionsTruncated:['pages_without_text_layer']}: {})
+    },budget);
   }catch(error){if(error instanceof Link2AIError)throw error;const message=error instanceof Error?error.message.toLowerCase():'';if(message.includes('password'))throw new Link2AIError('EXTRACTION_FAILED','Password-protected PDFs are not supported.',422,false);throw new Link2AIError('EXTRACTION_FAILED','The PDF was malformed or could not be parsed safely.',422,false);}
 }
 

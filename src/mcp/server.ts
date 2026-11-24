@@ -368,11 +368,11 @@ function minimizeOpenAiLinkData(data:Record<string,unknown>):Record<string,unkno
   return publicData;
 }
 
-async function linkToolResponse(result:ToolJobResult,offset=0,maxChars=MAX_CHARS,includeVisuals=true,minimizeForOpenAI=false){
+export async function linkToolResponse(result:ToolJobResult,offset=0,maxChars=MAX_CHARS,includeVisuals=true,minimizeForOpenAI=false){
   let data=chunkResult(result,offset,maxChars);
   if(result.status!=='completed'||!includeVisuals||offset!==0){
     if(minimizeForOpenAI)data=minimizeOpenAiLinkData(data);
-    return toolResponse(data);
+    return toolResponse(data,result.status==='failed');
   }
   const delivery=await loadVisualImagePage(result,0,MAX_INLINE_VISUAL_ASSETS);
   data=applyVisualDelivery(data,delivery);

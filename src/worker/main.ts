@@ -9,7 +9,7 @@ import { readinessIssues } from '../config/readiness.js';
 import { schemaReady } from '../config/schemaReadiness.js';
 import { assertWorkerRuntime } from './preflight.js';
 import { cleanupStaleTempDirs } from './tempCleanup.js';
-import { logErrorEvent, logEvent } from '../util/log.js';
+import { logErrorEvent, logEvent, withJobLogContext } from '../util/log.js';
 
 const regionRuntime=workerRegionRuntime();
 const workerId=`${os.hostname()}:${process.pid}:${regionRuntime.currentRegion}`;
@@ -65,7 +65,7 @@ async function slot(slotId:number){
     activeJobs++;
     try{
       if(stopping){await deferJob(job.id,0);continue;}
-      await processJob(job,{workerRegion:regionRuntime.currentRegion,regionOrder:regionRuntime.regionOrder});
+      await withJobLogContext(job.id,regionRuntime.currentRegion,()=>processJob(job,{workerRegion:regionRuntime.currentRegion,regionOrder:regionRuntime.regionOrder}));
     }finally{activeJobs--;}
   }
 }

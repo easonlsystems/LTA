@@ -5,7 +5,7 @@ process.env.PUBLIC_BASE_URL='http://localhost:3000';
 process.env.APP_SECRET='01234567890123456789012345678901';
 process.env.PUBLIC_BRAND_NAME='LaunchBrand';
 
-const [{createMcpHandler},{buildMcpServer,unicodeSafeSlice,chunkResult,selectTimedSegmentWindow,searchSourceText,searchVideoSegments,buildVideoMap},{pool}]=await Promise.all([
+const [{createMcpHandler},{buildMcpServer,unicodeSafeSlice,chunkResult,linkToolResponse,selectTimedSegmentWindow,searchSourceText,searchVideoSegments,buildVideoMap},{pool}]=await Promise.all([
   import('@modelcontextprotocol/server'),
   import('../dist/src/mcp/server.js'),
   import('../dist/src/db/pool.js')
@@ -49,6 +49,9 @@ const partialChunk=chunkResult({
 });
 assert.equal(partialChunk.source_completeness,'partial');
 assert.equal(partialChunk.content_complete,false);
+const failedLink=await linkToolResponse({status:'failed',job_id:'00000000-0000-4000-8000-000000000004',error_code:'EXTRACTION_FAILED',message:'Source failed',usage_units:0});
+assert.equal(failedLink.isError,true,'a failed source read must be marked as an MCP tool error');
+assert.equal(failedLink.structuredContent.status,'failed');
 assert.match(partialChunk.limitation_notice,/250 of 400 pages/);
 
 const unverifiedVideo=chunkResult({

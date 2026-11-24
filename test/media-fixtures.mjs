@@ -24,7 +24,30 @@ const {pool}=await import('../dist/src/db/pool.js');
 const {parseMediaUrl}=await import('../dist/src/media/url.js');
 const {publicPayload}=await import('../dist/src/api/publicApi.js');
 const {chunkResult}=await import('../dist/src/mcp/server.js');
+const {parsePdfBuffer}=await import('../dist/src/content/linkText.js');
 const dir=await mkdtemp(path.join(tmpdir(),'lta-media-fixtures-'));
+function twoPagePdf(){
+  const stream='BT /F1 12 Tf 40 250 Td (Readable first page) Tj ET';
+  const objects=[
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`
+  ];
+  let pdf='%PDF-1.4\n';
+  const offsets=[0];
+  for(let i=0;i<objects.length;i++){
+    offsets.push(Buffer.byteLength(pdf));
+    pdf+=`${i+1} 0 obj\n${objects[i]}\nendobj\n`;
+  }
+  const xref=Buffer.byteLength(pdf);
+  pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
+  for(const offset of offsets.slice(1))pdf+=`${String(offset).padStart(10,'0')} 00000 n \n`;
+  pdf+=`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(pdf);
+}
 async function run(args){
   const result=await new Promise((resolve,reject)=>{
     const child=spawn(ffmpeg.path,['-hide_banner','-loglevel','error','-y',...args]);
@@ -94,6 +117,14 @@ try{
   assert.match(unverifiedMcp.limitation_notice,/visual frame passthrough is not included/);
   assert.equal(videoTranscriptQuality('[Instrumental music]',27).ok,false);
   assert.equal(videoTranscriptQuality('Hello world',27).ok,true);
+  const partialPdf=await parsePdfBuffer(parseMediaUrl('https://example.com/mixed.pdf'),twoPagePdf(),'application/pdf');
+  assert.equal(partialPdf.completeness.pagesAvailable,2);
+  assert.equal(partialPdf.completeness.pagesExtracted,1);
+  assert.equal(partialPdf.completeness.truncated,true,'a PDF with a page lacking a text layer must not claim completeness');
+  assert.equal(partialPdf.completeness.truncationReason,'pdf_pages_without_text_layer');
+  const pdfRest=publicPayload({status:'completed',job_id:'pdf-fixture',platform:'pdf',transcript:partialPdf.text,truncated:partialPdf.completeness.truncated,usage_units:partialPdf.completeness.usageUnits});
+  assert.equal(pdfRest.source_completeness,'partial');
+  assert.equal(pdfRest.content_complete,false);
   const originalFetch=globalThis.fetch;
   try{
     const asrProviders=[];
