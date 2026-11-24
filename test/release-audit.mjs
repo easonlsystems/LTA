@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-const [linkSource,limitsSource,mcpSource,mcpServiceSource,apiSource,authWrapperSource,authBaseSource,authServiceSource,audioSource,safeHttpSource,publicUrlSource,workerSource,processorSource,plansSource,billingSource]=await Promise.all([
+const [linkSource,limitsSource,mcpSource,mcpServiceSource,apiSource,publicApiSource,authWrapperSource,authBaseSource,authServiceSource,audioSource,safeHttpSource,publicUrlSource,workerSource,processorSource,plansSource,billingSource]=await Promise.all([
   readFile(new URL('../src/content/linkText.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/content/limits.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/mcp/server.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/source/service.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/api/main.ts',import.meta.url),'utf8'),
+  readFile(new URL('../src/api/publicApi.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/auth/routes.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/auth/routes.base.ts',import.meta.url),'utf8'),
   readFile(new URL('../src/auth/service.ts',import.meta.url),'utf8'),
@@ -202,6 +203,9 @@ assert.doesNotMatch(mcpServiceSource,/createCheckoutSession|createTopupCheckoutS
 assert.doesNotMatch(processorSource,/createCheckoutSession|createTopupCheckoutSession|paymentUrl\(/,'Worker must not create purchase sessions when quota is exceeded');
 assert.match(authenticatedWorkflowSource,/schedule:[\s\S]*cron:/,'Authenticated production source certification must run on a recurring schedule');
 assert.match(authenticatedWorkflowSource,/push:[\s\S]*branches: \["main"\]/,'Authenticated production source certification must run after main deployments when configured');
+assert.match(publicApiSource,/PUBLIC_API_INLINE_WAIT_MS=10_000/,'REST reads must return processing before common client request timeouts');
+assert.match(publicApiSource,/inlineWaitMs:PUBLIC_API_INLINE_WAIT_MS/,'REST reads must use the bounded REST inline wait instead of the longer MCP wait');
+assert.match(mcpServiceSource,/inlineWaitMs=options\.inlineWaitMs\?\?env\(\)\.MCP_INLINE_WAIT_MS/,'Source jobs must allow each transport to choose its inline wait contract');
 assert.match(authenticatedCertSource,/refresh:true/,'Live production canaries must bypass cache and exercise the current source providers');
 assert.match(authenticatedCertSource,/instagram-reel/,'Authenticated certification must include a real Instagram media canary');
 assert.match(authenticatedCertSource,/assert\.equal\(before\.data\.quota_exempt,true/,'Fresh canaries must require a no-charge internal certification account');
