@@ -247,10 +247,8 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
             AND j.status='completed' AND c.expires_at>now()
             AND (c.source NOT IN ('caption','asr') OR c.media_validated=true)
            AND ($5::timestamptz IS NULL OR c.created_at >= $5::timestamptz)
-           AND NOT ($6::boolean AND jsonb_array_length(COALESCE(c.visual_assets,'[]'::jsonb))=0)
          ORDER BY j.completed_at DESC LIMIT 1`,
-        [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl,provenanceEpoch,
-         (parsed.platform==='instagram'&&parsed.kind==='post')||(parsed.platform==='tiktok'&&parsed.canonicalMediaId.startsWith('photo_'))]
+        [userId,parsed.platform,parsed.canonicalMediaId,parsed.normalizedUrl,provenanceEpoch]
       );
       if(completed.rowCount){
         await attachSourceAccessEvent(accessId,{jobId:completed.rows[0].id,platform:parsed.platform,sourceKey,reused:true,cacheHit:true});
@@ -260,11 +258,11 @@ export async function startTranscriptJob(userId:string,url:string,options:{refre
 
     const plan=await planForUser(userId);
     const job=await pool.query<{id:string}>(
-      `INSERT INTO transcript_jobs(user_id,platform,source_url,normalized_url,canonical_media_id,language,status,priority,client_source)
-       VALUES($1,$2,$3,$4,$5,'auto','queued',$6,$7)
+      `INSERT INTO transcript_jobs(user_id,platform,source_url,normalized_url,canonical_media_id,language,status,priority,client_source,force_refresh)
+       VALUES($1,$2,$3,$4,$5,'auto','queued',$6,$7,$8)
        ON CONFLICT DO NOTHING
        RETURNING id`,
-      [userId,parsed.platform,parsed.sourceUrl,parsed.normalizedUrl,parsed.canonicalMediaId,priorityForPlan(plan),clientSource]
+      [userId,parsed.platform,parsed.sourceUrl,parsed.normalizedUrl,parsed.canonicalMediaId,priorityForPlan(plan),clientSource,Boolean(options.refresh)]
     );
     if(!job.rowCount){
       const concurrent=await pool.query<{id:string}>(

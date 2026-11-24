@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {logErrorEvent,logEvent} from '../dist/src/util/log.js';
+import {logErrorEvent,logEvent,withJobLogContext} from '../dist/src/util/log.js';
 
 const emitted=[];
 const originalLog=console.log;
@@ -26,6 +26,16 @@ try{
     new Error('database password=do-not-log https://db.example/internal person2@example.com'),
     {job_id:'job-error-secret',path:'/srv/private/source.txt',safe_flag:true}
   );
+  await Promise.all([
+    withJobLogContext('private-job-a','ams',async()=>{
+      logEvent('provider_attempt',{job_id:'private-job-a'});
+      await new Promise(resolve=>setTimeout(resolve,1));
+      logErrorEvent('job_error',new Error('private failure'),{job_id:'private-job-a'});
+    }),
+    withJobLogContext('private-job-b','sfo',async()=>{
+      logEvent('provider_attempt',{job_id:'private-job-b'});
+    })
+  ]);
 }finally{
   console.log=originalLog;
   console.error=originalError;
@@ -45,5 +55,13 @@ assert.match(output,/"safe_flag":true/,'non-sensitive error context should remai
 assert.match(output,/"error_name":"Error"/,'error class may remain for diagnostics');
 assert.match(output,/"error_code":"INTERNAL_ERROR"/,'mapped error category may remain for diagnostics');
 assert.doesNotMatch(output,/error_message/i,'raw error messages must never be emitted');
+const contextual=emitted.map(line=>JSON.parse(line)).filter(row=>row.job_ref);
+assert.equal(contextual.length,3);
+assert.match(contextual[0].job_ref,/^[0-9a-f]{16}$/);
+assert.equal(contextual[0].job_ref,contextual[2].job_ref,'provider and outcome for one job must correlate');
+assert.notEqual(contextual[0].job_ref,contextual[1].job_ref,'concurrent jobs must remain distinct');
+assert.equal(contextual[0].region,'ams');
+assert.equal(contextual[1].region,'sfo');
+assert.doesNotMatch(output,/private-job-[ab]/,'raw job identifiers must remain private');
 
 console.log('log privacy tests PASS');

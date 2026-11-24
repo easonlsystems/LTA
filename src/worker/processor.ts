@@ -21,6 +21,10 @@ import { generalAudienceBlockReason } from '../safety/generalAudience.js';
 
 const resolver=new ResolverOrchestrator();
 
+export function shouldReuseCache(job:Pick<JobRow,'platform'|'force_refresh'>):boolean{
+  return job.platform!=='x'&&!job.force_refresh;
+}
+
 export function videoCompleteness(text:string,durationSeconds:number,segments?:Array<{start?:number;end:number}>){
   const coverage=segments?.reduce((max,segment)=>Number.isFinite(segment.end)?Math.max(max,segment.end):max,0)??0;
   // A delayed first spoken cue or a silent gap does not prove the transcript is truncated.
@@ -71,7 +75,7 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
   const heartbeat=setInterval(()=>void heartbeatJob(job.id).catch(()=>{}),60_000);
   try{
     let parsed=parseMediaUrl(job.normalized_url);
-    const reuseCache=job.platform!=='x';
+    const reuseCache=shouldReuseCache(job);
     let prefetchedMetadata:MediaMetadata|undefined;
     if(parsed.platform==='reddit'&&parsed.canonicalMediaId.startsWith('share_')){
       parsed=await resolveRedditSharePost(parsed);
@@ -351,17 +355,22 @@ export async function processJob(job:JobRow,runtime?:{workerRegion:string;region
     logEvent('job_completed',{job_id:job.id,platform:job.platform,source:'asr',resolver:metadata.resolver??'unknown',transcription_provider:asr.provider,duration_seconds:metadata.durationSeconds,extracted_token_estimate:estimateTokens(asr.transcript),usage_units:videoUsageUnits(metadata.durationSeconds),truncated:false,processing_ms:Date.now()-startedAt});
   }catch(e){
     const err=asLink2AIError(e);
-    if(reserved){await releaseQuota(job.id).catch(()=>{});reserved=false;}
+    let quotaReservationRelease:'not_reserved'|'released'|'failed'='not_reserved';
+    if(reserved){
+      try{await releaseQuota(job.id);quotaReservationRelease='released';}
+      catch{quotaReservationRelease='failed';}
+      reserved=false;
+    }
     const nextRegion=regionalFallbackTarget({platform:job.platform,errorCode:err.code,regionOrder,attemptedRegions:job.attempted_regions??[],currentRegion:workerRegion});
     if(nextRegion){
       if(mediaClaim){await releaseMediaClaim(job.id).catch(()=>{});mediaClaim=false;}
       await deferJobToRegion(job.id,nextRegion,err.code,err.message);
-      logEvent('job_regional_fallback',{job_id:job.id,platform:job.platform,from_region:workerRegion,to_region:nextRegion,error_code:err.code,attempted_regions:job.attempted_regions??[],processing_ms:Date.now()-startedAt});
+      logEvent('job_regional_fallback',{job_id:job.id,platform:job.platform,from_region:workerRegion,to_region:nextRegion,error_code:err.code,attempted_regions:job.attempted_regions??[],quota_reservation_release:quotaReservationRelease,processing_ms:Date.now()-startedAt});
       return;
     }
     const causeCode=typeof err.details?.cause_code==='string'?err.details.cause_code.slice(0,80):undefined;
     const transport=typeof err.details?.transport==='string'?err.details.transport.slice(0,40):undefined;
-    logErrorEvent('job_error',e,{job_id:job.id,platform:job.platform,error_code:err.code,retryable:err.retryable,attempt:job.attempts,processing_ms:Date.now()-startedAt,...(causeCode?{cause_code:causeCode}:{}),...(transport?{transport}:{} )});
+    logErrorEvent('job_error',e,{job_id:job.id,platform:job.platform,error_code:err.code,retryable:err.retryable,attempt:job.attempts,quota_reservation_release:quotaReservationRelease,processing_ms:Date.now()-startedAt,...(causeCode?{cause_code:causeCode}:{}),...(transport?{transport}:{} )});
     if(err.code==='QUOTA_EXCEEDED'){
       const requiredUnitsRaw=err.details?.required_usage_units??err.details?.required_usage_units_at_least;
       const requiredUnits=typeof requiredUnitsRaw==='number'&&Number.isFinite(requiredUnitsRaw)?requiredUnitsRaw:undefined;

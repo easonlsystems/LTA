@@ -137,7 +137,7 @@ assert.match(xResolverSource,/cdn\.syndication\.twimg\.com\/tweet-result/,'X vid
 assert.match(xResolverPureSource,/mediaDetails|node\.video/,'X structured resolver must recognize explicit video metadata');
 assert.match(xResolverSource,/safeGetBuffer\(video\.videoUrl/,'X video resolver must fetch the resolved media track for downstream audio\/ASR');
 assert.match(mcpServiceSource,/!options\.refresh&&parsed\.platform!=='x'/,'MCP must bypass stale completed-result reuse for X during media-routing rollout');
-assert.match(processorSource,/const reuseCache=job\.platform!=='x'/,'Worker must bypass stale X transcript caches during media-routing rollout');
+assert.match(processorSource,/const reuseCache=shouldReuseCache\(job\)/,'Worker must apply the source-specific and explicit-refresh cache policy');
 assert.match(providerChainSource,/runProviderChain/,'Media providers must use one explicit failover-chain implementation');
 assert.match(providerChainSource,/shouldTryExternalFallback/,'Provider failover must stop on definitive access errors');
 assert.match(providerChainSource,/source_provider_failover/,'Provider transitions must emit explicit failover telemetry');

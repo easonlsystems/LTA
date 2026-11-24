@@ -23,6 +23,7 @@ export interface JobRow {
   client_source: string;
   preferred_region: string | null;
   attempted_regions: string[];
+  force_refresh: boolean;
 }
 
 export async function claimNextJob(workerId: string, workerRegion='local', primaryRegion=workerRegion): Promise<JobRow | null> {

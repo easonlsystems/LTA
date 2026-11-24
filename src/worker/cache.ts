@@ -81,7 +81,9 @@ export async function findUserCompletedCache(userId:string,platform:string,canon
      ORDER BY j.completed_at DESC LIMIT 1`,
     params
   );
-  return validVisualPostCache(r.rows[0]??null,platform,canonicalId);
+  // A text-only social-page fallback is partial but still an already-paid read.
+  // Reuse it for its owner; findCache continues to reject it for other users.
+  return r.rows[0]??null;
 }
 
 export async function saveCache(payload: TranscriptPayload): Promise<CacheRow> {
